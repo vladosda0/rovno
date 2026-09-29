@@ -1,6 +1,12 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { analyticsPageUrl, ensureMetrikaStarted, METRIKA_COUNTER_ID } from "@/lib/analytics";
+import {
+  analyticsPageUrl,
+  analyticsReferrer,
+  crossSecretRouteBoundary,
+  ensureMetrikaStarted,
+  METRIKA_COUNTER_ID,
+} from "@/lib/analytics";
 
 /**
  * Fires a Yandex Metrika SPA pageview hit on every react-router navigation.
@@ -20,6 +26,7 @@ export function MetrikaPageviewTracker(): null {
   const isFirstHit = useRef(true);
 
   useEffect(() => {
+    if (crossSecretRouteBoundary()) return;
     ensureMetrikaStarted();
 
     if (isFirstHit.current) {
@@ -31,7 +38,7 @@ export function MetrikaPageviewTracker(): null {
     if (typeof window === "undefined" || typeof window.ym !== "function") return;
 
     window.ym(METRIKA_COUNTER_ID, "hit", analyticsPageUrl(), {
-      referer: document.referrer,
+      referer: analyticsReferrer(),
       title: document.title,
     });
   }, [location.pathname, location.search]);

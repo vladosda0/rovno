@@ -442,6 +442,22 @@ export function analyticsPageUrl(): string {
   return `${origin}${analyticsPathname(pathname)}${query === "" ? "" : `?${query}`}`;
 }
 
+/** document.referrer as handed to Metrika: a same-origin one gets the same treatment as the page url. */
+export function analyticsReferrer(): string {
+  const referrer = document.referrer;
+  let url: URL;
+  try {
+    url = new URL(referrer);
+  } catch {
+    return referrer;
+  }
+  if (url.origin !== window.location.origin) return referrer;
+  if (matchAnalyticsRoute(url.pathname)?.secret === true || carriesSecretRouteValue(url.searchParams)) {
+    return url.origin;
+  }
+  return `${url.origin}${analyticsPathname(url.pathname)}`;
+}
+
 /**
  * Parameter names that can establish a session. Supabase carries them in the
  * fragment (implicit grant) or in the query (`/auth/confirm?token_hash=…`, the
@@ -506,6 +522,44 @@ function urlCarriesAuthCredential(): boolean {
   );
 }
 
+/**
+ * Whether this document was loaded on a secret-bearing route. tag.js reads
+ * location.href by itself and cannot be stopped once it runs, so such a document
+ * never loads the tag, and a document that may run it never shows such a route:
+ * a navigation across that line is a full page load (rovno#153).
+ */
+const documentStartedOnSecretRoute =
+  typeof window !== "undefined" && matchAnalyticsRoute(window.location.pathname)?.secret === true;
+
+/** Indirection over the full page load, which jsdom cannot perform. */
+export const documentNavigation = {
+  replace(href: string): void {
+    window.location.replace(href);
+  },
+};
+
+/**
+ * Load the current URL afresh when it sits on the other side of the
+ * secret-route line from the one this document started on. Returns whether it
+ * did, so the caller stops treating the navigation as an in-app one.
+ */
+export function crossSecretRouteBoundary(): boolean {
+  if (!import.meta.env.VITE_METRIKA_COUNTER_ID) return false;
+  if (METRIKA_COUNTER_ID === null) return false;
+  if (typeof window === "undefined") return false;
+  const onSecretRoute = matchAnalyticsRoute(window.location.pathname)?.secret === true;
+  if (onSecretRoute === documentStartedOnSecretRoute) return false;
+
+  // The page being left may carry a token in its path or in `next`; the new
+  // document must not inherit it as document.referrer.
+  const policy = document.createElement("meta");
+  policy.name = "referrer";
+  policy.content = "origin";
+  document.head.appendChild(policy);
+  documentNavigation.replace(window.location.href);
+  return true;
+}
+
 const AUTH_CREDENTIAL_POLL_INTERVAL_MS = 100;
 /**
  * When to stop waiting for the credential to leave the address bar. A failed
@@ -541,6 +595,7 @@ export function initMetrika(): void {
   // network call, and without it trackEvent() drops every event fired before
   // the tag loads (AuthCallback fires email_verified in exactly that window).
   ensureYmQueue();
+  window.addEventListener("popstate", crossSecretRouteBoundary);
 
   if (!urlCarriesAuthCredential()) {
     bootstrapMetrika();
@@ -596,6 +651,7 @@ let metrikaStarted = false;
 function bootstrapMetrika(): void {
   if (METRIKA_COUNTER_ID === null) return;
   if (metrikaStarted) return;
+  if (documentStartedOnSecretRoute) return;
 
   const counterId = METRIKA_COUNTER_ID;
   const src = `https://mc.yandex.ru/metrika/tag.js?id=${counterId}`;
@@ -630,7 +686,7 @@ function bootstrapMetrika(): void {
     clickmap: true,
     accurateTrackBounce: true,
     trackLinks: true,
-    referrer: document.referrer,
+    referrer: analyticsReferrer(),
     url: analyticsPageUrl(),
   });
 

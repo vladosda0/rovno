@@ -295,6 +295,120 @@ describe("initMetrika and the Supabase auth fragment", () => {
   });
 });
 
+describe("the secret-route boundary (rovno#153)", () => {
+  let ym: YmMock;
+
+  beforeEach(() => {
+    ym = vi.fn();
+    (window as unknown as { ym?: unknown }).ym = ym;
+    removeInjectedTags();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    removeInjectedTags();
+    delete (window as unknown as { ym?: unknown }).ym;
+    setUrl("/");
+  });
+
+  it("never starts the tag in a document that opened on a share link, even after leaving it", async () => {
+    vi.useFakeTimers();
+    setUrl("/share/estimate/QA-SHARE-TOKEN");
+    const analytics = await loadAnalytics();
+    vi.spyOn(analytics.documentNavigation, "replace").mockImplementation(() => {});
+
+    analytics.initMetrika();
+    setUrl("/home");
+    vi.advanceTimersByTime(30_000);
+    analytics.ensureMetrikaStarted();
+
+    expect(initCalls(ym)).toHaveLength(0);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
+  });
+
+  it.each([
+    ["into a share link from a page that may run the tag", "/home", "/share/estimate/QA-SHARE-TOKEN", true],
+    ["into an invite from a page that may run the tag", "/project/p1/tasks", "/invite/accept/QA-INVITE", true],
+    ["out of a share link", "/share/document/QA-DOC-TOKEN", "/home", true],
+    ["between two ordinary pages", "/home", "/project/p1/tasks", false],
+    ["between two share links", "/share/estimate/QA-OLD", "/share/estimate/QA-NEWER", false],
+  ])("a navigation %s (%s -> %s) needs a fresh page load: %s", async (_label, from, to, fresh) => {
+    setUrl(from);
+    const analytics = await loadAnalytics();
+    const replace = vi.spyOn(analytics.documentNavigation, "replace").mockImplementation(() => {});
+
+    setUrl(to);
+
+    expect(analytics.crossSecretRouteBoundary()).toBe(fresh);
+    expect(replace.mock.calls).toEqual(fresh ? [[`${window.location.origin}${to}`]] : []);
+  });
+
+  it.each([
+    ["a signup page whose next carries a share link", "/auth/signup?next=%2Fshare%2Festimate%2FQA-SHARE-TOKEN", ""],
+    ["a share link", "/share/document/QA-DOC-TOKEN", ""],
+    ["an ordinary page with a private query", "/auth/email-sent?email=user%40example.com", "/auth/email-sent"],
+  ])("hands Metrika no token when the referrer is %s", async (_label, referrerPath, expectedPath) => {
+    Object.defineProperty(document, "referrer", { value: `${window.location.origin}${referrerPath}`, configurable: true });
+    setUrl("/home");
+    const analytics = await loadAnalytics();
+
+    analytics.initMetrika();
+
+    expect((initCalls(ym)[0][2] as { referrer: string }).referrer).toBe(`${window.location.origin}${expectedPath}`);
+    Object.defineProperty(document, "referrer", { value: "", configurable: true });
+  });
+
+  it("passes a referrer from another site through verbatim", async () => {
+    Object.defineProperty(document, "referrer", { value: "https://t.me/stroyrovno", configurable: true });
+    const analytics = await loadAnalytics();
+
+    expect(analytics.analyticsReferrer()).toBe("https://t.me/stroyrovno");
+    Object.defineProperty(document, "referrer", { value: "", configurable: true });
+  });
+
+  it("drops the referrer to the bare origin for the page it loads afresh", async () => {
+    setUrl("/share/estimate/QA-SHARE-TOKEN");
+    const analytics = await loadAnalytics();
+    vi.spyOn(analytics.documentNavigation, "replace").mockImplementation(() => {
+      expect(document.head.querySelector('meta[name="referrer"]')?.getAttribute("content")).toBe("origin");
+    });
+
+    setUrl("/auth/signup?next=%2Fshare%2Festimate%2FQA-SHARE-TOKEN");
+
+    expect(analytics.crossSecretRouteBoundary()).toBe(true);
+    expect(analytics.documentNavigation.replace).toHaveBeenCalledTimes(1);
+    document.head.querySelectorAll('meta[name="referrer"]').forEach((meta) => meta.remove());
+  });
+
+  it("does nothing when no counter is configured", async () => {
+    setUrl("/home");
+    vi.resetModules();
+    vi.stubEnv("VITE_METRIKA_COUNTER_ID", "");
+    const analytics = await import("./analytics");
+    const replace = vi.spyOn(analytics.documentNavigation, "replace").mockImplementation(() => {});
+
+    setUrl("/share/estimate/QA-SHARE-TOKEN");
+
+    expect(analytics.crossSecretRouteBoundary()).toBe(false);
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("loads the page afresh when Back returns to a share link while the tag runs", async () => {
+    setUrl("/home");
+    const analytics = await loadAnalytics();
+    const replace = vi.spyOn(analytics.documentNavigation, "replace").mockImplementation(() => {});
+    analytics.initMetrika();
+    expect(initCalls(ym)).toHaveLength(1);
+
+    setUrl("/share/estimate/QA-SHARE-TOKEN");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    expect(replace).toHaveBeenCalledWith(`${window.location.origin}/share/estimate/QA-SHARE-TOKEN`);
+  });
+});
+
 describe("analyticsPageUrl path sanitising", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
