@@ -10,6 +10,9 @@ interface UsageMeterProps {
   // Used for per-tier seat allowances (e.g. participants) so they share the exact
   // same typography and padding as the consumption meters.
   allowanceLabel?: string;
+  // Feature included in the plan but not in the product yet: greyed-out row
+  // with a "Coming soon" pill instead of a "N of M left" figure and bar.
+  soon?: boolean;
 }
 
 // One labelled progress bar for a usage slot, showing how much is REMAINING
@@ -17,8 +20,21 @@ interface UsageMeterProps {
 // rather than "0 of 50" with an empty bar that looks exhausted. limit < 0 means
 // unlimited. The bar is the brand blue and turns brand orange once under 20%
 // remaining. The shared renewal date is shown once beside the section header.
-export function UsageMeter({ title, used = 0, limit = 0, allowanceLabel }: UsageMeterProps) {
+export function UsageMeter({ title, used = 0, limit = 0, allowanceLabel, soon }: UsageMeterProps) {
   const { t } = useTranslation();
+
+  if (soon) {
+    return (
+      <div data-soon="" className="space-y-1.5 rounded-panel bg-muted/40 p-1.5 px-sp-2 opacity-60">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-body-sm font-semibold text-muted-foreground">{title}</span>
+          <span className="inline-flex shrink-0 rounded-pill border border-border bg-muted/60 px-1.5 py-0 text-[10px] font-medium text-muted-foreground">
+            {t("pricing.soonBadge")}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   // Allowance mode: a static labelled value, no bar (same shell as a meter).
   if (allowanceLabel !== undefined) {

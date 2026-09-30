@@ -382,7 +382,7 @@ export function TaskDetailModal({
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0 mt-0.5">
-              {canManageTask && !structureReadOnly && onDeleteTask && (
+              {canManageTask && !(structureReadOnly && blockEstimateLinkedDelete) && onDeleteTask && (
                 <button
                   onClick={() => setDeleteOpen(true)}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"

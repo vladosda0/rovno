@@ -773,3 +773,71 @@ describe("createProjectStage (browser source)", () => {
     expect(new Set(eventIds).size).toBe(eventIds.length);
   });
 });
+
+describe("deleteTask (supabase source)", () => {
+  afterEach(() => setMockSupabase(null));
+
+  // A chainable stand-in for the PostgREST builder: every call is recorded per
+  // table, and awaiting the chain resolves to that table's configured result.
+  function mockTables(results: Record<string, { data: unknown; error: unknown }>) {
+    const calls: Record<string, Array<[string, unknown[]]>> = {};
+    const from = vi.fn((table: string) => {
+      calls[table] = calls[table] ?? [];
+      const chain: Record<string, unknown> = {};
+      for (const method of ["select", "delete", "eq", "is", "or", "limit"]) {
+        chain[method] = (...args: unknown[]) => {
+          calls[table].push([method, args]);
+          return chain;
+        };
+      }
+      chain.then = (resolve: (value: unknown) => unknown) => resolve(results[table]);
+      return chain;
+    });
+    setMockSupabase({ from } as unknown as MockSupabaseClient);
+    return calls;
+  }
+
+  async function supabaseSource() {
+    return getPlanningSource({ kind: "supabase", profileId: "profile-1" });
+  }
+
+  it("deletes only while the task is still unlinked, in the same statement", async () => {
+    const calls = mockTables({
+      task_checklist_items: { data: [], error: null },
+      tasks: { data: [{ id: "task-1" }], error: null },
+    });
+    const source = await supabaseSource();
+
+    await expect(source.deleteTask("task-1")).resolves.toBeUndefined();
+    expect(calls.task_checklist_items).toEqual(expect.arrayContaining([
+      ["eq", ["task_id", "task-1"]],
+      ["or", ["estimate_work_id.not.is.null,estimate_resource_line_id.not.is.null"]],
+    ]));
+    expect(calls.tasks).toEqual(expect.arrayContaining([
+      ["delete", []],
+      ["eq", ["id", "task-1"]],
+      ["is", ["estimate_work_id", null]],
+    ]));
+  });
+
+  it("fails when the delete removed nothing (the task was linked again or is gone)", async () => {
+    mockTables({
+      task_checklist_items: { data: [], error: null },
+      tasks: { data: [], error: null },
+    });
+    const source = await supabaseSource();
+
+    await expect(source.deleteTask("task-1")).rejects.toThrow();
+  });
+
+  it("refuses a task the estimate still owns through checklist lineage", async () => {
+    const calls = mockTables({
+      task_checklist_items: { data: [{ id: "ci-1" }], error: null },
+      tasks: { data: [{ id: "task-1" }], error: null },
+    });
+    const source = await supabaseSource();
+
+    await expect(source.deleteTask("task-1")).rejects.toThrow();
+    expect(calls.tasks ?? []).not.toContainEqual(["delete", []]);
+  });
+});

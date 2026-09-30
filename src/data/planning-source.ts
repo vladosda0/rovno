@@ -147,6 +147,8 @@ export interface PlanningSource {
     input: { text: string; done?: boolean; sortOrder?: number },
   ) => Promise<void>;
   deleteTaskChecklistItem: (taskId: string, itemId: string) => Promise<void>;
+  /** Deletes a task. In Supabase mode, only one the estimate no longer owns. */
+  deleteTask: (taskId: string) => Promise<void>;
   createTaskComment: (taskId: string, body: string, authorId?: string) => Promise<void>;
   /**
    * Unified task-status change: server-enforces the done/blocked guards, inserts
@@ -468,6 +470,9 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
     },
     async deleteTaskChecklistItem(taskId: string, itemId: string) {
       store.deleteChecklistItem(taskId, itemId);
+    },
+    async deleteTask(taskId: string) {
+      store.deleteTask(taskId);
     },
     async createTaskComment(taskId: string, body: string) {
       store.addComment(taskId, body);
@@ -1419,6 +1424,29 @@ function createSupabasePlanningSource(
         .eq("id", itemId)
         .eq("task_id", taskId);
       if (error) throw error;
+    },
+    async deleteTask(taskId: string) {
+      const { data: lineageRows, error: lineageError } = await supabase
+        .from("task_checklist_items")
+        .select("id")
+        .eq("task_id", taskId)
+        .or("estimate_work_id.not.is.null,estimate_resource_line_id.not.is.null")
+        .limit(1);
+      if (lineageError) throw lineageError;
+      if ((lineageRows ?? []).length > 0) {
+        throw new Error("The estimate still owns this task; it cannot be deleted in Supabase mode.");
+      }
+
+      const { data, error } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", taskId)
+        .is("estimate_work_id", null)
+        .select("id");
+      if (error) throw error;
+      if ((data ?? []).length === 0) {
+        throw new Error("The task is linked to an estimate work or no longer exists.");
+      }
     },
     async createTaskComment(taskId: string, body: string, authorId?: string) {
       const insert: TaskCommentInsert = {

@@ -8,6 +8,7 @@ import {
   deleteStage as storeDeleteStage, completeStage as storeCompleteStage,
 } from "@/data/store";
 import { getPlanningSource, TaskNoLongerAvailableError } from "@/data/planning-source";
+import { isTaskOwnedByEstimate } from "@/lib/task-estimate-ownership";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
@@ -161,6 +162,9 @@ export default function ProjectTasks() {
   // Task detail modal
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const selectedTask = tasks.find((entry) => entry.id === selectedTaskId) ?? null;
+  // The estimate no longer owns this task (e.g. its work was deleted), so a
+  // manager may delete it by hand in Supabase mode (rovno#125).
+  const selectedTaskDetachedFromEstimate = selectedTask !== null && !isTaskOwnedByEstimate(selectedTask);
 
   // Deep-link: open task from navigation state (e.g. from PhotoViewer)
   useEffect(() => {
@@ -701,12 +705,21 @@ export default function ProjectTasks() {
   }, [updateTaskFact]);
 
   const handleTaskDelete = useCallback(async (taskId: string) => {
-    if (isSupabaseMode) {
-      throw new Error(t("tasks.error.supabaseStructure"));
+    if (!isSupabaseMode) {
+      storeDeleteTask(taskId);
+      return;
     }
 
-    storeDeleteTask(taskId);
-  }, [isSupabaseMode, t]);
+    try {
+      const source = await getPlanningSource(workspaceMode);
+      await source.deleteTask(taskId);
+    } catch {
+      // A refusal usually means the board is stale (the task was linked again).
+      await invalidateProjectTasks().catch(() => undefined);
+      throw new Error(t("tasks.modal.deleteFailed.fallback"));
+    }
+    await invalidateProjectTasks();
+  }, [isSupabaseMode, workspaceMode, invalidateProjectTasks, t]);
 
   // --- Handlers ---
   const openNewTask = useCallback((prefillStatus?: TaskStatus) => {
@@ -1122,7 +1135,7 @@ export default function ProjectTasks() {
         canUploadMedia={canUploadTaskMedia}
         estimateLinkedPlanningReadOnly={workspaceMode.kind === "supabase" && Boolean(selectedTask?.estimateV2WorkId)}
         taskStructureReadOnly={isSupabaseMode}
-        blockEstimateLinkedDelete={isSupabaseMode}
+        blockEstimateLinkedDelete={isSupabaseMode && !selectedTaskDetachedFromEstimate}
         disableStatusChanges={false}
         pendingStatus={
           pendingStatusChange && pendingStatusChange.taskId === selectedTaskId
@@ -1133,7 +1146,7 @@ export default function ProjectTasks() {
         onTitleChange={handleTaskTitleChange}
         onDescriptionChange={handleTaskDescriptionChange}
         onDeadlineChange={handleTaskDeadlineChange}
-        onDeleteTask={isSupabaseMode ? undefined : handleTaskDelete}
+        onDeleteTask={!isSupabaseMode || selectedTaskDetachedFromEstimate ? handleTaskDelete : undefined}
         projectMedia={media}
         onChecklistToggle={handleChecklistToggle}
         onChecklistAdd={handleAddChecklistItem}

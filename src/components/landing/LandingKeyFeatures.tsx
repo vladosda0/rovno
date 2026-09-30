@@ -492,18 +492,20 @@ const MiniDocs = () => {
 
 // Copy lives in the locale files; the card only carries the key, so this stays a
 // module-level constant (no hook) while still re-rendering on a language switch.
-type KFFeature = { id: string; icon: string; mini: ReactNode };
+// `soon`: shown on the landing but not in the product yet (rovno-db#45).
+type KFFeature = { id: string; icon: string; mini: ReactNode; soon?: boolean };
 const KF_FEATURES: KFFeature[] = [
   { id: "estimate", icon: "receipt", mini: <MiniEstimate /> },
   { id: "builder", icon: "layers", mini: <MiniBuilder /> },
   { id: "procure", icon: "box", mini: <MiniProcurement /> },
   { id: "chat", icon: "bot", mini: <MiniChat /> },
-  { id: "photo", icon: "image", mini: <MiniPhoto /> },
+  { id: "photo", icon: "image", mini: <MiniPhoto />, soon: true },
   { id: "docs", icon: "files", mini: <MiniDocs /> },
 ];
 
 const KFPill = ({ icon, children }: { icon: string; children: ReactNode }) => (
   <div
+    data-kf-pill
     style={{
       display: "inline-flex",
       alignItems: "center",
@@ -678,7 +680,14 @@ export function KeyFeatures() {
   const renderCard = (f: KFFeature, i: number) => {
     const inner = (
       <>
-        <KFPill icon={f.icon}>{t(`landing.features.${f.id}.pill`)}</KFPill>
+        <div data-kf-head style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <KFPill icon={f.icon}>{t(`landing.features.${f.id}.pill`)}</KFPill>
+          {f.soon && (
+            <span style={{ fontFamily: "var(--font-mono-ui)", fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", padding: "4px 8px", borderRadius: 999, border: "1px solid rgba(30,92,203,0.32)", color: "rgba(30,92,203,0.72)", lineHeight: 1 }}>
+              {t("pricing.soonBadge")}
+            </span>
+          )}
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 9, minHeight: 0 }}>{f.mini}</div>
         <p
           style={sx({

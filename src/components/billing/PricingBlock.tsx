@@ -27,8 +27,8 @@ export function PricingBlock({ className }: { className?: string }) {
       items: [
         { text: t("pricing.plans.free.ai.title"), bold: true },
         { text: t("pricing.plans.free.ai.chat") },
-        { text: t("pricing.plans.free.ai.doc") },
-        { text: t("pricing.plans.free.ai.photo") },
+        { text: t("pricing.plans.free.ai.doc"), soon: true },
+        { text: t("pricing.plans.free.ai.photo"), soon: true },
       ],
     },
     { icon: "👤", items: [{ text: t("pricing.plans.free.users"), bold: true }] },
@@ -41,8 +41,8 @@ export function PricingBlock({ className }: { className?: string }) {
       items: [
         { text: t("pricing.plans.master.ai.title"), bold: true },
         { text: t("pricing.plans.master.ai.chat") },
-        { text: t("pricing.plans.master.ai.doc") },
-        { text: t("pricing.plans.master.ai.photo") },
+        { text: t("pricing.plans.master.ai.doc"), soon: true },
+        { text: t("pricing.plans.master.ai.photo"), soon: true },
       ],
     },
     {
@@ -75,8 +75,8 @@ export function PricingBlock({ className }: { className?: string }) {
       items: [
         { text: t("pricing.plans.brigade.ai.title"), bold: true },
         { text: t("pricing.plans.brigade.ai.chat") },
-        { text: t("pricing.plans.brigade.ai.doc") },
-        { text: t("pricing.plans.brigade.ai.photo") },
+        { text: t("pricing.plans.brigade.ai.doc"), soon: true },
+        { text: t("pricing.plans.brigade.ai.photo"), soon: true },
       ],
     },
     {

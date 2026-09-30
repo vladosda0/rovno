@@ -10,10 +10,13 @@ import {
 export interface FeatureGroupItem {
   // One line within a group. `text` is the (optionally bold) lead; `note` is an
   // inline normal-weight continuation; `subItems` render as a sub-bullet list.
+  // `soon` greys the line out with a "Coming soon" pill: the plan includes it,
+  // but the feature is not in the product yet.
   text: string;
   note?: string;
   subItems?: string[];
   bold?: boolean;
+  soon?: boolean;
 }
 
 export interface FeatureGroup {
@@ -149,9 +152,18 @@ export function PlanCard({
             </span>
             <div className="space-y-1">
               {group.items.map((item) => (
-                <div key={item.text} className="text-body-sm text-foreground">
+                <div
+                  key={item.text}
+                  data-soon={item.soon ? "" : undefined}
+                  className={`text-body-sm ${item.soon ? "text-muted-foreground" : "text-foreground"}`}
+                >
                   <span className={item.bold ? "font-semibold" : undefined}>{item.text}</span>
                   {item.note ? ` ${item.note}` : null}
+                  {item.soon ? (
+                    <span className="ml-1.5 inline-flex rounded-pill border border-border bg-muted/60 px-1.5 py-0 align-middle text-[10px] font-medium text-muted-foreground">
+                      {t("pricing.soonBadge")}
+                    </span>
+                  ) : null}
                   {item.subItems && item.subItems.length > 0 ? (
                     <ul className="mt-0.5 space-y-0.5 pl-3">
                       {item.subItems.map((sub) => (

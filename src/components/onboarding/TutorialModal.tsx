@@ -21,6 +21,8 @@ interface TutorialStep {
   icon?: React.ReactNode;
   /** Optional richer visual rendered above the title (replaces the icon bubble when present). */
   visual?: React.ReactNode;
+  /** Feature not in the product yet: a "Coming soon" pill beside the title. */
+  soon?: boolean;
 }
 
 interface TutorialModalProps {
@@ -98,7 +100,14 @@ export function TutorialModal({
                 {current.icon}
               </div>
             ) : null}
-            <DialogTitle className="text-center">{t(current.titleKey)}</DialogTitle>
+            <div data-tutorial-head className="flex flex-wrap items-center justify-center gap-2">
+              <DialogTitle className="text-center">{t(current.titleKey)}</DialogTitle>
+              {current.soon ? (
+                <span className="inline-flex rounded-pill border border-border bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  {t("pricing.soonBadge")}
+                </span>
+              ) : null}
+            </div>
             <DialogDescription className="text-body-sm text-muted-foreground text-center leading-relaxed">
               {t(current.descriptionKey)}
             </DialogDescription>

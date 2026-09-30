@@ -509,7 +509,9 @@ type Plan = {
   cap: string;
   featured?: boolean;
   badge?: string;
-  ai: { label: string; quotas: string[] };
+  // `soon`: included in the plan but not in the product yet (rovno-db#45),
+  // rendered greyed out with a "Coming soon" pill.
+  ai: { label: string; quotas: { text: string; soon?: boolean }[] };
   feat: string[];
   cta: string;
 };
@@ -536,7 +538,11 @@ export function Pricing({ startPath }: { startPath: string }) {
       cap: t("landing.pricing.free.cap"),
       ai: {
         label: t("pricing.plans.free.ai.title"),
-        quotas: [t("pricing.plans.free.ai.chat"), t("pricing.plans.free.ai.doc"), t("pricing.plans.free.ai.photo")],
+        quotas: [
+          { text: t("pricing.plans.free.ai.chat") },
+          { text: t("pricing.plans.free.ai.doc"), soon: true },
+          { text: t("pricing.plans.free.ai.photo"), soon: true },
+        ],
       },
       feat: [t("landing.pricing.free.feat1"), t("landing.pricing.free.feat2")],
       cta: t("landing.pricing.free.cta"),
@@ -549,7 +555,11 @@ export function Pricing({ startPath }: { startPath: string }) {
       badge: t("pricing.recommendedBadge"),
       ai: {
         label: t("pricing.plans.master.ai.title"),
-        quotas: [t("pricing.plans.master.ai.chat"), t("pricing.plans.master.ai.doc"), t("pricing.plans.master.ai.photo")],
+        quotas: [
+          { text: t("pricing.plans.master.ai.chat") },
+          { text: t("pricing.plans.master.ai.doc"), soon: true },
+          { text: t("pricing.plans.master.ai.photo"), soon: true },
+        ],
       },
       feat: [t("landing.pricing.master.feat1"), t("landing.pricing.master.feat2"), t("landing.pricing.master.feat3")],
       cta: t("pricing.cta.continue"),
@@ -560,7 +570,11 @@ export function Pricing({ startPath }: { startPath: string }) {
       cap: t("landing.pricing.brigade.cap"),
       ai: {
         label: t("pricing.plans.brigade.ai.title"),
-        quotas: [t("pricing.plans.brigade.ai.chat"), t("pricing.plans.brigade.ai.doc"), t("pricing.plans.brigade.ai.photo")],
+        quotas: [
+          { text: t("pricing.plans.brigade.ai.chat") },
+          { text: t("pricing.plans.brigade.ai.doc"), soon: true },
+          { text: t("pricing.plans.brigade.ai.photo"), soon: true },
+        ],
       },
       feat: [
         t("landing.pricing.brigade.feat1"),
@@ -635,8 +649,17 @@ export function Pricing({ startPath }: { startPath: string }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600, lineHeight: "18px" }}>{p.ai.label}</span>
                     {p.ai.quotas.map((q) => (
-                      <span key={q} style={{ fontFamily: "var(--font-body)", fontSize: 13, lineHeight: "18px", opacity: 0.72, paddingLeft: 2 }}>
-                        {q}
+                      <span
+                        key={q.text}
+                        data-soon={q.soon ? "" : undefined}
+                        style={{ fontFamily: "var(--font-body)", fontSize: 13, lineHeight: "18px", opacity: q.soon ? 0.44 : 0.72, paddingLeft: 2 }}
+                      >
+                        <span>{q.text}</span>
+                        {q.soon && (
+                          <span style={{ marginLeft: 8, fontFamily: "var(--font-mono-ui)", fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", padding: "2px 6px", borderRadius: 999, border: "1px solid currentColor", verticalAlign: "1px" }}>
+                            {t("pricing.soonBadge")}
+                          </span>
+                        )}
                       </span>
                     ))}
                   </div>

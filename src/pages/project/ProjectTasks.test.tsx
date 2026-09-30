@@ -238,6 +238,79 @@ describe("ProjectTasks", () => {
     expect(screen.getByText("Estimate task")).toBeInTheDocument();
   });
 
+  // rovno#125: задачу, которой смета больше не владеет, менеджер удаляет руками.
+  it("lets a manager delete a task whose estimate work is gone", async () => {
+    const deleteTask = vi.fn().mockResolvedValue(undefined);
+    mocks.getPlanningSource.mockResolvedValue({ changeTaskStatus: mocks.changeTaskStatus, deleteTask });
+    mocks.useTasks.mockReturnValue([buildTask({ estimateV2WorkId: null, title: "Orphan task" })]);
+
+    renderProjectTasks();
+    fireEvent.click(screen.getByText("Orphan task"));
+    fireEvent.click(screen.getByRole("button", { name: /Delete task/i }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^Delete$/i }));
+
+    await waitFor(() => expect(deleteTask).toHaveBeenCalledWith("task-1"));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith({ title: "Task deleted" }));
+  });
+
+  it("keeps delete hidden for a task still linked to an estimate work", () => {
+    renderProjectTasks();
+    fireEvent.click(screen.getByText("Estimate task"));
+
+    expect(screen.queryByRole("button", { name: /Delete task/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps delete hidden for a task the estimate still owns through its checklist", () => {
+    // A task created at the hero transition has no estimate_work_id until the
+    // projection runs, but its checklist already points at the estimate.
+    mocks.useTasks.mockReturnValue([buildTask({
+      estimateV2WorkId: null,
+      title: "Hero task",
+      checklist: [{ id: "ci-1", text: "Line", done: false, estimateV2WorkId: "work-1", estimateV2LineId: "line-1" }],
+    })]);
+
+    renderProjectTasks();
+    fireEvent.click(screen.getByText("Hero task"));
+
+    expect(screen.queryByRole("button", { name: /Delete task/i })).not.toBeInTheDocument();
+  });
+
+  it("offers delete on a detached task whose checklist holds only manual items", () => {
+    mocks.useTasks.mockReturnValue([buildTask({
+      estimateV2WorkId: null,
+      title: "Orphan task",
+      checklist: [{ id: "ci-1", text: "Manual", done: false }],
+    })]);
+
+    renderProjectTasks();
+    fireEvent.click(screen.getByText("Orphan task"));
+
+    expect(screen.getByRole("button", { name: /Delete task/i })).toBeInTheDocument();
+  });
+
+  it("keeps delete hidden when only a checklist line still points at the estimate", () => {
+    mocks.useTasks.mockReturnValue([buildTask({
+      estimateV2WorkId: null,
+      title: "Line-linked task",
+      checklist: [{ id: "ci-1", text: "Line", done: false, estimateV2LineId: "line-1" }],
+    })]);
+
+    renderProjectTasks();
+    fireEvent.click(screen.getByText("Line-linked task"));
+
+    expect(screen.queryByRole("button", { name: /Delete task/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps delete hidden from a contractor even on a detached task", () => {
+    mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+    mocks.useTasks.mockReturnValue([buildTask({ estimateV2WorkId: null, title: "Orphan task" })]);
+
+    renderProjectTasks();
+    fireEvent.click(screen.getByText("Orphan task"));
+
+    expect(screen.queryByRole("button", { name: /Delete task/i })).not.toBeInTheDocument();
+  });
+
   it("keeps contractor in contribute mode without structure controls", () => {
     mocks.usePermission.mockReturnValue(buildPermission("contractor"));
     mocks.useWorkspaceMode.mockReturnValue({ kind: "local" });

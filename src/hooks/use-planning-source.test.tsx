@@ -178,6 +178,7 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
       updateTaskChecklistItem: vi.fn(),
       createTaskChecklistItem: vi.fn(),
       deleteTaskChecklistItem: vi.fn(),
+      deleteTask: vi.fn(),
       createTaskComment: vi.fn(),
       changeTaskStatus: vi.fn(),
     };

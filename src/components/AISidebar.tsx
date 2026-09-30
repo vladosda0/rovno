@@ -3436,6 +3436,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             {
               titleKey: "tutorial.aiSidebar.step3.title",
               descriptionKey: "tutorial.aiSidebar.step3.description",
+              // Photo consultation is not in the product yet (rovno-db#45).
+              soon: true,
               visual: (
                 <div className="w-full space-y-1.5">
                   <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
