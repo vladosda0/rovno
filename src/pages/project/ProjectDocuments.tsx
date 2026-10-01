@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileInput } from "@/components/ui/file-input";
-import { DOCUMENT_UPLOAD_ACCEPT } from "@/lib/document-file-types";
+import { DOCUMENT_UPLOAD_ACCEPT, isSvgFile } from "@/lib/document-file-types";
 import { downloadStorageUrl } from "@/components/home/documents-hub/storage-urls";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -457,6 +457,14 @@ export default function ProjectDocuments() {
 
     if (!uploadFile) {
       toast({ title: t("documents.upload.selectFile"), variant: "destructive" });
+      return;
+    }
+    if (isSvgFile(uploadFile)) {
+      toast({
+        title: t("documents.upload.failedTitle"),
+        description: t("documents.upload.svgNotAllowed"),
+        variant: "destructive",
+      });
       return;
     }
 

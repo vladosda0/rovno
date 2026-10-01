@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DOCUMENT_UPLOAD_ACCEPT } from "./document-file-types";
+import { DOCUMENT_UPLOAD_ACCEPT, isSvgFile } from "./document-file-types";
 
 // rovno #284 S6. This pin exists because a review-round mutant gutted the list
 // to ".pdf" and the full suite stayed green: on iOS/Android the picker ENFORCES
@@ -23,5 +23,28 @@ describe("DOCUMENT_UPLOAD_ACCEPT", () => {
   it("is a well-formed accept attribute: no blanks, no duplicates", () => {
     expect(entries.every((entry) => entry.length > 0 && !entry.includes(" "))).toBe(true);
     expect(new Set(entries).size).toBe(entries.length);
+  });
+});
+
+describe("isSvgFile", () => {
+  it.each([
+    ["logo.svg", "image/svg+xml"],
+    ["logo.SVG", ""],
+    ["logo.svgz", "application/octet-stream"],
+    ["logo.svg ", ""],
+    ["logo.png", "image/svg+xml"],
+    ["logo", " Image/SVG+XML; charset=utf-8"],
+  ])("refuses %s (%s)", (name, type) => {
+    expect(isSvgFile({ name, type })).toBe(true);
+  });
+
+  it.each([
+    ["photo.png", "image/png"],
+    ["plan.pdf", "application/pdf"],
+    ["svg-export.png", "image/png"],
+    ["notes.svg.txt", "text/plain"],
+    ["plan.dwg", ""],
+  ])("lets %s (%s) through", (name, type) => {
+    expect(isSvgFile({ name, type })).toBe(false);
   });
 });

@@ -2480,6 +2480,7 @@
   "documents.upload.finalizedDescription": "Загрузка завершена успешно.",
   "documents.upload.failedTitle": "Не удалось загрузить документ",
   "documents.upload.failedFallback": "Не получилось загрузить документ.",
+  "documents.upload.svgNotAllowed": "SVG нельзя загрузить в документы",
   "documents.upload.finalizeFailedTitle": "Не удалось завершить",
   "documents.upload.finalizeFailedFallback": "Не получилось завершить загрузку. Попробуй ещё раз.",
   "documents.generate.title": "Сгенерировать документ",

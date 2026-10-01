@@ -604,6 +604,36 @@ describe("ProjectDocuments", () => {
     });
   });
 
+  it("refuses an SVG before asking for an upload slot and says why", async () => {
+    const prepareUpload = vi.fn();
+    mockUseWorkspaceMode.mockReturnValue({ kind: "supabase", profileId: "user-1" });
+    mockUseProjectDocumentsState.mockReturnValue({ documents: [], isLoading: false });
+    mockUseDocumentUploadMutations.mockReturnValue({
+      prepareUpload,
+      uploadBytes: vi.fn(),
+      finalizeUpload: vi.fn(),
+    });
+    mockToast.mockReset();
+
+    renderProjectDocuments();
+    fireEvent.click(screen.getByRole("button", { name: "Upload a document" }));
+    const dialog = screen.getByRole("dialog");
+    const input = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(["<svg/>"], "logo.svg", { type: "image/svg+xml" })] },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload" }));
+
+    await vi.waitFor(() => { expect(mockToast).toHaveBeenCalledTimes(1); });
+    expect(mockToast).toHaveBeenCalledWith({
+      title: "Document upload failed",
+      description: "SVG files cannot be uploaded to documents",
+      variant: "destructive",
+    });
+    expect(prepareUpload).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("button", { name: "Upload" })).toBeEnabled();
+  });
+
   it("hides upload actions for viewers", () => {
     mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
     mockUsePermission.mockReturnValue(buildPermission("viewer"));

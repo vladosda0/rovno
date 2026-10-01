@@ -3,6 +3,8 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const uploadMock = vi.fn();
+const { toastMock } = vi.hoisted(() => ({ toastMock: vi.fn() }));
+vi.mock("@/hooks/use-toast", () => ({ toast: toastMock }));
 vi.mock("@/components/upload/use-scoped-document-upload", () => ({
   useScopedDocumentUpload: () => uploadMock,
 }));
@@ -36,6 +38,26 @@ describe("EstimateTemplateForm", () => {
     expect(uploadMock).toHaveBeenCalledWith(
       expect.objectContaining({ type: "estimate_template_pending_ingest", title: "My estimate" }),
     );
+  });
+
+  it("refuses an SVG before any upload starts and says why", async () => {
+    toastMock.mockReset();
+    const { container } = renderForm({ scope: "personal" });
+    fireEvent.change(screen.getByPlaceholderText(/Turnkey house estimate/i), {
+      target: { value: "My estimate" },
+    });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(["<svg/>"], "logo.svg", { type: "image/svg+xml" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    expect(toastMock).toHaveBeenCalledWith({
+      title: "SVG files cannot be uploaded to documents",
+      variant: "destructive",
+    });
+    expect(uploadMock).not.toHaveBeenCalled();
   });
 
   it("Path B (create from scratch) is disabled in 3.2.2", () => {

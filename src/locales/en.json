@@ -2446,6 +2446,7 @@
   "documents.upload.finalizedDescription": "Upload finalized successfully.",
   "documents.upload.failedTitle": "Document upload failed",
   "documents.upload.failedFallback": "Unable to upload the document.",
+  "documents.upload.svgNotAllowed": "SVG files cannot be uploaded to documents",
   "documents.upload.finalizeFailedTitle": "Finalize failed",
   "documents.upload.finalizeFailedFallback": "Unable to finalize the upload. Try again.",
   "documents.generate.title": "Generate document",
