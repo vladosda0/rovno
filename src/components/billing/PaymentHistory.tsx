@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { PaymentDetailDialog } from "@/components/billing/PaymentDetailDialog";
@@ -16,7 +17,7 @@ export function PaymentHistory() {
   const { t, i18n } = useTranslation();
   const { profileId, user } = useRuntimeAuth();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     // L1: scope the cache to the profile so a user switch can't flash the
     // previous account's history.
     queryKey: ["payment-history", profileId],
@@ -48,6 +49,16 @@ export function PaymentHistory() {
 
   if (isLoading) {
     return <p className="text-caption text-muted-foreground">{t("common.loading")}</p>;
+  }
+  if (isError && !data) {
+    return (
+      <div className="flex items-center gap-sp-2">
+        <p className="text-caption text-muted-foreground">{t("settings.billing.historyLoadError")}</p>
+        <Button variant="outline" size="sm" onClick={() => void refetch()}>
+          {t("common.retry")}
+        </Button>
+      </div>
+    );
   }
   if (!data || data.length === 0) {
     return <p className="text-caption text-muted-foreground">{t("settings.billing.historyEmpty")}</p>;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PaymentHistory } from "@/components/billing/PaymentHistory";
 import { __unsafeSetRuntimeAuthStateForTests } from "@/hooks/use-runtime-auth";
@@ -11,6 +11,7 @@ import type { User } from "@supabase/supabase-js";
 const inSpy = vi.fn();
 const orderSpy = vi.fn();
 let currentRows: unknown[] = [];
+let currentError: { message: string } | null = null;
 
 vi.mock("@/integrations/supabase/client", () => {
   const makeBuilder = () => {
@@ -24,7 +25,10 @@ vi.mock("@/integrations/supabase/client", () => {
         orderSpy(column, opts);
         return builder;
       },
-      limit: () => Promise.resolve({ data: currentRows, error: null }),
+      limit: () =>
+        Promise.resolve(
+          currentError ? { data: null, error: currentError } : { data: currentRows, error: null },
+        ),
     };
     return builder;
   };
@@ -54,11 +58,12 @@ function row(overrides: Record<string, unknown>) {
 
 function renderHistory() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  render(
     <QueryClientProvider client={client}>
       <PaymentHistory />
     </QueryClientProvider>,
   );
+  return client;
 }
 
 describe("PaymentHistory", () => {
@@ -66,6 +71,7 @@ describe("PaymentHistory", () => {
     inSpy.mockReset();
     orderSpy.mockReset();
     currentRows = [];
+    currentError = null;
     // Authenticated profile so the query runs (enabled: !!profileId).
     __unsafeSetRuntimeAuthStateForTests({
       status: "authenticated",
@@ -108,5 +114,44 @@ describe("PaymentHistory", () => {
 
     expect(await screen.findByText("No payments yet.")).toBeInTheDocument();
     expect(screen.queryByText("Refunded")).not.toBeInTheDocument();
+  });
+
+  it("shows a load error with a retry, not the empty state, when the fetch fails", async () => {
+    currentError = { message: "boom" };
+    renderHistory();
+
+    expect(await screen.findByText("Could not load payment history.")).toBeInTheDocument();
+    expect(screen.queryByText("No payments yet.")).not.toBeInTheDocument();
+
+    currentError = null;
+    currentRows = [row({ id: "44444444-0000-0000-0000-000000000000", status: "refunded" })];
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Refunded")).toBeInTheDocument();
+    expect(screen.queryByText("Could not load payment history.")).not.toBeInTheDocument();
+  });
+
+  it("keeps the loaded list when a later refetch fails", async () => {
+    currentRows = [row({ id: "55555555-0000-0000-0000-000000000000", status: "refunded" })];
+    const client = renderHistory();
+    expect(await screen.findByText("Refunded")).toBeInTheDocument();
+
+    currentError = { message: "boom" };
+    await act(() => client.refetchQueries({ queryKey: ["payment-history"] }));
+    await waitFor(() => expect(client.getQueryState(["payment-history", "p1"])?.status).toBe("error"));
+    expect(screen.getByText("Refunded")).toBeInTheDocument();
+    expect(screen.queryByText("Could not load payment history.")).not.toBeInTheDocument();
+  });
+
+  it("does not show the load error while the query is disabled (no profile yet)", async () => {
+    __unsafeSetRuntimeAuthStateForTests({
+      status: "authenticated",
+      session: null,
+      user: { email: "vlad@example.com" } as User,
+      profileId: null,
+    });
+    renderHistory();
+
+    expect(await screen.findByText("No payments yet.")).toBeInTheDocument();
+    expect(screen.queryByText("Could not load payment history.")).not.toBeInTheDocument();
   });
 });

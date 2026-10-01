@@ -109,10 +109,10 @@ describe("unreleased AI features are marked 'Coming soon'", () => {
       </MemoryRouter>,
     );
     for (const text of [
-      "1 document checks / month",
+      "1 document check / month",
       "10 document checks / month",
       "50 document checks / month",
-      "1 photo analyses / month",
+      "1 photo analysis / month",
       "15 photo analyses / month",
       "100 photo analyses / month",
     ]) {

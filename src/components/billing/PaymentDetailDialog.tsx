@@ -41,6 +41,7 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
   });
   const dateLabel = dateFmt.format(new Date(when));
   const shortId = payment.id.slice(0, 8);
+  const statusText = payment.status === "refunded" ? t("billing.payment.statusRefunded") : undefined;
 
   const daysSince = (Date.now() - new Date(when).getTime()) / 86_400_000;
   const withinWindow = daysSince <= REFUND_WINDOW_DAYS;
@@ -51,6 +52,7 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
       planName,
       dateLabel,
       userEmail,
+      statusText,
       labels: {
         title: t("billing.payment.receiptDocTitle"),
         date: t("billing.refund.dateLabel"),
@@ -59,6 +61,7 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
         amount: t("billing.refund.amountLabel"),
         email: t("billing.refund.emailLabel"),
         note: t("billing.payment.receiptDocNote"),
+        status: t("billing.refund.statusLabel"),
       },
     });
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -103,6 +106,7 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
               <DetailRow label={t("billing.refund.planLabel")} value={planName} />
               <DetailRow label={t("billing.refund.amountLabel")} value={amountLabel} />
               <DetailRow label={t("billing.refund.emailLabel")} value={userEmail} />
+              {statusText && <DetailRow label={t("billing.refund.statusLabel")} value={statusText} />}
             </dl>
             <p className="text-caption text-muted-foreground">
               {t("billing.payment.receiptNote", { email: userEmail })}
