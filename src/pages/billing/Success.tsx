@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BILLING_ENABLED } from "@/lib/billing";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
-import { usePaymentStatus } from "@/hooks/usePaymentStatus";
+import { isTerminalPaymentStatus, usePaymentStatus } from "@/hooks/usePaymentStatus";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { trackEvent } from "@/lib/analytics";
 
@@ -57,7 +57,40 @@ export default function Success() {
     return () => window.clearInterval(timer);
   }, [needsSync, refetch]);
 
-  if (!BILLING_ENABLED) return null;
+  // T-Bank redirects here as soon as the payer finishes on its side; the payment
+  // is only real once the notification webhook marks the intent confirmed.
+  const intent = intentQuery.data;
+  const confirmed = intent?.status === "confirmed";
+  const failed = !!intent && isTerminalPaymentStatus(intent.status) && !confirmed;
+  useEffect(() => {
+    if (!BILLING_ENABLED) return;
+    if (!intentId) {
+      navigate("/settings?tab=billing", { replace: true });
+    } else if (failed && intent) {
+      const code = intent.status === "rejected" || intent.status === "cancelled"
+        ? intent.error_code
+        : intent.status;
+      const reason = code ? `&reason=${encodeURIComponent(code)}` : "";
+      navigate(`/billing/fail?intent=${intent.id}${reason}`, { replace: true });
+    }
+  }, [intentId, failed, intent, navigate]);
+
+  if (!BILLING_ENABLED || !intentId || failed) return null;
+
+  if (!confirmed) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col items-center justify-center px-sp-3 py-sp-6 text-center">
+        <Loader2 className="h-14 w-14 animate-spin text-muted-foreground" />
+        <h1 className="mt-sp-3 text-h2 text-foreground">{t("billing.success.pendingTitle")}</h1>
+        <p className="mt-sp-2 text-body-sm text-muted-foreground">{t("billing.success.pendingBody")}</p>
+        <div className="mt-sp-4 flex w-full flex-col gap-sp-2">
+          <Button asChild variant="outline">
+            <Link to="/settings?tab=billing">{t("billing.success.ctaSettings")}</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const dateFmt = new Intl.DateTimeFormat(i18n.language === "ru" ? "ru-RU" : "en-US", {
     day: "numeric",

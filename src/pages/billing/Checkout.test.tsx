@@ -9,9 +9,19 @@ vi.mock("@/lib/billing", async (importOriginal) => {
 });
 
 const mutateAsync = vi.fn();
-vi.mock("@/hooks/useInitPayment", () => ({
-  useInitPayment: () => ({ mutateAsync, isPending: false, isError: false, isSuccess: false }),
-}));
+vi.mock("@/hooks/useInitPayment", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/hooks/useInitPayment")>();
+  return {
+    ...actual,
+    useInitPayment: () => ({ mutateAsync, isPending: false, isError: false, isSuccess: false }),
+  };
+});
+
+const toastSpy = vi.fn();
+vi.mock("@/hooks/use-toast", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/hooks/use-toast")>();
+  return { ...actual, toast: (...args: unknown[]) => toastSpy(...args) };
+});
 
 type ActiveSub = ReturnType<typeof import("@/hooks/useActiveSubscription").useActiveSubscription>;
 let activeSubReturn: ActiveSub;
@@ -19,15 +29,14 @@ vi.mock("@/hooks/useActiveSubscription", () => ({
   useActiveSubscription: () => activeSubReturn,
 }));
 
-// Settable payment-status row + a refetch spy (Fix I) + a real-ish terminal check (Fix G).
+// Settable payment-status row + a refetch spy (Fix I); the terminal check is the real one (Fix G).
 type StatusRow = { id: string; status: string; error_code: string | null; plan_code?: string };
 let statusData: StatusRow | undefined = undefined;
 const refetchStatus = vi.fn();
-const TERMINAL = new Set(["confirmed", "rejected", "cancelled", "refunded", "partial_refund"]);
-vi.mock("@/hooks/usePaymentStatus", () => ({
-  usePaymentStatus: () => ({ data: statusData, refetch: refetchStatus }),
-  isTerminalPaymentStatus: (s: string | undefined | null) => !!s && TERMINAL.has(s),
-}));
+vi.mock("@/hooks/usePaymentStatus", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/hooks/usePaymentStatus")>();
+  return { ...actual, usePaymentStatus: () => ({ data: statusData, refetch: refetchStatus }) };
+});
 
 // Capture the navigate calls (Fix G) while keeping the real MemoryRouter.
 const mockNavigate = vi.fn();
@@ -54,15 +63,16 @@ vi.mock("@/components/billing/TBankPaymentForm", () => ({
 }));
 
 import Checkout from "@/pages/billing/Checkout";
+import { InitPaymentError, initPaymentErrorFromInvokeFailure } from "@/hooks/useInitPayment";
 import {
   __unsafeResetRuntimeAuthForTests,
   __unsafeSetRuntimeAuthStateForTests,
 } from "@/hooks/use-runtime-auth";
 import type { Session, User } from "@supabase/supabase-js";
 
-function renderCheckout() {
+function renderCheckout(plan = "master") {
   return render(
-    <MemoryRouter initialEntries={["/billing/checkout?plan=master"]}>
+    <MemoryRouter initialEntries={[`/billing/checkout?plan=${plan}`]}>
       <Checkout />
     </MemoryRouter>,
   );
@@ -87,6 +97,7 @@ describe("Checkout", () => {
     mutateAsync.mockReset();
     refetchStatus.mockReset();
     mockNavigate.mockReset();
+    toastSpy.mockReset();
     onReadyRefs.length = 0;
     widgetProps = {};
     statusData = undefined;
@@ -199,6 +210,49 @@ describe("Checkout", () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
+  it("upgrade: charges the catalogue difference today and names the full price for later", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+    activeSubReturn = {
+      ...noSubscription(),
+      status: "active",
+      subscription: {
+        id: "s1",
+        profile_id: "pid-1",
+        provider: "tbank",
+        plan_code: "master",
+        status: "active",
+        is_current: true,
+        currency: "RUB",
+        amount_cents: 99000,
+        auto_renew: true,
+        current_period_starts_at: "2026-05-15T00:00:00Z",
+        current_period_ends_at: "2026-06-15T00:00:00Z",
+        canceled_at: null,
+        grace_until: null,
+        created_at: "2026-05-15T00:00:00Z",
+        pending_plan_code: null,
+      },
+    };
+
+    renderCheckout("brigade");
+
+    // 2 990 (Бригада) - 990 (Мастер) = 2 000 due today; 2 990 from the next period.
+    const due = screen.getByText(/^2\s000\s₽$/);
+    expect(due).toBeInTheDocument();
+    expect(screen.getByText(/2\s990\s₽/, { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox").parentElement).toHaveTextContent(/2\s990\s₽/);
+
+    // One-time mode takes its consent for the amount charged today, not the full price.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /don't want auto-renewal/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("switch"));
+    });
+    expect(screen.getByRole("switch").parentElement).toHaveTextContent(/2\s000\s₽/);
+    expect(screen.getByRole("switch").parentElement).not.toHaveTextContent(/2\s990\s₽/);
+  });
+
   it("F: records the one-time consent version when auto-renewal is opted out", async () => {
     mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
 
@@ -222,6 +276,62 @@ describe("Checkout", () => {
         consent_version: expect.stringMatching(/^one-time-/),
       }),
     );
+  });
+
+  async function tickConsentAndFlush() {
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox"));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  it("409 upgrade_in_progress: shows a neutral notice, not the destructive error", async () => {
+    mutateAsync.mockRejectedValue(
+      new InitPaymentError("An upgrade is already in progress", "upgrade_in_progress"),
+    );
+
+    renderCheckout();
+    await tickConsentAndFlush();
+
+    expect(toastSpy).toHaveBeenCalledTimes(1);
+    expect(toastSpy).toHaveBeenCalledWith({
+      title: "Your previous payment is still processing",
+      description: "Wait a few minutes. If the payment went through, the subscription will appear on its own. If not, press “Try again”.",
+    });
+  });
+
+  it.each([
+    ["another backend code", new InitPaymentError("You are already subscribed to this plan", "not_an_upgrade")],
+    ["no code", new InitPaymentError("Failed to initialise payment")],
+    ["a plain Error that only mentions the phrase", new Error("An upgrade is already in progress")],
+  ])("init failure with %s keeps the destructive error toast", async (_label, error) => {
+    mutateAsync.mockRejectedValue(error);
+
+    renderCheckout();
+    await tickConsentAndFlush();
+
+    expect(toastSpy).toHaveBeenCalledTimes(1);
+    expect(toastSpy).toHaveBeenCalledWith({
+      title: "Couldn't start the payment",
+      description: error.message,
+      variant: "destructive",
+    });
+  });
+
+  it("a non-Error init rejection still gets the destructive error toast", async () => {
+    mutateAsync.mockRejectedValue(null);
+
+    renderCheckout();
+    await tickConsentAndFlush();
+
+    expect(toastSpy).toHaveBeenCalledWith({
+      title: "Couldn't start the payment",
+      description: undefined,
+      variant: "destructive",
+    });
   });
 
   it("G: routes to the fail screen with a refund reason on a refunded payment_intent", async () => {
@@ -276,5 +386,29 @@ describe("Checkout", () => {
       widgetProps.onStatus?.("PROCESSING");
     });
     expect(refetchStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe("initPaymentErrorFromInvokeFailure", () => {
+  const httpError = (body: string) => ({ message: "non-2xx", context: new Response(body, { status: 409 }) });
+
+  it.each([
+    ["a FunctionsHttpError body", httpError('{"error":"An upgrade is already in progress","code":"upgrade_in_progress"}'), null],
+    ["an already-parsed data body", { message: "non-2xx" }, { error: "An upgrade is already in progress", code: "upgrade_in_progress" }],
+  ])("carries the backend code out of %s", async (_label, error, data) => {
+    const err = await initPaymentErrorFromInvokeFailure(error, data);
+    expect(err).toBeInstanceOf(InitPaymentError);
+    expect(err.code).toBe("upgrade_in_progress");
+    expect(err.message).toBe("An upgrade is already in progress");
+  });
+
+  it.each([
+    ["no code field", httpError('{"error":"x"}')],
+    ["a non-string code", httpError('{"error":"x","code":409}')],
+    ["an empty code", httpError('{"error":"x","code":""}')],
+    ["a non-JSON body", httpError("Bad Gateway")],
+    ["no response at all", new Error("Failed to fetch")],
+  ])("has a null code for %s", async (_label, error) => {
+    expect((await initPaymentErrorFromInvokeFailure(error, null)).code).toBeNull();
   });
 });

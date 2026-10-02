@@ -26,11 +26,43 @@ export function useInitPayment() {
         body: args,
       });
       if (error) {
-        throw new Error(await messageFromInvokeFailure(error, data));
+        throw await initPaymentErrorFromInvokeFailure(error, data);
       }
       return data as InitPaymentResponse;
     },
   });
+}
+
+// Carries the backend's machine-readable `code` (e.g. "upgrade_in_progress") so
+// the checkout can branch on it instead of on the English message text.
+export class InitPaymentError extends Error {
+  readonly code: string | null;
+  constructor(message: string, code: string | null = null) {
+    super(message);
+    this.name = "InitPaymentError";
+    this.code = code;
+  }
+}
+
+export async function initPaymentErrorFromInvokeFailure(
+  error: unknown,
+  data: unknown,
+): Promise<InitPaymentError> {
+  const message = await messageFromInvokeFailure(error, data);
+  let code = parseErrorCode(data);
+  if (!code && error && typeof error === "object" && "context" in error) {
+    const ctx = (error as { context?: unknown }).context;
+    if (typeof Response !== "undefined" && ctx instanceof Response) {
+      code = parseErrorCode(safeJsonParse(await ctx.clone().text().catch(() => "")));
+    }
+  }
+  return new InitPaymentError(message, code);
+}
+
+function parseErrorCode(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const code = (data as Record<string, unknown>).code;
+  return typeof code === "string" && code ? code : null;
 }
 
 // On FunctionsHttpError, error.context is the raw (unconsumed) Response. Read it
