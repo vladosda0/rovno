@@ -18,6 +18,8 @@
  * so non-HEIC uploads don't pay the ~600 KB libheif WASM cost.
  */
 
+import { importOptional } from "@/lib/observability/optional-import";
+
 const TARGET_MAX_DIMENSION_PX = 3840;
 const TARGET_JPEG_QUALITY = 0.9;
 const TARGET_MAX_SIZE_MB = 4;
@@ -44,7 +46,7 @@ function rewriteExtensionToJpg(filename: string): string {
 }
 
 async function decodeHeicToJpegFile(file: File): Promise<File> {
-  const { default: heic2any } = await import("heic2any");
+  const { default: heic2any } = await importOptional(() => import("heic2any"));
   const blob = await heic2any({
     blob: file,
     toType: "image/jpeg",
@@ -89,7 +91,9 @@ export async function optimizeImageForUpload(
     return { file, optimized: false };
   }
 
-  const { default: imageCompression } = await import("browser-image-compression");
+  const { default: imageCompression } = await importOptional(
+    () => import("browser-image-compression"),
+  );
   const compressed = await imageCompression(working, {
     maxSizeMB: TARGET_MAX_SIZE_MB,
     maxWidthOrHeight: TARGET_MAX_DIMENSION_PX,

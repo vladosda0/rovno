@@ -11,12 +11,14 @@
  * must never break the app for the user.
  */
 
+import { releaseFromDocument } from "./app-release";
+import { importOptional } from "./optional-import";
 import { scrubEventSafe } from "./scrub";
 import { isCrawlerAssetFetchFailure, isWalletProviderRejection } from "./third-party-noise";
 
 type SentryLib = typeof import("@sentry/react");
 
-/** Injected by vite.config.ts `define` (git SHA at build time). */
+/** Injected by vite.config.ts `define` (git SHA at build time, or "unknown"). */
 declare const __APP_RELEASE__: string;
 
 export const SENTRY_DSN: string | null = (() => {
@@ -29,7 +31,10 @@ export const SENTRY_DSN: string | null = (() => {
 /** Same source + default as EnvBanner: unset behaves like production. */
 const ENVIRONMENT: string = `${import.meta.env.VITE_APP_ENV ?? "production"}`;
 
-const RELEASE: string = typeof __APP_RELEASE__ !== "undefined" ? __APP_RELEASE__ : "unknown";
+const RELEASE: string = releaseFromDocument(
+  typeof document !== "undefined" ? document : undefined,
+  typeof __APP_RELEASE__ !== "undefined" ? __APP_RELEASE__ : "unknown",
+);
 
 export interface CaptureContext {
   tags?: Record<string, string>;
@@ -102,7 +107,7 @@ export function initErrorTracking(): void {
   // Catch errors thrown before the SDK chunk arrives; replayed after init.
   installEarlyHandlers();
 
-  void import("@sentry/react")
+  void importOptional(() => import("@sentry/react"))
     .then((lib) => {
       lib.init({
         dsn: SENTRY_DSN,

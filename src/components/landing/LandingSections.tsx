@@ -11,10 +11,11 @@
 //  - All copy is localized (RU/EN) through the `landing.*` keys; the pricing
 //    section reuses the shared `pricing.*` namespace so the landing and the
 //    in-app pricing block can't drift apart.
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { PLANS, type PlanCode } from "@/data/plans";
+import { trackEventOncePerSession } from "@/lib/analytics";
 import { formatRubFromKopecks } from "@/lib/billing";
 import type { RuntimeAuthStatus } from "@/hooks/use-runtime-auth";
 import { getActiveLanguage } from "@/i18n";
@@ -527,6 +528,33 @@ const PRICING_ORIGINAL_KOPECKS: Partial<Record<PlanCode, number>> = {
 
 export function Pricing({ startPath }: { startPath: string }) {
   const { t } = useTranslation();
+  // The pricing "page" is this landing section, so the funnel's
+  // `pricing_page_viewed` fires when it actually reaches the viewport rather
+  // than on a route change. Once per session: scrolling back and forth past
+  // the section is one look at the prices, not five.
+  const sectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const node = sectionRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          trackEventOncePerSession("pricing_page_viewed");
+          observer.disconnect();
+        }
+      },
+      // rootMargin, NOT a ratio threshold: `threshold: 0.25` is a fraction of
+      // the ELEMENT, so on a phone — where this section stacks into a tall
+      // column — a quarter of it can exceed the whole viewport and the event
+      // would never fire. Shrinking the root to its middle band is
+      // viewport-relative, so it behaves the same at any section height.
+      { threshold: 0, rootMargin: "-25% 0px -25% 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   // Plan names, AI tier labels and quota lines come from the shared `pricing.*`
   // namespace that the in-app pricing block already uses, so the two can't drift
   // apart. `PLANS[code].display_name` stays the fallback: it mirrors backend
@@ -591,7 +619,7 @@ export function Pricing({ startPath }: { startPath: string }) {
     </svg>
   );
   return (
-    <section id="pricing" className="rv-section" style={{ padding: "96px 48px 72px" }}>
+    <section ref={sectionRef} id="pricing" className="rv-section" style={{ padding: "96px 48px 72px" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <h2 style={{ fontFamily: "var(--font-display)", fontSize: 48, lineHeight: 1, letterSpacing: "-0.03em", color: "var(--rv-blue)" }}>{t("landing.pricing.title")}</h2>
         <p style={{ fontFamily: "var(--font-body)", fontSize: 18, lineHeight: "24px", color: "var(--rv-blue)", opacity: 0.72, marginBottom: 32 }}>

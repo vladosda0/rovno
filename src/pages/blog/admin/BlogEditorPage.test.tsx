@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -26,6 +26,7 @@ vi.mock("@/lib/blog/api", () => ({
 
 import BlogEditorPage from "@/pages/blog/admin/BlogEditorPage";
 import {
+  createBlogPost,
   deleteBlogPost,
   fetchMyBlogAuthor,
   fetchPostById,
@@ -187,5 +188,77 @@ describe("BlogEditorPage unpublish", () => {
         }),
       ),
     );
+  });
+});
+
+describe("BlogEditorPage title and subtitle height", () => {
+  const SUBTITLE = "Подзаголовок, который в редакторе переносится на вторую и третью строку";
+  let scrollHeight: { mockRestore: () => void };
+
+  afterEach(() => {
+    scrollHeight.mockRestore();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authenticateRuntimeAuth();
+    (fetchMyBlogAuthor as Mock).mockResolvedValue({ id: "author-1", profile_id: "profile-1" });
+    (fetchPostById as Mock).mockResolvedValue({ ...POST, subtitle: SUBTITLE });
+    // jsdom lays nothing out, so scrollHeight is always 0. Stand in for the
+    // browser: an empty field is one row, a filled one is taller.
+    scrollHeight = vi.spyOn(HTMLTextAreaElement.prototype, "scrollHeight", "get").mockImplementation(function (
+      this: HTMLTextAreaElement,
+    ) {
+      return this.value === "" ? 24 : 96;
+    });
+  });
+
+  it("sizes the subtitle of a loaded post without waiting for a keystroke", async () => {
+    renderEditor();
+
+    const subtitle = (await screen.findByDisplayValue(SUBTITLE)) as HTMLTextAreaElement;
+
+    expect(subtitle.style.height).toBe("96px");
+  });
+
+  it("sizes the title again when the field remounts with the same value", async () => {
+    // A new post's first save navigates to /blog/admin/:id inside the same
+    // component: the loading branch unmounts the fields, and they come back
+    // with the value they already had.
+    const TITLE = "Заголовок, который переносится на вторую строку редактора";
+    let finishLoading!: (post: BlogPostWithAuthor) => void;
+    (fetchPostById as Mock).mockReturnValue(
+      new Promise<BlogPostWithAuthor>((resolve) => (finishLoading = resolve)),
+    );
+    (createBlogPost as Mock).mockResolvedValue({ ...POST, title: TITLE });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/blog/admin/new"]}>
+          <Routes>
+            <Route path="/blog/admin/new" element={<BlogEditorPage />} />
+            <Route path="/blog/admin/:id" element={<BlogEditorPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.change(await screen.findByPlaceholderText("Название"), { target: { value: TITLE } });
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    await waitFor(() => expect(createBlogPost).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByPlaceholderText("Название")).not.toBeInTheDocument());
+
+    finishLoading({ ...POST, title: TITLE });
+    const remounted = (await screen.findByDisplayValue(TITLE)) as HTMLTextAreaElement;
+
+    expect(remounted.style.height).toBe("96px");
+  });
+
+  it("shrinks back when the field is cleared", async () => {
+    renderEditor();
+    const subtitle = (await screen.findByDisplayValue(SUBTITLE)) as HTMLTextAreaElement;
+
+    fireEvent.change(subtitle, { target: { value: "" } });
+
+    expect(subtitle.style.height).toBe("24px");
   });
 });

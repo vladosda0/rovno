@@ -3,26 +3,24 @@ import reactSwc from "@vitejs/plugin-react-swc";
 import path from "path";
 import { execSync } from "node:child_process";
 import { componentTagger } from "lovable-tagger";
+import {
+  RELEASE_META_NAME,
+  releaseLabel,
+  resolveAppRelease,
+} from "./src/lib/observability/app-release";
 
 /**
- * Release identifier baked into the bundle for Sentry release tagging
- * (`__APP_RELEASE__`, see src/lib/observability/sentry.ts). Prefers an
- * explicit VITE_COMMIT_SHA env var (for build environments without .git),
- * falls back to `git rev-parse`, then to "unknown" — never fails the build.
+ * `-c safe.directory=*`: a build container usually runs as a different user
+ * than the one owning the checkout, and plain `git rev-parse` then aborts with
+ * "detected dubious ownership in repository".
  */
-function resolveAppRelease(): string {
-  const fromEnv = process.env.VITE_COMMIT_SHA?.trim();
-  if (fromEnv) return fromEnv;
-  try {
-    return (
-      execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
-        .toString()
-        .trim() || "unknown"
-    );
-  } catch {
-    return "unknown";
-  }
+function gitShortSha(): string {
+  return execSync("git -c safe.directory='*' rev-parse --short HEAD", {
+    stdio: ["ignore", "pipe", "pipe"],
+  }).toString();
 }
+
+const appRelease = resolveAppRelease({ env: process.env, gitShortSha, warn: console.warn });
 
 // Vitest + @vitejs/plugin-react-swc can stall at high CPU while transforming
 // very large TSX (AISidebar). In test mode, skip both SWC and Babel React plugins
@@ -33,7 +31,7 @@ function resolveAppRelease(): string {
 export default defineConfig(({ mode }) => ({
   esbuild: mode === "test" ? { jsx: "automatic" } : undefined,
   define: {
-    __APP_RELEASE__: JSON.stringify(resolveAppRelease()),
+    __APP_RELEASE__: JSON.stringify(appRelease),
     // Sentry tree-shaking flags: we ship errors-only (no tracing/replay),
     // these strip the unused SDK code paths from the lazy chunk.
     __SENTRY_DEBUG__: false,
@@ -49,6 +47,16 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     mode !== "test" && reactSwc(),
     mode === "development" && componentTagger(),
+    {
+      name: "rovno-release-meta",
+      transformIndexHtml: () => [
+        {
+          tag: "meta",
+          attrs: { name: RELEASE_META_NAME, content: releaseLabel(appRelease, new Date()) },
+          injectTo: "head" as const,
+        },
+      ],
+    },
   ].filter(Boolean),
   resolve: {
     alias: {
