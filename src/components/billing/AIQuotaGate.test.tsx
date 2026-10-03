@@ -40,19 +40,139 @@ function setQuota(partial: Partial<TierQuota>) {
   );
 }
 
-function renderGate() {
-  return render(
+// A fresh element per call: rerender() with the same element is a no-op.
+function gateTree() {
+  return (
     <MemoryRouter>
       <AIQuotaGate usageType="chat">
         <button type="button">composer</button>
       </AIQuotaGate>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderGate() {
+  return render(gateTree());
 }
 
 describe("AIQuotaGate", () => {
   beforeEach(() => {
     billing.enabled = true;
+  });
+
+  it("makes the dimmed children inert so the keyboard cannot reach them", () => {
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    renderGate();
+    expect(screen.getByText("composer").closest("[inert]")).not.toBeNull();
+    expect(screen.getByRole("alertdialog")).not.toHaveAttribute("aria-live");
+  });
+
+  it("leaves the children interactive while under the limit", () => {
+    setQuota({ ai_chat_used: 5, ai_chat_limit: 50 });
+    renderGate();
+    expect(screen.getByText("composer").closest("[inert]")).toBeNull();
+  });
+
+  // The real composer is a div inside a div, so React reuses the gate's own DOM
+  // nodes for it once the paywall lifts. Whatever the gate set imperatively has
+  // to be taken back, or a user who just upgraded cannot type until a reload.
+  it("gives the composer back when the paywall lifts", () => {
+    const tree = () => (
+      <MemoryRouter>
+        <AIQuotaGate usageType="chat">
+          <div>
+            <div>
+              <textarea aria-label="composer" />
+            </div>
+          </div>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    const { rerender } = render(tree());
+    expect(screen.getByLabelText("composer").closest("[inert]")).not.toBeNull();
+    setQuota({ ai_chat_used: 0, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByLabelText("composer").closest("[inert]")).toBeNull();
+  });
+
+  it("moves focus to the paywall when the limit runs out in front of the user", () => {
+    setQuota({ ai_chat_used: 49, ai_chat_limit: 50 });
+    const { rerender } = renderGate();
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(gateTree());
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveFocus();
+    expect(dialog).toHaveAccessibleDescription(/You've used all your AI messages/);
+  });
+
+  // Same div-in-div shape as the real composer: the outer nodes are reused on
+  // the flip, so this would catch the textarea surviving it with focus inside
+  // an inert subtree.
+  it("moves focus to the paywall when it was in the composer", () => {
+    const tree = () => (
+      <MemoryRouter>
+        <AIQuotaGate usageType="chat">
+          <div>
+            <div>
+              <textarea aria-label="composer" />
+            </div>
+          </div>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 49, ai_chat_limit: 50 });
+    const { rerender } = render(tree());
+    screen.getByLabelText("composer").focus();
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByRole("alertdialog")).toHaveFocus();
+  });
+
+  it("leaves focus alone when the user is typing elsewhere on the page", () => {
+    const tree = () => (
+      <MemoryRouter>
+        <input aria-label="elsewhere" />
+        <AIQuotaGate usageType="chat">
+          <button type="button">composer</button>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 49, ai_chat_limit: 50 });
+    const { rerender } = render(tree());
+    screen.getByLabelText("elsewhere").focus();
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("elsewhere")).toHaveFocus();
+  });
+
+  it("does not take focus on the first answer after the quota went unknown", () => {
+    setQuota({ ai_chat_used: 5, ai_chat_limit: 50 });
+    const { rerender } = renderGate();
+    mockedUseTierQuota.mockReturnValue(
+      { data: undefined } as unknown as ReturnType<typeof useTierQuota>,
+    );
+    rerender(gateTree());
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(gateTree());
+    expect(screen.getByRole("alertdialog")).not.toHaveFocus();
+  });
+
+  it("does not take focus when the paywall is already up on page load", () => {
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    renderGate();
+    expect(screen.getByRole("alertdialog")).not.toHaveFocus();
+  });
+
+  it("does not take focus when the first quota answer is already exhausted", () => {
+    mockedUseTierQuota.mockReturnValue(
+      { data: undefined } as unknown as ReturnType<typeof useTierQuota>,
+    );
+    const { rerender } = renderGate();
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(gateTree());
+    expect(screen.getByRole("alertdialog")).not.toHaveFocus();
   });
 
   it("renders children unobstructed when under the limit", () => {
