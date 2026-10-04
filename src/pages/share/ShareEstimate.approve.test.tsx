@@ -100,40 +100,50 @@ describe("ShareEstimate approval submit", () => {
     fillAndSubmitStamp();
 
     await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
-    expect(toastSpy.mock.calls[0]?.[0]).toMatchObject({ title: "Unable to approve this version", variant: "destructive" });
+    expect(toastSpy.mock.calls[0]?.[0]).toEqual({ title: "Unable to approve this version", variant: "destructive" });
     expect(approveRemote).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("shows the server's text when the rejection is a plain object, not an Error", async () => {
+  it("says the version can no longer be approved when the server answers P0002, and refetches the share", async () => {
     const { shareId } = createSharedVersion();
     leaveDemoServedByServer(shareId);
-    approveRemote.mockRejectedValue({ message: "Share is no longer open", code: "P0002", details: null, hint: null });
+    approveRemote.mockRejectedValue({
+      code: "P0002",
+      message: "share token not found, archived, already approved, or approval is disabled",
+      details: null,
+      hint: null,
+    });
 
     renderSharePage(shareId);
     await screen.findByRole("button", { name: "Approve" });
+    const fetchesBefore = fetchRemote.mock.calls.length;
     fillAndSubmitStamp();
 
     await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
-    expect(toastSpy.mock.calls[0]?.[0]).toMatchObject({
-      title: "Unable to approve this version",
-      description: "Share is no longer open",
-      variant: "destructive",
-    });
+    expect(toastSpy.mock.calls[0]?.[0]).toEqual({ title: "This version can no longer be approved", variant: "destructive" });
+    await waitFor(() => expect(fetchRemote.mock.calls.length).toBeGreaterThan(fetchesBefore));
   });
 
-  it("shows the title alone when the rejection carries no text", async () => {
+  it("keeps the server's own text out of the toast for any other rejection", async () => {
     const { shareId } = createSharedVersion();
     leaveDemoServedByServer(shareId);
-    approveRemote.mockRejectedValue({ code: "P0002" });
+    approveRemote.mockRejectedValue({
+      code: "57014",
+      message: "canceling statement due to statement timeout",
+      details: null,
+      hint: null,
+    });
 
     renderSharePage(shareId);
     await screen.findByRole("button", { name: "Approve" });
+    const fetchesBefore = fetchRemote.mock.calls.length;
     fillAndSubmitStamp();
 
     await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
-    expect(toastSpy.mock.calls[0]?.[0]).toMatchObject({ title: "Unable to approve this version", variant: "destructive" });
-    expect(toastSpy.mock.calls[0]?.[0]?.description).toBeUndefined();
+    expect(toastSpy.mock.calls[0]?.[0]).toEqual({ title: "Unable to approve this version", variant: "destructive" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(fetchRemote.mock.calls.length).toBe(fetchesBefore);
   });
 
   it("announces approval once the server has recorded it", async () => {
