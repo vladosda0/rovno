@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FunctionsFetchError, FunctionsHttpError } from "@supabase/supabase-js";
 import { shouldReportDataLayerError } from "./data-layer-errors";
 
 function tierLimitError() {
@@ -13,6 +14,25 @@ describe("shouldReportDataLayerError", () => {
     const abort = new DOMException("The operation was aborted.", "AbortError");
     expect(shouldReportDataLayerError(abort, "query")).toBe(false);
     expect(shouldReportDataLayerError(abort, "mutation")).toBe(false);
+  });
+
+  it("skips the plain-object abort postgrest-js returns, which has no name", () => {
+    const aborted = {
+      message: "AbortError: signal is aborted without reason",
+      details: "",
+      hint: "Request was aborted (timeout or manual cancellation)",
+      code: "",
+    };
+    expect(shouldReportDataLayerError(aborted, "query")).toBe(false);
+    expect(shouldReportDataLayerError(aborted, "mutation")).toBe(false);
+
+    // A server error that merely quotes the word keeps its non-empty code.
+    expect(
+      shouldReportDataLayerError({ message: "AbortError: upstream gave up", code: "PGRST000" }, "mutation"),
+    ).toBe(true);
+    expect(
+      shouldReportDataLayerError({ message: "saw AbortError: mid-message", details: "", hint: "", code: "" }, "mutation"),
+    ).toBe(true);
   });
 
   it("skips backend tier-limit paywall errors", () => {
@@ -41,6 +61,25 @@ describe("shouldReportDataLayerError", () => {
       code: "",
     };
     expect(shouldReportDataLayerError(firefox, "query")).toBe(false);
+  });
+
+  it("skips an edge-function call that never left the browser, for queries only", () => {
+    const offlineInvoke = new FunctionsFetchError(new TypeError("Failed to fetch"));
+    expect(shouldReportDataLayerError(offlineInvoke, "query")).toBe(false);
+    expect(shouldReportDataLayerError(offlineInvoke, "mutation")).toBe(true);
+
+    // The wrapper says only that the fetch chain rejected; the cause decides.
+    expect(shouldReportDataLayerError(new FunctionsFetchError(new RangeError("bug")), "query")).toBe(true);
+    expect(shouldReportDataLayerError(new FunctionsFetchError(new Error("Failed to fetch")), "query")).toBe(true);
+    expect(shouldReportDataLayerError(new FunctionsFetchError(undefined), "query")).toBe(true);
+
+    // The function answered: that is a server outcome, not connectivity.
+    expect(shouldReportDataLayerError(new FunctionsHttpError(new Response(null, { status: 500 })), "query")).toBe(true);
+    expect(shouldReportDataLayerError({ name: "FunctionsFetchError", message: "x" }, "query")).toBe(true);
+    // The class is what is matched, never the text.
+    expect(
+      shouldReportDataLayerError(new Error("Failed to send a request to the Edge Function"), "query"),
+    ).toBe(true);
   });
 
   it("still reports a defect whose message merely contains a network pattern", () => {

@@ -27,6 +27,11 @@ interface RedeemResult {
   expires_at?: string;
 }
 
+function signupWithCode(code: string): string {
+  const ret = `/promo/redeem?code=${encodeURIComponent(code)}`;
+  return `/auth/signup?next=${encodeURIComponent(ret)}`;
+}
+
 export default function PromoRedeem() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -46,14 +51,22 @@ export default function PromoRedeem() {
     if (status !== "authenticated") {
       // Guest: sign up first, then return here with the code prefilled so they
       // can submit again. Signup/Login honour the ?next= param (must start "/").
-      const ret = `/promo/redeem?code=${encodeURIComponent(trimmed)}`;
-      navigate(`/auth/signup?next=${encodeURIComponent(ret)}`);
+      navigate(signupWithCode(trimmed));
       return;
     }
 
     setBusy(true);
     try {
-      const { data, error } = await rawSupabase.rpc("redeem_promo_code", { p_code: trimmed });
+      const { data, error, status: httpStatus } = await rawSupabase.rpc("redeem_promo_code", {
+        p_code: trimmed,
+      });
+      if (error && httpStatus === 401) {
+        // The RPC is granted to `authenticated` only, so a session the server no
+        // longer accepts is refused before the function body can return a status.
+        trackEvent("promo_redeem_attempted", { result: "unauthenticated" });
+        navigate(signupWithCode(trimmed));
+        return;
+      }
       if (error) throw error;
       const result = (Array.isArray(data) ? data[0] : data) as RedeemResult | undefined;
       trackEvent("promo_redeem_attempted", { result: result?.status ?? "unknown" });
@@ -78,13 +91,9 @@ export default function PromoRedeem() {
         case "already_subscribed":
           toast({ title: t("promo.redeem.error.alreadySubscribed"), variant: "destructive" });
           break;
-        case "unauthenticated": {
-          // Stale/expired session despite a local "authenticated" status: route
-          // back through signup, preserving the code so the flow can resume.
-          const ret = `/promo/redeem?code=${encodeURIComponent(trimmed)}`;
-          navigate(`/auth/signup?next=${encodeURIComponent(ret)}`);
+        case "unauthenticated":
+          navigate(signupWithCode(trimmed));
           break;
-        }
         default:
           toast({ title: t("promo.redeem.error.unknown"), variant: "destructive" });
       }

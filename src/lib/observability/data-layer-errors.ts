@@ -33,8 +33,18 @@ function isPostgrestFetchError(error: object): boolean {
   return (error as { code?: unknown }).code === "";
 }
 
+/**
+ * `functions.invoke` rejections arrive in this class with the cause in
+ * `context`. Matched by class name, not by text: a text match would also
+ * catch an unrelated error quoting it.
+ */
+function isFunctionsFetchError(error: object): boolean {
+  return error instanceof Error && error.name === "FunctionsFetchError";
+}
+
 export function isNetworkFetchFailure(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
+  if (isFunctionsFetchError(error)) return isNetworkFetchFailure((error as { context?: unknown }).context);
   if (!(error instanceof TypeError) && !isPostgrestFetchError(error)) return false;
   const { message } = error as { message?: unknown };
   if (typeof message !== "string") return false;
@@ -43,11 +53,11 @@ export function isNetworkFetchFailure(error: unknown): boolean {
 }
 
 function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { name?: unknown }).name === "AbortError"
-  );
+  if (typeof error !== "object" || error === null) return false;
+  if ((error as { name?: unknown }).name === "AbortError") return true;
+  // The postgrest-js shape described above carries the name only as a message prefix.
+  const { message } = error as { message?: unknown };
+  return isPostgrestFetchError(error) && typeof message === "string" && message.startsWith("AbortError: ");
 }
 
 /**
