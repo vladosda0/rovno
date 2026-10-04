@@ -292,10 +292,10 @@ export default function ProjectDocuments() {
   }, [shareCheck, shareDocId, sharesLastSettledAt, sharesError]);
   const shareCheckSettled = shareCheck !== null && shareCheck.settled && shareCheck.documentId === shareDocId;
 
-  // Deep-link: open the document the dashboard docs widget was clicked on. Same
-  // navigation-state convention the task board uses for `openTaskId`. Consumed
-  // once, because `documents` changes identity on refetch and re-running would
-  // reopen the preview the user just closed.
+  // Deep-link: open the document the dashboard docs widget was clicked on, read
+  // from navigation state. Consumed once per mount, because `documents` changes
+  // identity on refetch and re-running would reopen the preview the user just
+  // closed.
   const location = useLocation();
   const consumedDocumentIdRef = useRef<string | null>(null);
   useEffect(() => {

@@ -98,11 +98,11 @@ export default function ProjectGallery() {
   const [slots, setSlots] = useState<UploadSlot[]>(() => [makeIdleSlot()]);
   const [viewPhoto, setViewPhoto] = useState<MediaType | null>(null);
 
-  // Deep-link: open a photo the dashboard gallery widget was clicked on. Same
-  // navigation-state convention the task board uses for `openTaskId`.
+  // Deep-link: open a photo the dashboard gallery widget was clicked on, read
+  // from navigation state.
   //
   // `photos` has to be a dependency because the list is still loading on arrival,
-  // but it changes identity on every refetch — so consume the id exactly once,
+  // but it changes identity on every refetch — so consume the id once per mount,
   // or closing the viewer would be undone by the next refetch.
   const location = useLocation();
   const consumedPhotoIdRef = useRef<string | null>(null);

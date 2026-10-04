@@ -1211,9 +1211,9 @@ function createSupabasePlanningSource(
       if (estimatesResult.error) {
         throw estimatesResult.error;
       }
-      // Третий сигнал УТОЧНЯЕТ статус (на стенде он переворачивает 3 проекта
-      // из 38), поэтому его отказ не должен гасить статус и прогресс у всех
-      // остальных. Первые два запроса несут сами данные и по-прежнему бросают.
+      // Третий сигнал УТОЧНЯЕТ статус, поэтому его отказ не должен гасить
+      // статус и прогресс у всех остальных. Первые два запроса несут сами
+      // данные и по-прежнему бросают.
       const linkedChecklistRows = linkedChecklistResult.error ? [] : (linkedChecklistResult.data ?? []);
 
       (tasksResult.data ?? []).forEach((row) => {

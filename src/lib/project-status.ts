@@ -76,14 +76,13 @@ export function totalTaskCount(counts: ProjectTaskStatusCounts): number {
 export function deriveProjectStatus(summary: ProjectStatusSummary): ProjectStatus {
   if (summary.executionStatus) return summary.executionStatus;
   // `execution_status` is null on rows written before the column existed, and on
-  // drafts whose mirror write was lost. На staging 22.09.2026 таких смет 24 из
-  // 33, то есть это обычная ветка, а не редкая.
+  // drafts whose mirror write was lost.
   //
   // Три сигнала, ровно те же и в том же порядке, что у ВЫВОДА стора смет
   // (`inferredEstimateStatus`, estimate-v2-store.ts): одобренный корень, пункт
   // чеклиста, привязанный к смете, и начатая задача. Третий добавлен по решению
   // владельца 22.09.2026: без него главная говорила «Планирование» там, где
-  // страница сметы говорит «В работе», на трёх живых проектах стенда.
+  // страница сметы говорит «В работе».
   //
   // Совпадает именно ВЫВОД, а не вся цепочка стора. Выше вывода у него стоит
   // ещё одна ступень: сохранённый в localStorage статус, если он не
@@ -106,9 +105,7 @@ export function deriveProjectStatus(summary: ProjectStatusSummary): ProjectStatu
 /**
  * Share of finished tasks — the same formula the project dashboard uses, КРОМЕ
  * случая, когда задач нет вовсе: дашборд показывает тогда 0, а здесь берётся
- * сохранённое `progress_pct`. На стенде таких проектов ноль, и единственный
- * писатель колонки пишет в неё 0, так что расхождение недостижимо — но оно
- * есть в коде, и обещать полное совпадение здесь нельзя.
+ * сохранённое `progress_pct`. Обещать полное совпадение здесь нельзя.
  */
 export function deriveProjectProgressPct(
   counts: ProjectTaskStatusCounts,

@@ -139,10 +139,9 @@ export interface AIContextPack {
 
 export interface AIContextInputs {
   /**
-   * `progress_pct` is the stored column, which no writer in the product has ever
-   * updated (rovno-db#47): on staging 37 of 38 projects carry 0. It survives here
-   * only as the fallback for a project that has no tasks to measure — see the
-   * progress derivation in `buildAIProjectContext`.
+   * `progress_pct` is the stored column (rovno-db#47). It survives here only as
+   * the fallback for a project that has no tasks to measure — see the progress
+   * derivation in `buildAIProjectContext`.
    */
   project: { title: string; type: string; progress_pct: number } | null;
   stages: { title: string; status: string }[];
