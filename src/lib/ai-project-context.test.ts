@@ -172,6 +172,78 @@ describe("buildAIProjectContext — tasks visibility", () => {
     const pack = buildAIProjectContext(seamForRole("viewer"), BASE_INPUTS);
     expect(pack.tasks).toEqual({ total: 3, done: 1, blocked: 1 });
   });
+
+  it("counts a legacy 'completed' row as done, so tasks and progress cannot disagree", () => {
+    const pack = buildAIProjectContext(seamForRole("owner", "detail"), {
+      ...BASE_INPUTS,
+      tasks: [{ status: "completed" }, { status: "not_started" }],
+    });
+    expect(pack.tasks).toEqual({ total: 2, done: 1, blocked: 0 });
+    expect(pack.project.progress).toBe("50%");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rovno-db#47: `projects.progress_pct` has no writer anywhere in the product, so
+// it reads 0 on 37 of 38 staging projects. The assistant used to be handed that
+// zero verbatim and reasoned on "0% готово" for every project. Progress is now
+// derived from the project's own tasks, by the same formula as the dashboard and
+// the home "Проекты" list (`deriveProjectProgressPct`).
+// ---------------------------------------------------------------------------
+
+describe("buildAIProjectContext — project progress is derived from tasks", () => {
+  it("reports 33% for 1 of 3 tasks done even though the stored progress_pct is 0", () => {
+    const pack = buildAIProjectContext(seamForRole("owner", "detail"), {
+      ...BASE_INPUTS,
+      project: { title: "Test Project", type: "residential", progress_pct: 0 },
+      tasks: [{ status: "done" }, { status: "in_progress" }, { status: "not_started" }],
+    });
+    expect(pack.project.progress).toBe("33%");
+  });
+
+  it("ignores a stale non-zero progress_pct when the project has tasks", () => {
+    // BASE_INPUTS stores 42% and carries 1 done of 3.
+    const pack = buildAIProjectContext(seamForRole("owner", "detail"), BASE_INPUTS);
+    expect(pack.project.progress).toBe("33%");
+  });
+
+  it("reports 100% when every task is done", () => {
+    const pack = buildAIProjectContext(seamForRole("owner", "detail"), {
+      ...BASE_INPUTS,
+      tasks: [{ status: "done" }, { status: "done" }],
+    });
+    expect(pack.project.progress).toBe("100%");
+  });
+
+  it("falls back to the stored progress_pct only when the project has no tasks", () => {
+    const pack = buildAIProjectContext(seamForRole("owner", "detail"), {
+      ...BASE_INPUTS,
+      tasks: [],
+    });
+    expect(pack.project.progress).toBe("42%");
+  });
+
+  it("agrees with the tasks block it is derived from", () => {
+    const pack = buildAIProjectContext(seamForRole("owner", "detail"), {
+      ...BASE_INPUTS,
+      tasks: [
+        { status: "done" },
+        { status: "done" },
+        { status: "blocked" },
+        { status: "not_started" },
+      ],
+    });
+    expect(pack.tasks).toEqual({ total: 4, done: 2, blocked: 1 });
+    expect(pack.project.progress).toBe("50%");
+  });
+
+  it("stays 0% when there is no project at all", () => {
+    const pack = buildAIProjectContext(seamForRole("owner", "detail"), {
+      ...BASE_INPUTS,
+      project: null,
+    });
+    expect(pack.project.progress).toBe("0%");
+  });
 });
 
 // ---------------------------------------------------------------------------

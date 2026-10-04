@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ExternalLink, Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { triggerFrontendRebuild } from "@/lib/blog/api";
-import { needsRebuildAfterDelete, rebuildAfterTakedown } from "@/lib/blog/rebuild-toast";
+import { deleteDoneTitle, needsRebuildAfterDelete, rebuildAfterTakedown } from "@/lib/blog/rebuild-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -89,7 +89,7 @@ function PostRow({ post }: { post: BlogPostWithAuthor }) {
                       // the delete returned decide that, not this list's copy of
                       // them, which another tab can have published since.
                       if (!needsRebuildAfterDelete(deleted)) {
-                        toast({ title: "Статья удалена" });
+                        toast({ title: deleteDoneTitle(deleted) });
                         return;
                       }
                       void rebuildAfterTakedown("delete", toast);

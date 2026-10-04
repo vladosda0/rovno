@@ -5,13 +5,24 @@ import { AlertTriangle, CheckCircle2, Loader2, LogIn, UserPlus } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
-import { acceptProjectInvite, type AcceptProjectInviteFailure } from "@/lib/accept-project-invite";
+import {
+  acceptProjectInvite,
+  type AcceptProjectInviteErrorCode,
+  type AcceptProjectInviteFailure,
+} from "@/lib/accept-project-invite";
 
 type AcceptState =
   | { status: "idle" }
   | { status: "accepting" }
   | { status: "accepted"; projectId: string }
   | { status: "failed"; error: AcceptProjectInviteFailure["error"] };
+
+// The other codes are decided by the invite itself, so a retry can only repeat them.
+const RETRYABLE_ERRORS: ReadonlySet<AcceptProjectInviteErrorCode> = new Set([
+  "unknown",
+  "auth_required",
+  "project_owner_over_limit",
+]);
 
 export default function InviteAccept() {
   const { t } = useTranslation();
@@ -157,9 +168,11 @@ export default function InviteAccept() {
                 <Button variant="outline" asChild>
                   <Link to="/home">{t("invite.goHome")}</Link>
                 </Button>
-                <Button variant="ghost" onClick={() => setAttempt((value) => value + 1)}>
-                  {t("invite.tryAgain")}
-                </Button>
+                {RETRYABLE_ERRORS.has(acceptState.error.code) ? (
+                  <Button variant="ghost" onClick={() => setAttempt((value) => value + 1)}>
+                    {t("invite.tryAgain")}
+                  </Button>
+                ) : null}
               </div>
             </div>
           ) : null}

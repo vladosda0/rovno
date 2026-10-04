@@ -12,7 +12,7 @@ import { BILLING_ENABLED, CONSENT_VERSION, formatRubFromKopecks, newIdempotencyK
 import type { TbankIntegrationStatus } from "@/lib/tbank-widget";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
-import { useInitPayment } from "@/hooks/useInitPayment";
+import { InitPaymentError, useInitPayment } from "@/hooks/useInitPayment";
 import { isTerminalPaymentStatus, usePaymentStatus } from "@/hooks/usePaymentStatus";
 import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
@@ -169,6 +169,15 @@ export default function Checkout() {
       .catch((error: unknown) => {
         if (cancelled) return;
         trackEvent("billing_init_payment_failed", { plan: planCode });
+        // 409 upgrade_in_progress: an earlier upgrade attempt may or may not have
+        // been paid; show a neutral notice and leave the retry button.
+        if (error instanceof InitPaymentError && error.code === "upgrade_in_progress") {
+          toast({
+            title: t("billing.checkout.upgradeInProgress.title"),
+            description: t("billing.checkout.upgradeInProgress.description"),
+          });
+          return;
+        }
         toast({
           title: t("billing.checkout.initError"),
           description: error instanceof Error ? error.message : undefined,

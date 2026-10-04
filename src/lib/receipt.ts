@@ -8,6 +8,7 @@ export interface ReceiptLabels {
   amount: string;
   email: string;
   note: string;
+  status: string;
 }
 
 export interface ReceiptData {
@@ -15,6 +16,8 @@ export interface ReceiptData {
   planName: string;
   dateLabel: string;
   userEmail: string;
+  // Set for a payment that is no longer a plain confirmed one (e.g. "Refunded").
+  statusText?: string;
   labels: ReceiptLabels;
 }
 
@@ -29,13 +32,14 @@ function escapeHtml(value: string): string {
 // the official 54-FZ fiscal receipt is emailed by the OFD. Dependency-free so it
 // downloads as a .html the user can open and print to PDF.
 export function buildReceiptHtml(data: ReceiptData): string {
-  const { payment, planName, dateLabel, userEmail, labels } = data;
+  const { payment, planName, dateLabel, userEmail, statusText, labels } = data;
   const rows: Array<[string, string]> = [
     [labels.date, dateLabel],
     [labels.id, payment.id],
     [labels.plan, planName],
     [labels.amount, formatRubFromKopecks(payment.amount_kopecks)],
     [labels.email, userEmail],
+    ...(statusText ? [[labels.status, statusText] as [string, string]] : []),
   ];
   const rowsHtml = rows
     .map(([k, v]) => `<tr><td class="k">${escapeHtml(k)}</td><td class="v">${escapeHtml(v)}</td></tr>`)

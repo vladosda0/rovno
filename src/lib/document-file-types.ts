@@ -53,3 +53,14 @@ export const DOCUMENT_UPLOAD_ACCEPT = [
   ".rar",
   ".7z",
 ].join(",");
+
+/**
+ * The documents bucket refuses SVG (rovno-db#62). The uploaders check this
+ * before asking for an upload slot, so the user gets a plain reason.
+ */
+export function isSvgFile(file: Pick<File, "name" | "type">): boolean {
+  return (
+    file.type.trim().toLowerCase().startsWith("image/svg")
+    || /\.svgz?$/i.test(file.name.trim())
+  );
+}

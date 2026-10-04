@@ -685,11 +685,11 @@ function getDayKey(timestampMs: number): string {
   return format(new Date(timestampMs), "yyyy-MM-dd");
 }
 
-function getDayLabel(timestampMs: number, t: Translator): string {
+function getDayLabel(timestampMs: number, t: Translator, dayFormatter: Intl.DateTimeFormat): string {
   const date = new Date(timestampMs);
   if (isToday(date)) return t("ai.sidebar.day.today");
   if (isYesterday(date)) return t("ai.sidebar.day.yesterday");
-  return format(date, "MMM d, yyyy");
+  return dayFormatter.format(date);
 }
 
 function buildProposalSummaryLines(childEvents: Event[], t: Translator): string[] {
@@ -760,6 +760,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+    }),
+    [i18n.language],
+  );
+  const dayHeaderFormatter = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     }),
     [i18n.language],
   );
@@ -843,6 +851,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const executingQueueRef = useRef(false);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const regenerateTimersRef = useRef<number[]>([]);
+  const legacyProposalTimersRef = useRef<Set<number>>(new Set());
   const photoAnalysisTimerRef = useRef<number | null>(null);
   const previousScopeKeyRef = useRef(scopeKey);
   const latestScopedStateRef = useRef<ScopedAISidebarState>(createEmptyScopedSidebarState());
@@ -1107,9 +1116,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   }, [aiChatModel]);
 
   useEffect(() => {
+    const legacyProposalTimers = legacyProposalTimersRef.current;
     return () => {
       clearRegenerateTimers();
       clearPhotoAnalysisTimer();
+      legacyProposalTimers.forEach((timerId) => window.clearTimeout(timerId));
     };
   }, [clearPhotoAnalysisTimer, clearRegenerateTimers]);
 
@@ -1457,7 +1468,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     });
 
     const finishWithLegacyHeuristic = () => {
-      window.setTimeout(() => {
+      const timerId = window.setTimeout(() => {
+        legacyProposalTimersRef.current.delete(timerId);
         if (targetProjectId) {
           const readiness = evaluateProjectTargetedSendReadiness(
             targetProjectId,
@@ -1566,6 +1578,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           });
         }
       }, WORK_STEPS_GENERATE.length * 600 + 200);
+      legacyProposalTimersRef.current.add(timerId);
     };
 
     if (
@@ -2599,13 +2612,13 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       const date = new Date(row.timestampMs);
       map.set(dayKey, {
         key: dayKey,
-        label: getDayLabel(row.timestampMs, t),
+        label: getDayLabel(row.timestampMs, t, dayHeaderFormatter),
         rows: [row],
         olderThanYesterday: !isToday(date) && !isYesterday(date),
       });
     });
     return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
-  }, [streamRows, t]);
+  }, [dayHeaderFormatter, streamRows, t]);
 
   const visibleDayBuckets = useMemo(() => {
     if (dayBuckets.length === 0) return [];
@@ -2864,7 +2877,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     }
 
     const marker = `<!-- learn-msg:${message.id} -->`;
-    const timestampHeader = format(new Date(), "MMM d, yyyy HH:mm");
+    // Same stamp as an archived chat's header, so it reads in the interface language.
+    const timestampHeader = archiveHeaderFormatter.format(new Date());
     const learnDocTitle = t("ai.sidebar.learnDoc.title");
     const entry = `${marker}\n## ${timestampHeader}\n\n${message.content}`;
     const docs = getDocuments(targetProjectId);
@@ -3422,6 +3436,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             {
               titleKey: "tutorial.aiSidebar.step3.title",
               descriptionKey: "tutorial.aiSidebar.step3.description",
+              // Photo consultation is not in the product yet (rovno-db#45).
+              soon: true,
               visual: (
                 <div className="w-full space-y-1.5">
                   <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">

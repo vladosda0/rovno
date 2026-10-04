@@ -2556,6 +2556,7 @@ export type Database = {
           "created_at": string
           "revoked_at": string | null
           "revoked_by": string | null
+          "storage_object_id": string | null
           }
           Insert: {
           "id"?: string
@@ -2565,6 +2566,7 @@ export type Database = {
           "created_at"?: string
           "revoked_at"?: string | null
           "revoked_by"?: string | null
+          "storage_object_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -2574,6 +2576,7 @@ export type Database = {
           "created_at"?: string
           "revoked_at"?: string | null
           "revoked_by"?: string | null
+          "storage_object_id"?: string | null
           }
           Relationships: []
         }
@@ -2779,6 +2782,13 @@ export type Database = {
           "p_folder_id": string
           }
           Returns: unknown
+        }
+        "document_version_file_is_attached": {
+          Args: {
+          "p_document_id": string
+          "p_storage_object_id": string
+          }
+          Returns: boolean
         }
         "effective_ai_access_for_profile": {
           Args: {

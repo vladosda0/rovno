@@ -29,7 +29,7 @@ interface EventFeedItemProps {
 
 export function EventFeedItem({ event, compact, highlighted }: EventFeedItemProps) {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const perm = usePermission(event.project_id);
   const actor = getUserById(event.actor_id);
   const detail = getActivityDisplayDetail(event, {
@@ -68,7 +68,7 @@ export function EventFeedItem({ event, compact, highlighted }: EventFeedItemProp
         {detail && <p className="text-caption text-muted-foreground truncate">{detail}</p>}
       </div>
       <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
-        {new Date(getEventGroupTimestampMs(event)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        {new Date(getEventGroupTimestampMs(event)).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}
       </span>
     </button>
   );

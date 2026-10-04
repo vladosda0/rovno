@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
 import {
@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileInput } from "@/components/ui/file-input";
-import { DOCUMENT_UPLOAD_ACCEPT } from "@/lib/document-file-types";
+import { DOCUMENT_UPLOAD_ACCEPT, isSvgFile } from "@/lib/document-file-types";
 import { downloadStorageUrl } from "@/components/home/documents-hub/storage-urls";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -250,6 +250,7 @@ export default function ProjectDocuments() {
     sharesByDocumentId,
     isLoading: sharesLoading,
     isError: sharesError,
+    lastSettledAt: sharesLastSettledAt,
   } = useDocumentShares(pid, { enabled: canShareDocuments });
   const invalidateDocumentShares = useInvalidateDocumentShares(pid);
 
@@ -263,12 +264,49 @@ export default function ProjectDocuments() {
   // again the moment the dialog opens: one owner-only RPC per Share click, in
   // exchange for never handing out a link that is already dead.
   const shareDocId = shareDoc?.id ?? null;
+  const [shareCheck, setShareCheck] = useState<{
+    documentId: string;
+    startedAt: number;
+    settled: boolean;
+    failed: boolean;
+  } | null>(null);
   useEffect(() => {
-    if (!shareDocId) return;
+    if (!shareDocId) {
+      setShareCheck(null);
+      return;
+    }
+    setShareCheck({ documentId: shareDocId, startedAt: Date.now(), settled: false, failed: false });
     void invalidateDocumentShares();
     // invalidateDocumentShares is stable (useCallback on the ids it closes over).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareDocId]);
+
+  // Settled means the list itself was re-read after the dialog opened; a
+  // cancelled or superseded refetch does not count. If that re-read failed, the
+  // cache is not trusted and the dialog asks create_document_share, which
+  // returns the live link or mints one.
+  useEffect(() => {
+    if (!shareCheck || shareCheck.settled || shareCheck.documentId !== shareDocId) return;
+    if (sharesLastSettledAt < shareCheck.startedAt) return;
+    setShareCheck({ ...shareCheck, settled: true, failed: sharesError });
+  }, [shareCheck, shareDocId, sharesLastSettledAt, sharesError]);
+  const shareCheckSettled = shareCheck !== null && shareCheck.settled && shareCheck.documentId === shareDocId;
+
+  // Deep-link: open the document the dashboard docs widget was clicked on, read
+  // from navigation state. Consumed once per mount, because `documents` changes
+  // identity on refetch and re-running would reopen the preview the user just
+  // closed.
+  const location = useLocation();
+  const consumedDocumentIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const requestedId = (location.state as { openDocumentId?: string } | null)?.openDocumentId;
+    if (!requestedId) return;
+    if (consumedDocumentIdRef.current === requestedId) return;
+    const target = documents.find((entry) => entry.id === requestedId);
+    if (!target) return;
+    consumedDocumentIdRef.current = requestedId;
+    setViewDoc(target);
+  }, [documents, location.state]);
 
   const effectiveInternalDocs = useMemo(
     () => effectiveInternalDocsVisibilityForSeam(perm.seam.membership),
@@ -419,6 +457,14 @@ export default function ProjectDocuments() {
 
     if (!uploadFile) {
       toast({ title: t("documents.upload.selectFile"), variant: "destructive" });
+      return;
+    }
+    if (isSvgFile(uploadFile)) {
+      toast({
+        title: t("documents.upload.failedTitle"),
+        description: t("documents.upload.svgNotAllowed"),
+        variant: "destructive",
+      });
       return;
     }
 
@@ -1623,7 +1669,8 @@ export default function ProjectDocuments() {
           onOpenChange={(open) => { if (!open) setShareDoc(null); }}
           projectId={pid}
           document={{ id: shareDoc.id, title: shareDoc.title, visibilityClass: shareDoc.visibility_class ?? null }}
-          existingShare={sharesByDocumentId.get(shareDoc.id) ?? null}
+          existingShare={shareCheckSettled && !shareCheck.failed ? sharesByDocumentId.get(shareDoc.id) ?? null : null}
+          verifyingExistingShare={!shareCheckSettled}
           canChangeVisibility={canChangeVisibility}
           onMakeShared={(documentId) => applyVisibilityChange(documentId, "shared_project")}
         />

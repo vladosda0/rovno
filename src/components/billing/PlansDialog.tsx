@@ -41,6 +41,11 @@ function lim(value: number): string {
   return value < 0 ? "∞" : String(value);
 }
 
+// Plural count for a limit: Intl.PluralRules("ru").select(-1) is "one", so unlimited goes as Infinity ("other").
+function limCount(value: number): { count: number; value: string } {
+  return { count: value < 0 ? Infinity : value, value: lim(value) };
+}
+
 interface PlansDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -162,9 +167,20 @@ export function PlansDialog({ open, onOpenChange, currentPlan }: PlansDialogProp
                   </p>
 
                   <ul className="mt-sp-2 flex-1 space-y-1 text-caption text-muted-foreground">
-                    <li>{t("plans.dialog.limit.chat", { value: limits.ai_chat_per_month })}</li>
-                    <li>{t("plans.dialog.limit.doc", { value: lim(limits.ai_doc_per_month) })}</li>
-                    <li>{t("plans.dialog.limit.photo", { value: lim(limits.ai_photo_per_month) })}</li>
+                    <li>{t("plans.dialog.limit.chat", limCount(limits.ai_chat_per_month))}</li>
+                    {/* Sold in every plan, not in the product yet (rovno-db#45):
+                        greyed out with a "Coming soon" badge. */}
+                    {[
+                      t("plans.dialog.limit.doc", limCount(limits.ai_doc_per_month)),
+                      t("plans.dialog.limit.photo", limCount(limits.ai_photo_per_month)),
+                    ].map((line) => (
+                      <li key={line} data-soon="" className="flex flex-wrap items-center gap-1 opacity-60">
+                        <span>{line}</span>
+                        <Badge variant="outline" className="border-border px-1.5 py-0 text-[10px] font-medium text-muted-foreground">
+                          {t("pricing.soonBadge")}
+                        </Badge>
+                      </li>
+                    ))}
                     <li>{t("plans.dialog.limit.estimates", { value: lim(limits.estimates_total) })}</li>
                     <li>{t("plans.dialog.limit.editors", { value: lim(limits.editors_per_project) })}</li>
                     {limits.can_create_organization && <li className="flex items-center gap-1"><Check className="h-3 w-3 text-accent" />{t("plans.dialog.limit.org")}</li>}

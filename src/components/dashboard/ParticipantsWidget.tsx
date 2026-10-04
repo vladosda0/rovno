@@ -47,13 +47,17 @@ export function ParticipantsWidget({ members, projectId, className }: Props) {
         {members.map((m) => {
           const user = getUserById(m.user_id);
           return (
-            <div key={m.user_id} className="flex items-center gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2">
+            <Link
+              key={m.user_id}
+              to={`/project/${projectId}/participants`}
+              className="flex items-center gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2 hover:bg-muted/70 transition-colors"
+            >
               <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
                 <span className="text-[10px] font-semibold text-accent">{user?.name?.charAt(0) ?? "?"}</span>
               </div>
               <span className="text-caption text-foreground flex-1 truncate">{user?.name ?? t("participantsWidget.unknown")}</span>
               <span className="text-[10px] text-muted-foreground">{roleLabel(m.role)}</span>
-            </div>
+            </Link>
           );
         })}
       </div>

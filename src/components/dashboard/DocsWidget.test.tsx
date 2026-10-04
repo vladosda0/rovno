@@ -38,6 +38,15 @@ describe("DocsWidget", () => {
     expect(screen.getByText("Uploaded from demo")).toBeInTheDocument();
   });
 
+  // The row is the document, not a label about it: clicking it opens that
+  // document on the documents page.
+  it("links each row to its own document", () => {
+    renderDocsWidget([buildDocument("doc-2", "Wiring diagram")]);
+
+    const row = screen.getByText("Wiring diagram").closest("a");
+    expect(row).toHaveAttribute("href", "/project/project-1/documents");
+  });
+
   it("keeps the pinned document first and the rest newest-first", () => {
     const { container } = renderDocsWidget([
       buildDocument("doc-1", "Contract", "project_creation"),

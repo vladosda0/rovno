@@ -11,10 +11,11 @@
 //  - All copy is localized (RU/EN) through the `landing.*` keys; the pricing
 //    section reuses the shared `pricing.*` namespace so the landing and the
 //    in-app pricing block can't drift apart.
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { PLANS, type PlanCode } from "@/data/plans";
+import { trackEventOncePerSession } from "@/lib/analytics";
 import { formatRubFromKopecks } from "@/lib/billing";
 import type { RuntimeAuthStatus } from "@/hooks/use-runtime-auth";
 import { getActiveLanguage } from "@/i18n";
@@ -509,7 +510,9 @@ type Plan = {
   cap: string;
   featured?: boolean;
   badge?: string;
-  ai: { label: string; quotas: string[] };
+  // `soon`: included in the plan but not in the product yet (rovno-db#45),
+  // rendered greyed out with a "Coming soon" pill.
+  ai: { label: string; quotas: { text: string; soon?: boolean }[] };
   feat: string[];
   cta: string;
 };
@@ -525,6 +528,33 @@ const PRICING_ORIGINAL_KOPECKS: Partial<Record<PlanCode, number>> = {
 
 export function Pricing({ startPath }: { startPath: string }) {
   const { t } = useTranslation();
+  // The pricing "page" is this landing section, so the funnel's
+  // `pricing_page_viewed` fires when it actually reaches the viewport rather
+  // than on a route change. Once per session: scrolling back and forth past
+  // the section is one look at the prices, not five.
+  const sectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const node = sectionRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          trackEventOncePerSession("pricing_page_viewed");
+          observer.disconnect();
+        }
+      },
+      // rootMargin, NOT a ratio threshold: `threshold: 0.25` is a fraction of
+      // the ELEMENT, so on a phone — where this section stacks into a tall
+      // column — a quarter of it can exceed the whole viewport and the event
+      // would never fire. Shrinking the root to its middle band is
+      // viewport-relative, so it behaves the same at any section height.
+      { threshold: 0, rootMargin: "-25% 0px -25% 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   // Plan names, AI tier labels and quota lines come from the shared `pricing.*`
   // namespace that the in-app pricing block already uses, so the two can't drift
   // apart. `PLANS[code].display_name` stays the fallback: it mirrors backend
@@ -536,7 +566,11 @@ export function Pricing({ startPath }: { startPath: string }) {
       cap: t("landing.pricing.free.cap"),
       ai: {
         label: t("pricing.plans.free.ai.title"),
-        quotas: [t("pricing.plans.free.ai.chat"), t("pricing.plans.free.ai.doc"), t("pricing.plans.free.ai.photo")],
+        quotas: [
+          { text: t("pricing.plans.free.ai.chat") },
+          { text: t("pricing.plans.free.ai.doc"), soon: true },
+          { text: t("pricing.plans.free.ai.photo"), soon: true },
+        ],
       },
       feat: [t("landing.pricing.free.feat1"), t("landing.pricing.free.feat2")],
       cta: t("landing.pricing.free.cta"),
@@ -549,7 +583,11 @@ export function Pricing({ startPath }: { startPath: string }) {
       badge: t("pricing.recommendedBadge"),
       ai: {
         label: t("pricing.plans.master.ai.title"),
-        quotas: [t("pricing.plans.master.ai.chat"), t("pricing.plans.master.ai.doc"), t("pricing.plans.master.ai.photo")],
+        quotas: [
+          { text: t("pricing.plans.master.ai.chat") },
+          { text: t("pricing.plans.master.ai.doc"), soon: true },
+          { text: t("pricing.plans.master.ai.photo"), soon: true },
+        ],
       },
       feat: [t("landing.pricing.master.feat1"), t("landing.pricing.master.feat2"), t("landing.pricing.master.feat3")],
       cta: t("pricing.cta.continue"),
@@ -560,7 +598,11 @@ export function Pricing({ startPath }: { startPath: string }) {
       cap: t("landing.pricing.brigade.cap"),
       ai: {
         label: t("pricing.plans.brigade.ai.title"),
-        quotas: [t("pricing.plans.brigade.ai.chat"), t("pricing.plans.brigade.ai.doc"), t("pricing.plans.brigade.ai.photo")],
+        quotas: [
+          { text: t("pricing.plans.brigade.ai.chat") },
+          { text: t("pricing.plans.brigade.ai.doc"), soon: true },
+          { text: t("pricing.plans.brigade.ai.photo"), soon: true },
+        ],
       },
       feat: [
         t("landing.pricing.brigade.feat1"),
@@ -577,7 +619,7 @@ export function Pricing({ startPath }: { startPath: string }) {
     </svg>
   );
   return (
-    <section id="pricing" className="rv-section" style={{ padding: "96px 48px 72px" }}>
+    <section ref={sectionRef} id="pricing" className="rv-section" style={{ padding: "96px 48px 72px" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <h2 style={{ fontFamily: "var(--font-display)", fontSize: 48, lineHeight: 1, letterSpacing: "-0.03em", color: "var(--rv-blue)" }}>{t("landing.pricing.title")}</h2>
         <p style={{ fontFamily: "var(--font-body)", fontSize: 18, lineHeight: "24px", color: "var(--rv-blue)", opacity: 0.72, marginBottom: 32 }}>
@@ -635,8 +677,17 @@ export function Pricing({ startPath }: { startPath: string }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600, lineHeight: "18px" }}>{p.ai.label}</span>
                     {p.ai.quotas.map((q) => (
-                      <span key={q} style={{ fontFamily: "var(--font-body)", fontSize: 13, lineHeight: "18px", opacity: 0.72, paddingLeft: 2 }}>
-                        {q}
+                      <span
+                        key={q.text}
+                        data-soon={q.soon ? "" : undefined}
+                        style={{ fontFamily: "var(--font-body)", fontSize: 13, lineHeight: "18px", opacity: q.soon ? 0.44 : 0.72, paddingLeft: 2 }}
+                      >
+                        <span>{q.text}</span>
+                        {q.soon && (
+                          <span style={{ marginLeft: 8, fontFamily: "var(--font-mono-ui)", fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", padding: "2px 6px", borderRadius: 999, border: "1px solid currentColor", verticalAlign: "1px" }}>
+                            {t("pricing.soonBadge")}
+                          </span>
+                        )}
                       </span>
                     ))}
                   </div>

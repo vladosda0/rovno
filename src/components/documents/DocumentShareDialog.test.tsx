@@ -75,6 +75,21 @@ describe("DocumentShareDialog", () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
+  it("does not show a cached link while the share list is being re-checked", async () => {
+    const share = { documentId: "doc-1", shareToken: TOKEN, createdAt: "2026-09-08T00:00:00Z" };
+    const { rerender, props } = renderDialog({ existingShare: share, verifyingExistingShare: true });
+
+    await act(async () => {});
+    expect(screen.queryByLabelText("Link")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy link" })).not.toBeInTheDocument();
+    expect(mockCreate).not.toHaveBeenCalled();
+
+    rerender(<DocumentShareDialog {...props} existingShare={share} verifyingExistingShare={false} />);
+    const input = await screen.findByLabelText("Link");
+    expect((input as HTMLInputElement).value).toContain(TOKEN);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
   it("revokes after confirmation and closes", async () => {
     const { props } = renderDialog();
     await screen.findByLabelText("Link");

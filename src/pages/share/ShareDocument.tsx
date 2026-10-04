@@ -53,6 +53,7 @@ export default function ShareDocument() {
   const { t, i18n } = useTranslation();
   const [downloading, setDownloading] = useState(false);
   const [openingTab, setOpeningTab] = useState(false);
+  const [brokenImageUrl, setBrokenImageUrl] = useState<string | null>(null);
 
   const query = useQuery({
     queryKey: ["document-share", token],
@@ -158,7 +159,7 @@ export default function ShareDocument() {
     );
   }
 
-  const isImage = file.mimeType?.startsWith("image/") ?? false;
+  const isImage = (file.mimeType?.startsWith("image/") ?? false) && brokenImageUrl !== file.signedUrl;
   const isPdf = file.mimeType === "application/pdf";
   const canOpenInline = !!file.mimeType && INLINE_SAFE_MIME_TYPES.has(file.mimeType);
 
@@ -204,7 +205,12 @@ export default function ShareDocument() {
 
       <div className="rounded-card border border-border bg-card p-sp-2">
         {isImage ? (
-          <img src={file.signedUrl} alt={file.title} className="mx-auto max-h-[70vh] rounded-md object-contain" />
+          <img
+            src={file.signedUrl}
+            alt={file.title}
+            className="mx-auto max-h-[70vh] rounded-md object-contain"
+            onError={() => setBrokenImageUrl(file.signedUrl)}
+          />
         ) : isPdf ? (
           <iframe
             src={file.signedUrl}

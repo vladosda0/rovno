@@ -174,6 +174,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260825150000_profiles_column_scoped_write_grants.sql`
 - `supabase/migrations/20260825150100_harden_append_tutorial_completed.sql`
 - `supabase/migrations/20260908120000_document_shares.sql`
+- `supabase/migrations/20260924120000_cross_project_transfer_server_owned.sql`
+- `supabase/migrations/20261001020000_document_shares_pin_file.sql`
 
 ## Exclusions
 

@@ -31,19 +31,24 @@ export function GalleryWidget({ media, projectId, className }: Props) {
         {media.length > 0 ? (
           <div className="grid grid-cols-2 gap-2">
             {media.slice(0, 4).map((m) => (
-              <div key={m.id} className="space-y-1">
+              <Link
+                key={m.id}
+                to={`/project/${projectId}/gallery`}
+                state={{ openPhotoId: m.id }}
+                className="space-y-1 group"
+              >
                 <div className="rounded-panel bg-muted/40 aspect-square flex items-center justify-center p-1 overflow-hidden relative">
                   <MediaImage
                     storage={m.storage}
                     alt={m.caption}
-                    imgClassName="absolute inset-0 h-full w-full object-cover"
+                    imgClassName="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105"
                     fallback={<Camera className="h-5 w-5 text-muted-foreground" />}
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground line-clamp-2">
                   {m.description || m.caption}
                 </p>
-              </div>
+              </Link>
             ))}
           </div>
         ) : (

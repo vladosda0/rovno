@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
@@ -133,6 +133,40 @@ describe("TaskDetailModal", () => {
     expect(screen.getByPlaceholderText("Click to add description…")).toBeInTheDocument();
   });
 
+  // The status write takes a server round-trip. Without a pending mark the chip
+  // looked untouched for those seconds and the click read as ignored.
+  it("marks the status being applied as busy and locks the other statuses", () => {
+    const onStatusChange = vi.fn();
+    renderTaskDetail({ pendingStatus: "in_progress", onStatusChange });
+
+    const pendingChip = screen.getByRole("button", { name: /In progress/ });
+    expect(pendingChip).toHaveAttribute("aria-busy", "true");
+    expect(pendingChip).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+
+    // aria-pressed держится за ПОДТВЕРЖДЁННЫЙ статус, а не за оптимистичную
+    // подсветку. Подсветка обязана забежать вперёд, озвучка — нет: если запись
+    // провалится, диктор не должен успеть объявить нажатым то, чего сервер не
+    // принял. Без этих двух строк правка aria-pressed на
+    // `task.status === s || isPending` оставляла все проверки зелёными.
+    expect(pendingChip).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /Not started/ }))
+      .toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(onStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("leaves the status chips live when nothing is in flight", () => {
+    const onStatusChange = vi.fn();
+    renderTaskDetail({ onStatusChange });
+
+    const chip = screen.getByRole("button", { name: /In progress/ });
+    expect(chip).not.toHaveAttribute("aria-busy", "true");
+    fireEvent.click(chip);
+    expect(onStatusChange).toHaveBeenCalledWith("task-1", "in_progress");
+  });
+
   it("provides an accessible dialog name and description", () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -197,5 +231,16 @@ describe("TaskDetailModal", () => {
 
     expect(screen.getByText("Other")).toBeInTheDocument();
     expect(screen.queryByText("Estimate item")).not.toBeInTheDocument();
+  });
+
+  it("exposes which status the task is in to assistive technology", () => {
+    renderTaskDetail({ task: task({ status: "in_progress" }) });
+
+    const group = screen.getByRole("group", { name: "Status" });
+    expect(within(group).getByRole("button", { name: "In progress", pressed: true })).toBeInTheDocument();
+
+    for (const label of ["Not started", "Done", "Blocked"]) {
+      expect(within(group).getByRole("button", { name: label, pressed: false })).toBeInTheDocument();
+    }
   });
 });

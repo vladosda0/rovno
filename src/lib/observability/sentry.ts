@@ -11,11 +11,14 @@
  * must never break the app for the user.
  */
 
+import { releaseFromDocument } from "./app-release";
+import { importOptional } from "./optional-import";
 import { scrubEventSafe } from "./scrub";
+import { isCrawlerAssetFetchFailure, isWalletProviderRejection } from "./third-party-noise";
 
 type SentryLib = typeof import("@sentry/react");
 
-/** Injected by vite.config.ts `define` (git SHA at build time). */
+/** Injected by vite.config.ts `define` (git SHA at build time, or "unknown"). */
 declare const __APP_RELEASE__: string;
 
 export const SENTRY_DSN: string | null = (() => {
@@ -28,7 +31,10 @@ export const SENTRY_DSN: string | null = (() => {
 /** Same source + default as EnvBanner: unset behaves like production. */
 const ENVIRONMENT: string = `${import.meta.env.VITE_APP_ENV ?? "production"}`;
 
-const RELEASE: string = typeof __APP_RELEASE__ !== "undefined" ? __APP_RELEASE__ : "unknown";
+const RELEASE: string = releaseFromDocument(
+  typeof document !== "undefined" ? document : undefined,
+  typeof __APP_RELEASE__ !== "undefined" ? __APP_RELEASE__ : "unknown",
+);
 
 export interface CaptureContext {
   tags?: Record<string, string>;
@@ -67,6 +73,11 @@ function installEarlyHandlers(): void {
     }
   };
   onEarlyRejection = (event: PromiseRejectionEvent) => {
+    // Filtered here as well as in `beforeSend`: the buffer holds
+    // MAX_BUFFERED_ERRORS entries and drops new arrivals once full, so
+    // unfiltered noise fills it and the real pre-init errors it is for are
+    // lost outright rather than merely filtered.
+    if (isWalletProviderRejection(event.reason)) return;
     if (earlyErrorBuffer.length < MAX_BUFFERED_ERRORS) {
       earlyErrorBuffer.push(event.reason);
     }
@@ -96,7 +107,7 @@ export function initErrorTracking(): void {
   // Catch errors thrown before the SDK chunk arrives; replayed after init.
   installEarlyHandlers();
 
-  void import("@sentry/react")
+  void importOptional(() => import("@sentry/react"))
     .then((lib) => {
       lib.init({
         dsn: SENTRY_DSN,
@@ -107,8 +118,16 @@ export function initErrorTracking(): void {
         // PostgREST / edge-function error messages carry useful detail past
         // Sentry's 250-char default.
         maxValueLength: 1000,
-        beforeSend: (event) =>
-          scrubEventSafe(event as unknown as Record<string, unknown>) as typeof event | null,
+        // `hint.originalException` is the raw rejected value on both paths that
+        // reach here — the SDK's own unhandledrejection handler and the
+        // `captureException` replay of `earlyErrorBuffer` below — so one
+        // predicate covers both windows. `ignoreErrors` cannot: a plain object
+        // is retitled by the SDK before it is matched.
+        beforeSend: (event, hint) =>
+          isWalletProviderRejection(hint?.originalException) ||
+          isCrawlerAssetFetchFailure(hint?.originalException, navigator.userAgent)
+            ? null
+            : (scrubEventSafe(event as unknown as Record<string, unknown>) as typeof event | null),
         ignoreErrors: [
           // Benign browser noise, standard Sentry hygiene.
           "ResizeObserver loop limit exceeded",

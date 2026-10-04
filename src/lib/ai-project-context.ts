@@ -22,6 +22,11 @@ import {
   effectiveInternalDocsVisibilityForSeam,
   canViewInternalDocuments,
 } from "@/lib/internal-docs-visibility";
+import {
+  countTaskStatuses,
+  deriveProjectProgressPct,
+  totalTaskCount,
+} from "@/lib/project-status";
 
 // ---------------------------------------------------------------------------
 // Targeted send gate (live assistant path must not bypass strict context seam)
@@ -133,6 +138,11 @@ export interface AIContextPack {
 // ---------------------------------------------------------------------------
 
 export interface AIContextInputs {
+  /**
+   * `progress_pct` is the stored column (rovno-db#47). It survives here only as
+   * the fallback for a project that has no tasks to measure — see the progress
+   * derivation in `buildAIProjectContext`.
+   */
   project: { title: string; type: string; progress_pct: number } | null;
   stages: { title: string; status: string }[];
   tasks: { status: string }[];
@@ -165,21 +175,35 @@ export function buildAIProjectContext(
     return visible;
   }
 
+  // -- Tasks --
+  // Resolved before the project block because progress is derived from the same
+  // counts. `domainVisible` appends to `hiddenDomains`, so this must stay the
+  // first domain checked or the order of `_meta.hiddenDomains` changes.
+  const tasksVisible = domainVisible("tasks");
+  const taskCounts = countTaskStatuses(inputs.tasks);
+  const tasksTotal = totalTaskCount(taskCounts);
+
+  const tasks: AIContextTasks | null = tasksVisible
+    ? { total: tasksTotal, done: taskCounts.done, blocked: taskCounts.blocked }
+    : null;
+
   // -- Project basics (always visible for members) --
+  // Progress is the share of finished tasks, the same formula the project
+  // dashboard and the home "Проекты" list use (`deriveProjectProgressPct`), so
+  // the assistant cannot reason from a number the user never sees. The stored
+  // `progress_pct` is used only when the project has no tasks at all, and only
+  // when the tasks domain is visible to this role — a role that may not see
+  // tasks must not receive an aggregate computed from them.
+  const progressPct = inputs.project
+    ? (tasksVisible
+        ? deriveProjectProgressPct(taskCounts, inputs.project.progress_pct)
+        : inputs.project.progress_pct)
+    : 0;
   const project: AIContextProject = inputs.project
-    ? { title: inputs.project.title, type: inputs.project.type, progress: `${inputs.project.progress_pct}%` }
+    ? { title: inputs.project.title, type: inputs.project.type, progress: `${progressPct}%` }
     : { title: "", type: "", progress: "0%" };
 
   const stages: AIContextStage[] = inputs.stages.map((s) => ({ title: s.title, status: s.status }));
-
-  // -- Tasks --
-  const tasks: AIContextTasks | null = domainVisible("tasks")
-    ? {
-        total: inputs.tasks.length,
-        done: inputs.tasks.filter((t) => t.status === "done").length,
-        blocked: inputs.tasks.filter((t) => t.status === "blocked").length,
-      }
-    : null;
 
   // -- Estimate (visibility-mode gated) --
   let estimate: AIContextEstimate | null = null;

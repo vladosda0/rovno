@@ -16,6 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/hooks/use-toast";
 import { useScopedDocumentUpload } from "@/components/upload/use-scoped-document-upload";
+import { isSvgFile } from "@/lib/document-file-types";
 import {
   ESTIMATE_TEMPLATE_SCOPE_TAGS,
   PENDING_INGEST_TYPE,
@@ -54,6 +55,10 @@ export function EstimateTemplateForm({
     event.preventDefault();
     if (!file || !title.trim()) {
       toast({ title: t("upload.modal.errors.fileRequired"), variant: "destructive" });
+      return;
+    }
+    if (isSvgFile(file)) {
+      toast({ title: t("documents.upload.svgNotAllowed"), variant: "destructive" });
       return;
     }
     const scopeNote = t("upload.modal.step3.estimate_template.scopeTagNote", { scope: scopeTag });

@@ -1,5 +1,5 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useProjectionAdvance } from "@/hooks/use-projection-advance";
 import * as store from "@/data/store";
 import {
@@ -11,6 +11,11 @@ import {
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { Stage, Task } from "@/types/entities";
+import { countTaskStatuses, type ProjectStatusSummary } from "@/lib/project-status";
+import {
+  getEstimateV2ProjectState,
+  subscribeEstimateV2,
+} from "@/data/estimate-v2-store";
 
 // 30s (P2): with focus refetch opted in below, returning to the tab after
 // half a minute away re-checks the server truth without churning quick tab
@@ -18,6 +23,7 @@ import type { Stage, Task } from "@/types/entities";
 const PLANNING_QUERY_STALE_TIME_MS = 30_000;
 const EMPTY_PLANNING_STAGES: Stage[] = [];
 const EMPTY_PLANNING_TASKS: Task[] = [];
+const EMPTY_STATUS_SUMMARY_BY_PROJECT: Record<string, ProjectStatusSummary> = {};
 
 // Query keys are STABLE across estimate projection advances (no revision segment).
 // A key that embeds projectedRevision collapses the cache to `undefined` on every
@@ -29,6 +35,8 @@ export const planningQueryKeys = {
     ["planning", "project-stages", profileId, projectId] as const,
   projectTasks: (profileId: string, projectId: string) =>
     ["planning", "project-tasks", profileId, projectId] as const,
+  projectsStatusSummary: (profileId: string, projectIds: string[]) =>
+    ["planning", "projects-status-summary", profileId, projectIds] as const,
 };
 
 function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
@@ -219,4 +227,90 @@ export function usePlanningProjectTasksState(projectId: string): { tasks: Task[]
 
 export function usePlanningProjectTasks(projectId: string): Task[] {
   return usePlanningProjectTasksState(projectId).tasks;
+}
+
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/** Keeps array identity stable so it can be a query key and an effect dependency. */
+function useStableStringArray(values: string[]): string[] {
+  const valueRef = useRef(values);
+  if (!areStringArraysEqual(valueRef.current, values)) {
+    valueRef.current = values;
+  }
+  return valueRef.current;
+}
+
+/**
+ * Per-project status inputs for the project lists: the estimate's execution
+ * status (which IS the project's status) plus task tallies for the progress bar.
+ * One pair of round-trips for the whole list, not one per project.
+ */
+export function useProjectsStatusSummary(
+  projectIds: string[],
+): Record<string, ProjectStatusSummary> {
+  const mode = useWorkspaceMode();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const normalizedProjectIds = useStableStringArray(projectIds.filter(Boolean));
+  const isBrowserMode = mode.kind === "demo" || mode.kind === "local";
+
+  const readBrowserSummaries = useCallback(
+    (): Record<string, ProjectStatusSummary> => Object.fromEntries(
+      normalizedProjectIds.map((projectId) => [projectId, {
+        executionStatus: getEstimateV2ProjectState(projectId).project.estimateStatus ?? null,
+        estimateApproved: false,
+        // Как и в браузерном источнике: ветка вывода здесь недостижима, потому
+        // что estimateStatus у стора НЕнулевой. Разблокируется с rovno#165.
+        hasLinkedEstimateChecklist: false,
+        taskCounts: countTaskStatuses(store.getTasks(projectId)),
+      }]),
+    ),
+    [normalizedProjectIds],
+  );
+  const [browserSummaries, setBrowserSummaries] = useState<Record<string, ProjectStatusSummary>>(
+    () => (isBrowserMode ? readBrowserSummaries() : EMPTY_STATUS_SUMMARY_BY_PROJECT),
+  );
+
+  // Two stores feed one badge: tasks live in the workspace store, the execution
+  // status in the estimate store. Subscribing to only one leaves the list stale
+  // after a change made on the other side.
+  useEffect(() => {
+    if (!isBrowserMode) {
+      setBrowserSummaries(EMPTY_STATUS_SUMMARY_BY_PROJECT);
+      return;
+    }
+    const update = () => setBrowserSummaries(readBrowserSummaries());
+    update();
+    const unsubscribeStore = store.subscribe(update);
+    const unsubscribeEstimates = subscribeEstimateV2(update);
+    return () => {
+      unsubscribeStore();
+      unsubscribeEstimates();
+    };
+  }, [isBrowserMode, readBrowserSummaries]);
+
+  const summaryQuery = useQuery({
+    queryKey: supabaseMode
+      ? planningQueryKeys.projectsStatusSummary(supabaseMode.profileId, normalizedProjectIds)
+      : planningQueryKeys.projectsStatusSummary("browser", normalizedProjectIds),
+    queryFn: async () => {
+      const source = await getPlanningSource(supabaseMode ?? undefined);
+      return source.getProjectsStatusSummary(normalizedProjectIds);
+    },
+    enabled: Boolean(supabaseMode && normalizedProjectIds.length > 0),
+    staleTime: PLANNING_QUERY_STALE_TIME_MS,
+    refetchOnWindowFocus: true,
+    // Ключ несёт ВЕСЬ список идентификаторов, поэтому создание или удаление
+    // проекта чеканит новый ключ и без этого обнуляло бы сводку по всем
+    // остальным: проценты мигали бы 67 -> 0 -> 67. Прошлые данные держатся,
+    // пока не доедут новые.
+    placeholderData: keepPreviousData,
+  });
+
+  if (isBrowserMode) {
+    return browserSummaries;
+  }
+
+  return summaryQuery.data ?? EMPTY_STATUS_SUMMARY_BY_PROJECT;
 }

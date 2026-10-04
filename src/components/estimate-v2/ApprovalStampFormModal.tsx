@@ -15,7 +15,7 @@ import type { ApprovalStamp } from "@/types/estimate-v2";
 interface ApprovalStampFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (stamp: ApprovalStamp) => void;
+  onSubmit: (stamp: ApprovalStamp) => void | Promise<void>;
   title?: string;
   submitLabel?: string;
   defaults?: {
@@ -39,6 +39,7 @@ export function ApprovalStampFormModal({
   const [name, setName] = useState(defaults?.name ?? "");
   const [surname, setSurname] = useState(defaults?.surname ?? "");
   const [email, setEmail] = useState(defaults?.email ?? "");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -47,36 +48,48 @@ export function ApprovalStampFormModal({
     setEmail(defaults?.email ?? "");
   }, [defaults?.email, defaults?.name, defaults?.surname, open]);
 
-  const canSubmit = Boolean(name.trim() && surname.trim() && email.trim());
+  const canSubmit = Boolean(name.trim() && surname.trim() && email.trim()) && !submitting;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[92vw] max-w-md p-0 gap-0 overflow-hidden">
-        <DialogHeader className="border-b border-border px-5 py-4">
+    <Dialog open={open} onOpenChange={(next) => { if (!submitting) onOpenChange(next); }}>
+      {/*
+        A column, not a grid: the header and the footer are the two things that must
+        stay on screen when the viewport is shorter than the modal (a phone with the
+        keyboard up, which is always, since the form is three text inputs). Only the
+        field band scrolls; `overflow-hidden` keeps the horizontal axis clipped and
+        the vertical clip comes from the base scroller.
+      */}
+      <DialogContent className="w-[92vw] max-w-md p-0 gap-0 overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0 border-b border-border px-5 py-4">
           <DialogTitle>{resolvedTitle}</DialogTitle>
           <DialogDescription>
             {t("estimate.approval.description")}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("estimate.approval.placeholder.name")} />
           <Input value={surname} onChange={(e) => setSurname(e.target.value)} placeholder={t("estimate.approval.placeholder.surname")} />
           <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("estimate.approval.placeholder.email")} type="email" />
         </div>
 
-        <DialogFooter className="border-t border-border px-5 py-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
+        <DialogFooter className="shrink-0 border-t border-border px-5 py-4">
+          <Button variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button
             disabled={!canSubmit}
-            onClick={() => {
+            onClick={async () => {
               if (!canSubmit) return;
-              onSubmit({
-                name: name.trim(),
-                surname: surname.trim(),
-                email: email.trim(),
-                timestamp: new Date().toISOString(),
-              });
+              setSubmitting(true);
+              try {
+                await onSubmit({
+                  name: name.trim(),
+                  surname: surname.trim(),
+                  email: email.trim(),
+                  timestamp: new Date().toISOString(),
+                });
+              } finally {
+                setSubmitting(false);
+              }
             }}
           >
             {resolvedSubmitLabel}

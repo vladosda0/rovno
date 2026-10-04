@@ -94,11 +94,13 @@ export function BillingPanel() {
                 title={t("quota.meter.doc")}
                 used={quota.ai_doc_used}
                 limit={quota.ai_doc_limit}
+                soon
               />
               <UsageMeter
                 title={t("quota.meter.photo")}
                 used={quota.ai_photo_used}
                 limit={quota.ai_photo_limit}
+                soon
               />
               <UsageMeter
                 title={t("quota.meter.estimates")}

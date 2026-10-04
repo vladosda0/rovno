@@ -26,6 +26,42 @@ describe("shouldReportDataLayerError", () => {
     expect(shouldReportDataLayerError(offline, "mutation")).toBe(true);
   });
 
+  it("skips the plain-object network failure postgrest-js returns for queries", () => {
+    const offlinePostgrest = { message: "TypeError: Failed to fetch", details: "", hint: "", code: "" };
+    expect(shouldReportDataLayerError(offlinePostgrest, "query")).toBe(false);
+    expect(shouldReportDataLayerError(offlinePostgrest, "mutation")).toBe(true);
+
+    const safari = { message: "TypeError: Load failed", details: "", hint: "", code: "" };
+    expect(shouldReportDataLayerError(safari, "query")).toBe(false);
+
+    const firefox = {
+      message: "TypeError: NetworkError when attempting to fetch resource.",
+      details: "",
+      hint: "",
+      code: "",
+    };
+    expect(shouldReportDataLayerError(firefox, "query")).toBe(false);
+  });
+
+  it("still reports a defect whose message merely contains a network pattern", () => {
+    // "load failed" is a substring of "upload failed": matching the message
+    // alone would classify a real defect as offline noise.
+    expect(shouldReportDataLayerError({ message: "Document upload failed" }, "query")).toBe(true);
+    expect(
+      shouldReportDataLayerError(
+        { message: "Failed to fetch price list", details: null, hint: null, code: "P0001" },
+        "query",
+      ),
+    ).toBe(true);
+    expect(shouldReportDataLayerError(new Error("Document upload failed"), "query")).toBe(true);
+
+    // Strict equality on the code is load-bearing: `0 == ""` is true, so a
+    // loose compare would swallow a legacy DOMException-shaped error.
+    expect(
+      shouldReportDataLayerError({ code: 0, message: "Load failed while decoding" }, "query"),
+    ).toBe(true);
+  });
+
   it("reports real defects for both kinds", () => {
     const bug = new TypeError("Cannot read properties of undefined (reading 'id')");
     expect(shouldReportDataLayerError(bug, "query")).toBe(true);

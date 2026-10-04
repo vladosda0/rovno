@@ -165,4 +165,29 @@ describe("InviteAccept", () => {
       expect(screen.getByText("Project dashboard")).toBeInTheDocument();
     }, { timeout: 3000 });
   });
+
+  it.each([
+    ["unknown", true],
+    ["auth_required", true],
+    ["project_owner_over_limit", true],
+    ["invite_email_mismatch", false],
+    ["invite_expired", false],
+    ["invite_invalid_or_unavailable", false],
+  ])("offers try again for %s only when a retry can change the answer (%s)", async (code, retryable) => {
+    useRuntimeAuthMock.mockReturnValue({
+      status: "authenticated",
+      session: null,
+      user: { id: "profile-1" },
+      profileId: "profile-1",
+    });
+    acceptProjectInviteMock.mockResolvedValue({
+      ok: false,
+      error: { code, message: "server said no", rawError: null },
+    });
+
+    renderInvitePage();
+
+    expect(await screen.findByRole("link", { name: /go to home/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /try again/i }) !== null).toBe(retryable);
+  });
 });

@@ -62,14 +62,21 @@ export function TaskSummaryWidget({ tasks, projectId, className }: Props) {
             const color = taskStatusColor[task.status] ?? "text-muted-foreground";
             const assignee = getUserById(task.assignee_id);
             return (
-              <div key={task.id} className="flex items-center gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2">
+              // Opens the task board with this card already open, the same way
+              // PhotoViewer jumps to a task: the row is the entity, not a label.
+              <Link
+                key={task.id}
+                to={`/project/${projectId}/tasks`}
+                state={{ openTaskId: task.id }}
+                className="flex items-center gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2 hover:bg-muted/70 transition-colors"
+              >
                 <Icon className={`h-3.5 w-3.5 shrink-0 ${color}`} />
                 <StatusBadge status={taskStatusLabel(task.status)} variant="task" className="text-[10px] px-1.5 py-0" />
                 <span className="text-caption text-foreground flex-1 truncate">{task.title}</span>
                 <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
                   {assignee?.name ?? t("taskSummary.unassigned")}
                 </span>
-              </div>
+              </Link>
             );
           })}
         </div>

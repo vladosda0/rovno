@@ -114,6 +114,17 @@
   }
 }
 
+/* vh fallback for the overlay height clamp (dialog, alert-dialog, sheet).
+   Chrome < 108 and Safari < 15.4 drop `max-height: 100dvh`; this rule is emitted in
+   the components layer, before the utility, so newer engines still take dvh and a
+   call site's own max-h-* (base or responsive) still overrides both. It cannot be a
+   second class: cn() collapses `max-h-[100vh] max-h-[100dvh]` into one. */
+@layer components {
+  .max-h-\[100dvh\] {
+    max-height: 100vh;
+  }
+}
+
 /* === Glass utility classes === */
 @layer utilities {
   .no-scrollbar {

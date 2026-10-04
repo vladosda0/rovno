@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const uploadMock = vi.fn();
+const { toastMock } = vi.hoisted(() => ({ toastMock: vi.fn() }));
+vi.mock("@/hooks/use-toast", () => ({ toast: toastMock }));
 vi.mock("@/components/upload/use-scoped-document-upload", () => ({
   useScopedDocumentUpload: () => uploadMock,
 }));
@@ -28,6 +30,23 @@ describe("DocumentForm", () => {
   beforeEach(() => {
     uploadMock.mockReset();
     uploadMock.mockResolvedValue({ documentId: "doc-1" });
+    toastMock.mockReset();
+  });
+
+  it("refuses an SVG before any upload starts and says why", async () => {
+    const onClose = vi.fn();
+    const { container } = renderForm({ scope: "project", projectId: "p1", onClose });
+    selectFile(container, new File(["<svg/>"], "logo.svg", { type: "image/svg+xml" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    expect(toastMock).toHaveBeenCalledWith({
+      title: "SVG files cannot be uploaded to documents",
+      variant: "destructive",
+    });
+    expect(uploadMock).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
   it("disables Save until a file is attached", () => {

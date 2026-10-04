@@ -4,6 +4,7 @@ vi.mock("@/lib/blog/api", () => ({ triggerFrontendRebuild: vi.fn() }));
 
 import { triggerFrontendRebuild } from "@/lib/blog/api";
 import {
+  deleteDoneTitle,
   needsRebuildAfterDelete,
   REBUILD_TIMEOUT_MS,
   rebuildAfterTakedown,
@@ -67,6 +68,18 @@ describe("needsRebuildAfterDelete", () => {
 
   it("skips the rebuild when the delete removed nothing", () => {
     expect(needsRebuildAfterDelete([])).toBe(false);
+  });
+});
+
+describe("deleteDoneTitle", () => {
+  it("does not claim the post is gone when the delete removed nothing", () => {
+    // PostgREST answers a DELETE that matched nothing with 200 and no rows, so an
+    // empty list also covers "RLS refused" and "another tab got there first".
+    expect(deleteDoneTitle([])).toBe("Статья удалена или уже была удалена");
+  });
+
+  it("keeps the plain title when the server actually removed a draft", () => {
+    expect(deleteDoneTitle([{ published_at: null }])).toBe("Статья удалена");
   });
 });
 

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { FileInput } from "@/components/ui/file-input";
-import { DOCUMENT_UPLOAD_ACCEPT } from "@/lib/document-file-types";
+import { DOCUMENT_UPLOAD_ACCEPT, isSvgFile } from "@/lib/document-file-types";
 import { toast } from "@/hooks/use-toast";
 import { useScopedDocumentUpload } from "@/components/upload/use-scoped-document-upload";
 import type { UploadResult, UploadScope } from "@/components/upload/types";
@@ -30,6 +30,13 @@ export function DocumentForm({ scope, projectId, onBack, onClose, onComplete }: 
     event.preventDefault();
     if (!file) {
       toast({ title: t("upload.modal.errors.fileRequired"), variant: "destructive" });
+      return;
+    }
+    if (isSvgFile(file)) {
+      toast({
+        title: t("documents.upload.svgNotAllowed"),
+        variant: "destructive",
+      });
       return;
     }
     const effectiveTitle = title.trim() || file.name;

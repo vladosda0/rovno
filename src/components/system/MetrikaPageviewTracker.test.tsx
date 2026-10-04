@@ -27,6 +27,7 @@ describe("MetrikaPageviewTracker", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllEnvs();
     delete (window as unknown as { ym?: unknown }).ym;
     window.history.replaceState({}, "", "/");
@@ -36,6 +37,8 @@ describe("MetrikaPageviewTracker", () => {
   // router has to drive it or the assertion pins the pre-navigation URL.
   it("sends a pageview whose url carries neither the auth fragment nor private query params", async () => {
     window.history.replaceState({}, "", `/auth/reset-password?lang=ru${AUTH_FRAGMENT}`);
+    const referrer = `${window.location.origin}/auth/login?next=%2Finvite%2Faccept%2FQA-INVITE`;
+    Object.defineProperty(document, "referrer", { value: referrer, configurable: true });
     const { MetrikaPageviewTracker } = await import("./MetrikaPageviewTracker");
 
     render(
@@ -53,10 +56,14 @@ describe("MetrikaPageviewTracker", () => {
     expect(hits[0][2]).toBe(`${window.location.origin}/auth/email-sent?lang=ru`);
     expect(hits[0][2]).not.toContain("access_token");
     expect(hits[0][2]).not.toContain("example.com");
+    expect((hits[0][3] as { referer: string }).referer).toBe(window.location.origin);
+    Object.defineProperty(document, "referrer", { value: "", configurable: true });
   });
 
-  it("reports the route template, not the share token, in the hit url", async () => {
+  it("loads a share link afresh instead of showing it next to a running tag", async () => {
     window.history.replaceState({}, "", "/home");
+    const analytics = await import("@/lib/analytics");
+    const replace = vi.spyOn(analytics.documentNavigation, "replace").mockImplementation(() => {});
     const { MetrikaPageviewTracker } = await import("./MetrikaPageviewTracker");
 
     render(
@@ -66,12 +73,26 @@ describe("MetrikaPageviewTracker", () => {
       </BrowserRouter>,
     );
 
-    await waitFor(() => expect(ym.mock.calls.some((call) => call[1] === "hit")).toBe(true));
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith(`${window.location.origin}/share/estimate/QA-SHARE-TOKEN`),
+    );
+    expect(ym.mock.calls.filter((call) => call[1] === "hit")).toHaveLength(0);
+  });
 
-    const hits = ym.mock.calls.filter((call) => call[1] === "hit");
-    expect(hits).toHaveLength(1);
-    expect(window.location.pathname).toBe("/share/estimate/QA-SHARE-TOKEN");
-    expect(hits[0][2]).toBe(`${window.location.origin}/share/estimate/:shareId`);
-    expect(hits[0][2]).not.toContain("QA-SHARE-TOKEN");
+  it("loads the next page afresh when leaving a share link, and starts no tag on the way", async () => {
+    window.history.replaceState({}, "", "/share/estimate/QA-SHARE-TOKEN");
+    const analytics = await import("@/lib/analytics");
+    const replace = vi.spyOn(analytics.documentNavigation, "replace").mockImplementation(() => {});
+    const { MetrikaPageviewTracker } = await import("./MetrikaPageviewTracker");
+
+    render(
+      <BrowserRouter>
+        <MetrikaPageviewTracker />
+        <Navigate to="/home" />
+      </BrowserRouter>,
+    );
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(`${window.location.origin}/home`));
+    expect(ym.mock.calls.filter((call) => call[1] === "init" || call[1] === "hit")).toHaveLength(0);
   });
 });

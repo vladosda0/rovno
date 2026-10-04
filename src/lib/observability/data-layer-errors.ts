@@ -18,10 +18,28 @@ const NETWORK_FAILURE_PATTERNS = [
   "networkerror when attempting to fetch resource", // Firefox
 ];
 
+/**
+ * A PostgREST call does not reject when `fetch` does: while `throwOnError` is
+ * unset it resolves with a plain object carrying `message` `"<name>: <msg>"`
+ * and an EMPTY `code`. @supabase/postgrest-js 2.97.0, dist/index.mjs:153-193,
+ * the `res.catch` branch, where `code` is initialised to `""` and set to
+ * nothing else. A server error's `code` is `"42501"`, `"PGRST116"` or absent.
+ *
+ * The empty `code` is what keeps this narrow. Matching the message alone would
+ * also swallow an unrelated defect whose text happens to contain a pattern,
+ * and "load failed" is a substring of "upload failed".
+ */
+function isPostgrestFetchError(error: object): boolean {
+  return (error as { code?: unknown }).code === "";
+}
+
 export function isNetworkFetchFailure(error: unknown): boolean {
-  if (!(error instanceof TypeError)) return false;
-  const message = error.message.toLowerCase();
-  return NETWORK_FAILURE_PATTERNS.some((pattern) => message.includes(pattern));
+  if (typeof error !== "object" || error === null) return false;
+  if (!(error instanceof TypeError) && !isPostgrestFetchError(error)) return false;
+  const { message } = error as { message?: unknown };
+  if (typeof message !== "string") return false;
+  const lowered = message.toLowerCase();
+  return NETWORK_FAILURE_PATTERNS.some((pattern) => lowered.includes(pattern));
 }
 
 function isAbortError(error: unknown): boolean {
