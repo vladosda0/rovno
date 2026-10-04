@@ -44,6 +44,14 @@ function qtyFromMilli(qtyMilli: number): string {
   return (qtyMilli / 1000).toString();
 }
 
+function rejectionText(error: unknown): string | undefined {
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return undefined;
+}
+
 export default function ShareEstimate() {
   const { shareId = "" } = useParams<{ shareId: string }>();
   const { toast } = useToast();
@@ -192,8 +200,11 @@ export default function ShareEstimate() {
         const approved = await approveSharedEstimateVersion(shareId, stamp);
         queryClient.setQueryData(["estimate-share", shareId], approved);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        toast({ title: t("share.estimate.toast.unableToApprove"), description: message, variant: "destructive" });
+        toast({
+          title: t("share.estimate.toast.unableToApprove"),
+          description: rejectionText(error),
+          variant: "destructive",
+        });
         return;
       }
     }

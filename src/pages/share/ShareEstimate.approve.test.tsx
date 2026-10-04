@@ -105,6 +105,37 @@ describe("ShareEstimate approval submit", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
+  it("shows the server's text when the rejection is a plain object, not an Error", async () => {
+    const { shareId } = createSharedVersion();
+    leaveDemoServedByServer(shareId);
+    approveRemote.mockRejectedValue({ message: "Share is no longer open", code: "P0002", details: null, hint: null });
+
+    renderSharePage(shareId);
+    await screen.findByRole("button", { name: "Approve" });
+    fillAndSubmitStamp();
+
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
+    expect(toastSpy.mock.calls[0]?.[0]).toMatchObject({
+      title: "Unable to approve this version",
+      description: "Share is no longer open",
+      variant: "destructive",
+    });
+  });
+
+  it("shows the title alone when the rejection carries no text", async () => {
+    const { shareId } = createSharedVersion();
+    leaveDemoServedByServer(shareId);
+    approveRemote.mockRejectedValue({ code: "P0002" });
+
+    renderSharePage(shareId);
+    await screen.findByRole("button", { name: "Approve" });
+    fillAndSubmitStamp();
+
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
+    expect(toastSpy.mock.calls[0]?.[0]).toMatchObject({ title: "Unable to approve this version", variant: "destructive" });
+    expect(toastSpy.mock.calls[0]?.[0]?.description).toBeUndefined();
+  });
+
   it("announces approval once the server has recorded it", async () => {
     const { shareId } = createSharedVersion();
     const shared = findVersionByShareId(shareId);
