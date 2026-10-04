@@ -105,7 +105,7 @@ describe("ShareEstimate approval submit", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("says the version can no longer be approved when the server answers P0002, and refetches the share", async () => {
+  it("says the version can no longer be approved when the server answers P0002, refetches the share and closes the form", async () => {
     const { shareId } = createSharedVersion();
     leaveDemoServedByServer(shareId);
     approveRemote.mockRejectedValue({
@@ -123,6 +123,7 @@ describe("ShareEstimate approval submit", () => {
     await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
     expect(toastSpy.mock.calls[0]?.[0]).toEqual({ title: "This version can no longer be approved", variant: "destructive" });
     await waitFor(() => expect(fetchRemote.mock.calls.length).toBeGreaterThan(fetchesBefore));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("keeps the server's own text out of the toast for any other rejection", async () => {

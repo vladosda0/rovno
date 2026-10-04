@@ -199,6 +199,7 @@ export default function ShareEstimate() {
         if (isNoLongerApprovable(error)) {
           toast({ title: t("share.estimate.toast.noLonger"), variant: "destructive" });
           void queryClient.invalidateQueries({ queryKey: ["estimate-share", shareId] });
+          setApprovalModalOpen(false);
           return;
         }
         toast({ title: t("share.estimate.toast.unableToApprove"), variant: "destructive" });
