@@ -99,7 +99,7 @@ export function getEventCaption(t: Translate, type: string, feminineActor: boole
 /**
  * The one rule both feed surfaces use to pick the caption's gender, so they
  * cannot disagree about the same row. Only the non-human fallback actor
- * ("Система") is feminine: "ИИ" is masculine, and so is a person, until
+ * ("Система") is feminine: "Шурик" is masculine, and so is a person, until
  * profiles carry a gender field.
  */
 export function isFallbackActor(aiOrigin: boolean, actorResolved: boolean): boolean {
