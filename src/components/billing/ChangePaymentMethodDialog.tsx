@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { TBankAddCardForm } from "@/components/billing/TBankAddCardForm";
 import { useAddCard } from "@/hooks/useAddCard";
+import { syncCardBinding } from "@/lib/card-binding-sync";
 import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
 
@@ -70,6 +71,10 @@ export function ChangePaymentMethodDialog({ trigger, onChanged }: ChangePaymentM
     setOpen(next);
     if (next) {
       startBinding();
+    } else if (paymentUrl) {
+      // The card may have been bound on the bank's page in another tab, where no
+      // success callback reaches this dialog: ask the bank, then reread the card.
+      void syncCardBinding().then(() => onChanged?.());
     }
   };
 
@@ -81,9 +86,16 @@ export function ChangePaymentMethodDialog({ trigger, onChanged }: ChangePaymentM
     // we say "processing" and refetch a few times to pick the change up once it lands.
     toast({ title: t("settings.billing.changeCardProcessing") });
     onChanged?.();
+    // Besides the three plain refetches, ask the bank for the result now and once
+    // more a few seconds later, and reread the card after each answer.
+    const syncThenRefetch = () => void syncCardBinding().then(() => onChanged?.());
+    syncThenRefetch();
     refetchTimers.current.push(
       window.setTimeout(() => onChanged?.(), 2500),
-      window.setTimeout(() => onChanged?.(), 6000),
+      window.setTimeout(() => {
+        onChanged?.();
+        syncThenRefetch();
+      }, 6000),
     );
     setOpen(false);
   };

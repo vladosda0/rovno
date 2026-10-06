@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { useCardOnFile } from "@/hooks/useCardOnFile";
+import { useCardBindingSync } from "@/hooks/useCardBindingSync";
 import { PaymentHistory } from "@/components/billing/PaymentHistory";
 import { ChangePaymentMethodDialog } from "@/components/billing/ChangePaymentMethodDialog";
 import { CancelSubscriptionDialog } from "@/components/billing/CancelSubscriptionDialog";
@@ -28,6 +29,8 @@ export function SubscriptionSection() {
   const { t, i18n } = useTranslation();
   const { subscription, status, readOnly, isLoading, refetch } = useActiveSubscription();
   const { data: card, refetch: refetchCard } = useCardOnFile();
+  // A bind finished on the bank's page while this screen was closed is picked up here.
+  useCardBindingSync(refetchCard);
   const [clearingDowngrade, setClearingDowngrade] = useState(false);
   const [reactivating, setReactivating] = useState(false);
 
