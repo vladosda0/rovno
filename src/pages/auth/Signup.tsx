@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { clearDemoSession, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 import { trackEvent } from "@/lib/analytics";
+import { safeNextPath } from "@/lib/safe-next-path";
 
 export default function Signup() {
   const { t } = useTranslation();
@@ -20,8 +21,8 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [loading, setLoading] = useState(false);
-  const nextUrl = searchParams.get("next");
-  const postAuthDestination = nextUrl && nextUrl.startsWith("/") ? nextUrl : "/onboarding";
+  const safeNext = safeNextPath(searchParams.get("next"));
+  const postAuthDestination = safeNext ?? "/onboarding";
 
   // Funnel: "registration started" = the form was opened (captures the
   // never-submitted drop-off, not just failed submits).
@@ -111,7 +112,7 @@ export default function Signup() {
       subtitle={t("auth.signup.subtitle")}
       footer={
         <p className="text-center text-body-sm text-muted-foreground">
-          {t("auth.signup.alreadyHaveAccount")} <Link to={nextUrl ? `/auth/login?next=${encodeURIComponent(nextUrl)}` : "/auth/login"} className="text-accent hover:underline">{t("auth.signup.signIn")}</Link>
+          {t("auth.signup.alreadyHaveAccount")} <Link to={safeNext ? `/auth/login?next=${encodeURIComponent(safeNext)}` : "/auth/login"} className="text-accent hover:underline">{t("auth.signup.signIn")}</Link>
         </p>
       }
     >

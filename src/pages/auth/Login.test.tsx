@@ -79,4 +79,29 @@ describe("Login", () => {
       expect(screen.getByTestId("location-marker")).toHaveTextContent("/invite/accept/token-123");
     });
   });
+
+  it.each(["//evil.example", "/\\evil.example", "/.//evil.example"])("ignores an off-origin next param %s after sign in", async (next) => {
+    setAuthRole("guest");
+    signInWithPasswordMock.mockResolvedValue({
+      data: { session: { user: { id: "profile-1" } } },
+      error: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={[`/auth/login?next=${encodeURIComponent(next)}`]}>
+        <Routes>
+          <Route path="/auth/login" element={<Login />} />
+          <Route path="*" element={<LocationMarker />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location-marker").textContent).toMatch(/^\/(home|onboarding)$/);
+    });
+  });
 });

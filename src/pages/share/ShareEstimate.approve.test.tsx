@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ShareEstimate from "@/pages/share/ShareEstimate";
@@ -11,7 +11,7 @@ import {
 } from "@/data/estimate-v2-store";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 import { __unsafeResetRuntimeAuthForTests } from "@/hooks/use-runtime-auth";
-import { authenticateRuntimeAuth } from "@/test/runtime-auth";
+import { authenticateRuntimeAuth, guestRuntimeAuth } from "@/test/runtime-auth";
 
 const { approveRemote, fetchRemote, toastSpy } = vi.hoisted(() => ({
   approveRemote: vi.fn(),
@@ -46,7 +46,7 @@ function leaveDemoServedByServer(shareId: string) {
 
 function renderSharePage(shareId: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  return render(
+  render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[`/share/estimate/${shareId}`]}>
         <Routes>
@@ -55,9 +55,10 @@ function renderSharePage(shareId: string) {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return queryClient;
 }
 
-function fillAndSubmitStamp() {
+function openAndFillStamp() {
   fireEvent.click(screen.getByRole("button", { name: "Approve" }));
   fireEvent.change(screen.getByPlaceholderText("Name"), { target: { value: "Ivan" } });
   fireEvent.change(screen.getByPlaceholderText("Surname"), { target: { value: "Petrov" } });
@@ -65,8 +66,13 @@ function fillAndSubmitStamp() {
   const dialog = screen.getByRole("dialog");
   const submit = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Approve");
   expect(submit).toBeDefined();
-  fireEvent.click(submit!);
   return submit!;
+}
+
+function fillAndSubmitStamp() {
+  const submit = openAndFillStamp();
+  fireEvent.click(submit);
+  return submit;
 }
 
 function localApprovalStamp(versionId: string) {
@@ -123,6 +129,44 @@ describe("ShareEstimate approval submit", () => {
     await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
     expect(toastSpy.mock.calls[0]?.[0]).toEqual({ title: "This version can no longer be approved", variant: "destructive" });
     await waitFor(() => expect(fetchRemote.mock.calls.length).toBeGreaterThan(fetchesBefore));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("closes the form when someone else approved the version while it was open", async () => {
+    const { shareId } = createSharedVersion();
+    const shared = findVersionByShareId(shareId)!;
+    leaveDemoServedByServer(shareId);
+
+    const queryClient = renderSharePage(shareId);
+    await screen.findByRole("button", { name: "Approve" });
+    const submit = openAndFillStamp();
+    act(() => {
+      queryClient.setQueryData(["estimate-share", shareId], {
+        ...shared,
+        version: { ...shared.version, approvalStamp: { name: "Anna", surname: "Orlova", email: "anna@example.com", timestamp: new Date().toISOString() } },
+      });
+    });
+    await waitFor(() => expect(document.body.textContent).toContain("Orlova"));
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
+    expect(toastSpy.mock.calls[0]?.[0]).toEqual({ title: "This version can no longer be approved", variant: "destructive" });
+    expect(approveRemote).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("closes the form when the session ended while it was open", async () => {
+    const { shareId } = createSharedVersion();
+    leaveDemoServedByServer(shareId);
+
+    renderSharePage(shareId);
+    await screen.findByRole("button", { name: "Approve" });
+    const submit = openAndFillStamp();
+    act(() => guestRuntimeAuth());
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
+    expect(approveRemote).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 

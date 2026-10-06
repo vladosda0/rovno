@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 import { setAnalyticsUserId, trackEventOncePerUser } from "@/lib/analytics";
+import { safeNextPath } from "@/lib/safe-next-path";
 
 export default function Login() {
   const { t } = useTranslation();
@@ -18,7 +19,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const nextUrl = searchParams.get("next");
+  const safeNext = safeNextPath(searchParams.get("next"));
   const confirmed = searchParams.get("confirmed") === "1";
 
   useEffect(() => {
@@ -31,7 +32,7 @@ export default function Login() {
   }, [confirmed, t]);
 
   const resolveDestination = (completedOnboarding: boolean): string => {
-    if (nextUrl && nextUrl.startsWith("/")) return nextUrl;
+    if (safeNext) return safeNext;
     return completedOnboarding ? "/home" : "/onboarding";
   };
 
