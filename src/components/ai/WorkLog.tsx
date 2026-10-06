@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Shurik } from "@/components/ai/Shurik";
 
 interface WorkLogProps {
   steps: string[];
@@ -30,29 +31,34 @@ export function WorkLog({ steps, onComplete, speed = 600, holdFinalStep = false 
     return () => clearTimeout(timer);
   }, [completedCount, steps.length, speed, onComplete, holdFinalStep]);
 
+  const working = completedCount < steps.length;
+
   return (
-    <div className="glass rounded-card p-2.5 space-y-1 w-full">
-      <span className="text-caption font-semibold text-muted-foreground">
-        {completedCount < steps.length ? t("ai.workLog.working") : t("ai.workLog.done")}
-      </span>
-      {steps.map((step, i) => {
-        const done = i < completedCount;
-        const active = i === completedCount;
-        return (
-          <div key={i} className="flex items-center gap-2 text-caption py-0.5">
-            {done ? (
-              <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
-            ) : active ? (
-              <Loader2 className="h-3.5 w-3.5 text-accent shrink-0 animate-spin" />
-            ) : (
-              <div className="h-3.5 w-3.5 shrink-0 rounded-full border border-border" />
-            )}
-            <span className={done ? "text-muted-foreground" : active ? "text-foreground" : "text-muted-foreground/50"}>
-              {step}
-            </span>
-          </div>
-        );
-      })}
+    <div className="glass rounded-card p-2.5 w-full flex items-center gap-2.5">
+      <Shurik pose={working ? "thinking" : "done"} decorative />
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <span className="text-[13px] font-semibold text-foreground">
+          {working ? t("ai.workLog.working") : t("ai.workLog.done")}
+        </span>
+        {steps.map((step, i) => {
+          const done = i < completedCount;
+          const active = i === completedCount;
+          return (
+            <div key={i} className="flex items-center gap-1.5 text-[11px] leading-4">
+              {done ? (
+                <CheckCircle2 className="h-3 w-3 text-success shrink-0" />
+              ) : active ? (
+                <Loader2 className="h-3 w-3 text-accent shrink-0 animate-spin" />
+              ) : (
+                <div className="h-3 w-3 shrink-0 rounded-full border border-border" />
+              )}
+              <span className={done ? "text-muted-foreground" : active ? "text-foreground" : "text-muted-foreground/50"}>
+                {step}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

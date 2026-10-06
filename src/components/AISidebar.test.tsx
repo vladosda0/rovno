@@ -119,8 +119,17 @@ describe("AISidebar", () => {
 
     expect(screen.getByText("beta history")).toBeInTheDocument();
 
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Project A" }));
     expect(screen.getByText("alpha history")).toBeInTheDocument();
+    const restored = Array.from(document.querySelectorAll('[data-testid="shurik-bubble"] img'));
+    expect(restored.length).toBeGreaterThan(0);
+    for (const figure of restored) {
+      expect(figure.getAttribute("src")).toBe("/shurik/avatar.png");
+    }
     expect(screen.queryByText("beta history")).not.toBeInTheDocument();
   });
 });

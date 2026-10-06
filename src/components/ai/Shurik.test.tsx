@@ -149,6 +149,16 @@ describe("Shurik", () => {
     expect(figure().getAttribute("src")).toBe(POSE_FILES.default);
   });
 
+  it("fetches the new pose ahead when a moving figure is given another pose", () => {
+    const requested = stubImagePreload();
+
+    const { rerender } = render(<Shurik pose="default" motion="idle" />);
+    requested.length = 0;
+    rerender(<Shurik pose="notice" motion="idle" />);
+
+    expect(requested).toContain(POSE_FILES.notice);
+  });
+
   it("fetches the wink and the pose ahead when it moves, and nothing when it stands still", () => {
     const requested = stubImagePreload();
 

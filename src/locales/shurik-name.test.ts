@@ -64,3 +64,27 @@ describe("the assistant is called Shurik", () => {
     expect(jobTitle.sort()).toEqual([...JOB_TITLE_KEYS].sort());
   });
 });
+
+describe("no stray word names Shurik: «ассистент», assistant, AI", () => {
+  it("has no «ассистент» left in the Russian texts", () => {
+    const stray = Object.entries(ru)
+      .filter(([, value]) => /ассистент/i.test(value))
+      .map(([key]) => key);
+    expect(stray).toEqual([]);
+  });
+
+  it("says assistant in English only where it is his job title", () => {
+    const jobTitle = Object.entries(en)
+      .filter(([, value]) => /assistant/i.test(value))
+      .map(([key]) => key);
+    expect(jobTitle.sort()).toEqual(
+      [...JOB_TITLE_KEYS, "ai.sidebar.opener.l0.headline", "ai.sidebar.message.fallbackIntro"].sort(),
+    );
+  });
+
+  it("does not call him AI where the panel explains a missing permission", () => {
+    expect(en["ai.sidebar.liveAssistant.permissionsUnavailable"]).toBe(
+      "Shurik can't use this project context right now (permissions unavailable).",
+    );
+  });
+});

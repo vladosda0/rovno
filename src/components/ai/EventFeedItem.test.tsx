@@ -28,7 +28,7 @@ vi.mock("react-i18next", () => ({
     // форматируется по i18n.language, и без него компонент падает на рендере.
     i18n: { language: mockLang },
     t: (key: string, params?: Record<string, string>) =>
-      key === "ai.event.actorAI" ? "ИИ"
+      key === "ai.event.actorAI" ? "Шурик"
       : key === "ai.event.actorSystem" ? "Система"
       : key === "activity.event.document.created" ? `добавил${params?.a ?? "{{a}}"} документ`
       : key,
@@ -101,7 +101,7 @@ describe("EventFeedItem", () => {
 
     render(<EventFeedItem event={event({ actor_id: "ai" })} />);
 
-    expect(screen.getByText("ИИ")).toBeTruthy();
+    expect(screen.getByText("Шурик")).toBeTruthy();
     expect(screen.getByText("добавил документ")).toBeTruthy();
   });
 

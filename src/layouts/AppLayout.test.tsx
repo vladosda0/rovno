@@ -79,17 +79,17 @@ describe("AppLayout", () => {
   it("starts with AI sidebar open when no session preference is set", async () => {
     renderLayout();
     expect(await screen.findByPlaceholderText("Ask AI...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Open AI sidebar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open Shurik" })).not.toBeInTheDocument();
   });
 
   it("restores explicit close preference across remount in the same session", async () => {
     const firstRender = renderLayout();
     fireEvent.click(await screen.findByRole("button", { name: /toggle ai sidebar/i }, { timeout: SIDEBAR_FIND_TIMEOUT_MS }));
-    expect(screen.getByRole("button", { name: "Open AI sidebar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Shurik" })).toBeInTheDocument();
     firstRender.unmount();
 
     renderLayout();
-    expect(screen.getByRole("button", { name: "Open AI sidebar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Shurik" })).toBeInTheDocument();
   });
 
   it("does not mount project AI sidebar on /home (MVP policy)", async () => {
@@ -112,7 +112,7 @@ describe("AppLayout", () => {
   it("opens again after clearing session preference", async () => {
     writeAiSidebarSessionPreference(true);
     const collapsedRender = renderLayout();
-    expect(screen.getByRole("button", { name: "Open AI sidebar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Shurik" })).toBeInTheDocument();
     collapsedRender.unmount();
 
     clearAiSidebarSessionPreference();
@@ -121,11 +121,62 @@ describe("AppLayout", () => {
     reopenedRender.unmount();
   });
 
+  it("shows Shurik hanging in the corner instead of a strip when the sidebar is collapsed", async () => {
+    writeAiSidebarSessionPreference(true);
+    const { container } = renderLayout();
+
+    const opener = screen.getByRole("button", { name: "Open Shurik" });
+    const figure = opener.querySelector("img");
+    expect(figure?.getAttribute("src")).toBe("/shurik/avatar.png");
+    expect(figure?.parentElement).toHaveClass("animate-shurik-sway");
+    expect(opener).toHaveClass("fixed", "bottom-4", "left-4");
+    expect(container.querySelector(".w-12.border-r")).toBeNull();
+
+    fireEvent.click(opener);
+    expect(await screen.findByPlaceholderText("Ask AI...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open Shurik" })).not.toBeInTheDocument();
+  });
+
+  it("leaves room under the page for the hanging Shurik only while the sidebar is collapsed", async () => {
+    writeAiSidebarSessionPreference(true);
+    renderLayout();
+    expect(screen.getByRole("main")).toHaveClass("md:pb-24");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Shurik" }));
+    await screen.findByPlaceholderText("Ask AI...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS });
+    expect(screen.getByRole("main")).not.toHaveClass("md:pb-24");
+  });
+
+  it("adds no room under pages that have no Shurik, even with the collapsed preference stored", () => {
+    writeAiSidebarSessionPreference(true);
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <MemoryRouter initialEntries={["/home"]}>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/home" element={<div>Home surface</div>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Open Shurik" })).not.toBeInTheDocument();
+    expect(screen.getByRole("main")).not.toHaveClass("md:pb-24");
+  });
+
+  it("keeps the hanging Shurik off screens narrower than the tablet breakpoint", () => {
+    writeAiSidebarSessionPreference(true);
+    renderLayout();
+
+    expect(screen.getByRole("button", { name: "Open Shurik" })).toHaveClass("hidden", "md:block");
+  });
+
   it("auto-opens the AI sidebar when photo consult is triggered while collapsed", async () => {
     writeAiSidebarSessionPreference(true);
     renderLayout();
 
-    expect(screen.getByRole("button", { name: "Open AI sidebar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Shurik" })).toBeInTheDocument();
 
     act(() => {
       openPhotoConsult({
@@ -141,7 +192,7 @@ describe("AppLayout", () => {
     });
 
     expect(await screen.findByText("Paver alignment check")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Open AI sidebar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open Shurik" })).not.toBeInTheDocument();
     expect(sessionStorage.getItem("workspace-ai-sidebar-collapsed")).toBe("true");
   });
 });

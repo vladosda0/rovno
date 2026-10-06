@@ -56,6 +56,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { MediaImage } from "@/components/MediaImage";
 import { WorkLog } from "@/components/ai/WorkLog";
+import { isFreshAssistantReply, ShurikBubble } from "@/components/ai/ShurikBubble";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
 import { GroundingCallout } from "@/components/ai/GroundingCallout";
@@ -3083,17 +3084,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     const rating = messageRatings[message.id];
     const isSaved = savedMessageIds.has(message.id);
     const isRegenerating = regeneratingMessageId === message.id;
-    return (
-      <div key={`active-chat-${message.id}`} className="px-0 py-1.5 min-w-0 max-w-full">
-        <div className={`rounded-md border border-border/60 px-2 py-1.5 min-w-0 max-w-full ${
-          isUserMessage ? "bg-sidebar-accent/40" : "bg-muted/20"
-        }`}>
+    const body = (
+      <>
           <div className="flex items-center gap-1.5">
-            <div className="flex h-5 w-5 items-center justify-center rounded-md bg-muted">
-              {isUserMessage
-                ? <User className="h-3 w-3 text-muted-foreground" />
-                : <Bot className="h-3 w-3 text-accent" />}
-            </div>
+            {isUserMessage && (
+              <div className="flex h-5 w-5 items-center justify-center rounded-md bg-muted">
+                <User className="h-3 w-3 text-muted-foreground" />
+              </div>
+            )}
             <p className="text-caption font-medium text-foreground">
               {isUserMessage ? t("ai.sidebar.chat.you") : t("ai.sidebar.chat.ai")}
             </p>
@@ -3205,7 +3203,17 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               </button>
             </div>
           )}
-        </div>
+      </>
+    );
+    return (
+      <div key={`active-chat-${message.id}`} className="px-0 py-1.5 min-w-0 max-w-full">
+        {isUserMessage ? (
+          <div className="rounded-md border border-border/60 bg-sidebar-accent/40 px-2 py-1.5 min-w-0 max-w-full">
+            {body}
+          </div>
+        ) : (
+          <ShurikBubble wink={isFreshAssistantReply(message, Date.now())}>{body}</ShurikBubble>
+        )}
       </div>
     );
   }
@@ -3821,6 +3829,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                   {activeWindow === "worklog" && latestWorkLog && (
                     <div className="w-full min-w-0 space-y-1.5">
                       <WorkLog
+                        key={latestWorkLog.id}
                         steps={latestWorkLog.steps}
                         holdFinalStep={Boolean(latestWorkLog.holdFinalStep)}
                       />
@@ -3846,7 +3855,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                   )}
 
                   {activeWindow === "proposal_queue" && proposalQueue && activeQueueItem && (
-                    <div className="w-full min-w-0">
+                    <ShurikBubble className="w-full">
+                      <p className="mb-1 text-caption font-medium text-foreground">{t("ai.shurik.name")}</p>
                       <ProposalQueueCard
                         item={activeQueueItem}
                         index={proposalQueue.activeIndex}
@@ -3868,7 +3878,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                         onBack={handleQueueBack}
                         onNext={handleQueueNext}
                       />
-                    </div>
+                    </ShurikBubble>
                   )}
 
                   {showPhotoConsultCard && photoConsult && (
