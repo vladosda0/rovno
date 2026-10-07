@@ -6,7 +6,7 @@ import {
   type TbankIntegrationStatus,
 } from "@/lib/tbank-widget";
 
-// If the addcardIframe never reports loaded within this window, fall back to the
+// If the card form never reports loaded within this window, fall back to the
 // hosted-page link instead of stranding an empty box (audit M3).
 const ADDCARD_LOAD_TIMEOUT_MS = 8000;
 
@@ -19,10 +19,13 @@ interface TBankAddCardFormProps {
   onFailed?: () => void;
 }
 
-// Embeds T-Bank's card-binding form via integration.js (features.addcardIframe),
+// Embeds T-Bank's card-binding form via integration.js (features.addcard.iframe),
 // initialised once. The PAN is entered on T-Bank's side. Best-effort: if the script /
 // VITE_TBANK_TERMINAL_KEY / init fails, it calls onFailed so the dialog can offer the
 // hosted-page link; the RebillId is captured server-side via the AddCard notification.
+// When the form finishes, integration.js sends the whole window to the terminal's
+// SuccessAddCardURL / FailAddCardURL (no router override here); that page asks the
+// bank for the result.
 export function TBankAddCardForm({ paymentUrl, onSuccess, onFailed }: TBankAddCardFormProps) {
   const { i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,17 +68,19 @@ export function TBankAddCardForm({ paymentUrl, onSuccess, onFailed }: TBankAddCa
             terminalKey,
             product: "eacq",
             features: {
-              addcardIframe: {
-                container: containerRef.current,
-                config: {
-                  language: (i18n.language === "en" ? "en" : "ru") as "ru" | "en",
-                  // Pass the callbacks in both the top-level and the nested `status` shape
-                  // so SUCCESS fires regardless of integration.js's exact iframe shape.
-                  loadedCallback: markAlive,
-                  changedCallback: onStatus,
-                  status: { changedCallback: onStatus },
+              addcard: {
+                iframe: {
+                  container: containerRef.current,
+                  config: {
+                    language: (i18n.language === "en" ? "en" : "ru") as "ru" | "en",
+                    // Pass the callbacks in both the top-level and the nested `status` shape
+                    // so SUCCESS fires regardless of integration.js's exact iframe shape.
+                    loadedCallback: markAlive,
+                    changedCallback: onStatus,
+                    status: { changedCallback: onStatus },
+                  },
+                  paymentStartCallback: () => Promise.resolve(paymentUrl),
                 },
-                paymentStartCallback: () => Promise.resolve(paymentUrl),
               },
             },
           })

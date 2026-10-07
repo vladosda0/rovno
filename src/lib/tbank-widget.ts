@@ -4,9 +4,12 @@
 // developer.tbank.ru/eacq/intro/developer/setup_js) and resolves the global
 // `PaymentIntegration`. Callers then call PaymentIntegration.init(...) ONCE per page
 // with the features they need:
-//   - iframe        — inline card payment form
-//   - payment       — quick-pay buttons (T-Pay / SBP / SberPay / …)
-//   - addcardIframe — card-binding form ("change card")
+//   - iframe         — inline card payment form
+//   - payment        — quick-pay buttons (T-Pay / SBP / SberPay / …)
+//   - addcard.iframe — card-binding form ("change card"); nested one level deeper
+//                      than the other two. Any other key (e.g. `addcardIframe`) makes
+//                      init reject with "Объект features пустой или содержит
+//                      недопустимые значения".
 // Every feature takes { container, config, paymentStartCallback }, where
 // paymentStartCallback resolves to a T-Bank PaymentURL produced by our backend
 // (tbank-init-payment for checkout, tbank-add-card for rebind).
@@ -43,7 +46,7 @@ export interface TbankFeatureConfig {
   language?: "ru" | "en";
   loadedCallback?: () => void;
   changedCallback?: (status: TbankIntegrationStatus) => void;
-  // integration.js nests the status callback under `status` for the iframe / addcardIframe
+  // integration.js nests the status callback under `status` for the iframe / addcard.iframe
   // features. We pass the callback in BOTH shapes (top-level + nested) so a SUCCESS/PROCESSING
   // event fires regardless of the exact runtime shape (codex PR #101 / terminal-verify gate).
   status?: { changedCallback?: (status: TbankIntegrationStatus) => void };
@@ -61,7 +64,7 @@ export interface TbankInitConfig {
   features: {
     payment?: TbankFeature;
     iframe?: TbankFeature;
-    addcardIframe?: TbankFeature;
+    addcard?: { iframe: TbankFeature };
   };
 }
 

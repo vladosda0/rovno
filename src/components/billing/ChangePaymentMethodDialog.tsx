@@ -23,7 +23,7 @@ interface ChangePaymentMethodDialogProps {
 }
 
 // "Изменить карту": opens a T-Bank card-binding session (tbank-add-card) and embeds the
-// addcardIframe widget so the user can save a new card with no real charge. On success
+// card form (addcard.iframe) so the user can save a new card with no real charge. On success
 // the new RebillId becomes the card on file (captured server-side via the AddCard
 // notification) and the next renewal uses it. If the inline widget can't mount, a
 // hosted-page link is offered instead.
