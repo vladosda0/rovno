@@ -59,6 +59,8 @@ export default function Checkout() {
   const currentPlanName = currentPlanCode
     ? PLANS[currentPlanCode]?.display_name ?? currentPlanCode
     : null;
+  // Buying from a zero-priced plan is worded as a new subscription, not an upgrade.
+  const showAsUpgrade = isUpgrade && currentCatalogueKopecks > 0;
 
   const [retryNonce, setRetryNonce] = useState(0);
   const [intentId, setIntentId] = useState<string | null>(null);
@@ -266,14 +268,14 @@ export default function Checkout() {
             <span className="text-h3 text-foreground">{plan.display_name}</span>
             <span className="text-h3 text-foreground">
               {formatRubFromKopecks(chargeKopecks)}
-              {!isUpgrade && autoRenew ? (
+              {!showAsUpgrade && autoRenew ? (
                 <span className="ml-1 text-body-sm font-normal text-muted-foreground">
                   {t("billing.checkout.perMonth")}
                 </span>
               ) : null}
             </span>
           </div>
-          {isUpgrade && currentPlanName ? (
+          {showAsUpgrade && currentPlanName ? (
             <p className="text-caption text-muted-foreground">
               {autoRenew
                 ? t("billing.checkout.upgradeRecurringNote", {
