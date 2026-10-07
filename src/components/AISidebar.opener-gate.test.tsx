@@ -143,7 +143,7 @@ describe("AISidebar opener readiness gate", () => {
     // Positive first: the sidebar really rendered, so the absences below mean
     // something. No signal, no legacy row, because a count read now would be a
     // count read from an unresolved query.
-    expect(screen.getByPlaceholderText("Ask AI...")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Ask Shurik...")).toBeInTheDocument();
     expect(screen.queryByText(/Blocked tasks/i)).toBeNull();
     expect(screen.queryByRole("button", { name: "What is blocking tasks?" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Generate contract" })).toBeNull();
@@ -155,7 +155,7 @@ describe("AISidebar opener readiness gate", () => {
     loading.project = true;
     renderSidebar();
 
-    expect(screen.getByPlaceholderText("Ask AI...")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Ask Shurik...")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "What is blocking tasks?" })).toBeNull();
     expect(shownCalls()).toHaveLength(0);
   });

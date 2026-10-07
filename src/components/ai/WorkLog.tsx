@@ -62,3 +62,12 @@ export function WorkLog({ steps, onComplete, speed = 600, holdFinalStep = false 
     </div>
   );
 }
+
+interface ActiveWorkLogProps {
+  log: { id: string; steps: string[]; holdFinalStep?: boolean };
+}
+
+/** The work log of the run in progress. A new run remounts it, so it starts from the first step. */
+export function ActiveWorkLog({ log }: ActiveWorkLogProps) {
+  return <WorkLog key={log.id} steps={log.steps} holdFinalStep={Boolean(log.holdFinalStep)} />;
+}

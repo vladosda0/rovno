@@ -78,13 +78,13 @@ describe("AppLayout", () => {
 
   it("starts with AI sidebar open when no session preference is set", async () => {
     renderLayout();
-    expect(await screen.findByPlaceholderText("Ask AI...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open Shurik" })).not.toBeInTheDocument();
   });
 
   it("restores explicit close preference across remount in the same session", async () => {
     const firstRender = renderLayout();
-    fireEvent.click(await screen.findByRole("button", { name: /toggle ai sidebar/i }, { timeout: SIDEBAR_FIND_TIMEOUT_MS }));
+    fireEvent.click(await screen.findByRole("button", { name: /toggle shurik's panel/i }, { timeout: SIDEBAR_FIND_TIMEOUT_MS }));
     expect(screen.getByRole("button", { name: "Open Shurik" })).toBeInTheDocument();
     firstRender.unmount();
 
@@ -105,8 +105,8 @@ describe("AppLayout", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    expect(screen.queryByPlaceholderText("Ask AI...")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /toggle ai sidebar/i })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Ask Shurik...")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /toggle shurik's panel/i })).not.toBeInTheDocument();
   });
 
   it("opens again after clearing session preference", async () => {
@@ -117,7 +117,7 @@ describe("AppLayout", () => {
 
     clearAiSidebarSessionPreference();
     const reopenedRender = renderLayout();
-    expect(await screen.findByPlaceholderText("Ask AI...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
     reopenedRender.unmount();
   });
 
@@ -133,7 +133,7 @@ describe("AppLayout", () => {
     expect(container.querySelector(".w-12.border-r")).toBeNull();
 
     fireEvent.click(opener);
-    expect(await screen.findByPlaceholderText("Ask AI...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open Shurik" })).not.toBeInTheDocument();
   });
 
@@ -143,7 +143,7 @@ describe("AppLayout", () => {
     expect(screen.getByRole("main")).toHaveClass("md:pb-24");
 
     fireEvent.click(screen.getByRole("button", { name: "Open Shurik" }));
-    await screen.findByPlaceholderText("Ask AI...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS });
+    await screen.findByPlaceholderText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS });
     expect(screen.getByRole("main")).not.toHaveClass("md:pb-24");
   });
 

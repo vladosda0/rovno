@@ -114,7 +114,7 @@ describe("AISidebar assistant paths", () => {
         </QueryClientProvider>,
       );
 
-      const composer = screen.getByPlaceholderText("Ask AI...");
+      const composer = screen.getByPlaceholderText("Ask Shurik...");
       fireEvent.change(composer, { target: { value: "estimate scope question" } });
       fireEvent.keyDown(composer, { key: "Enter" });
 
@@ -151,7 +151,7 @@ describe("AISidebar assistant paths", () => {
         </QueryClientProvider>,
       );
 
-      const composer = screen.getByPlaceholderText("Ask AI...");
+      const composer = screen.getByPlaceholderText("Ask Shurik...");
       fireEvent.change(composer, { target: { value: "first question" } });
       fireEvent.keyDown(composer, { key: "Enter" });
 
@@ -184,7 +184,7 @@ describe("AISidebar assistant paths", () => {
         </QueryClientProvider>,
       );
 
-      const composer = screen.getByPlaceholderText("Ask AI...");
+      const composer = screen.getByPlaceholderText("Ask Shurik...");
       fireEvent.change(composer, { target: { value: "what should I check next?" } });
       fireEvent.keyDown(composer, { key: "Enter" });
 
@@ -230,7 +230,7 @@ describe("AISidebar assistant paths", () => {
 
       expect(invokeLiveTextAssistantMock).not.toHaveBeenCalled();
 
-      const composer = screen.getByPlaceholderText("Ask AI...");
+      const composer = screen.getByPlaceholderText("Ask Shurik...");
       fireEvent.change(composer, { target: { value: "add task for rough-in" } });
       fireEvent.keyDown(composer, { key: "Enter" });
 

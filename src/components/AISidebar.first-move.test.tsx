@@ -52,7 +52,7 @@ function renderSidebar() {
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return screen.getByPlaceholderText("Ask AI...");
+  return screen.getByPlaceholderText("Ask Shurik...");
 }
 
 describe("AISidebar first-move instrumentation", () => {
@@ -151,7 +151,7 @@ describe("AISidebar first-move instrumentation", () => {
     // second send has to wait for it to come back. Asserting two submissions is
     // what keeps this test honest: without the wait the second pair of events
     // lands on a detached node and the test would pass while covering nothing.
-    const reopened = await screen.findByPlaceholderText("Ask AI...", {}, { timeout: 10_000 });
+    const reopened = await screen.findByPlaceholderText("Ask Shurik...", {}, { timeout: 10_000 });
     fireEvent.change(reopened, { target: { value: "second" } });
     fireEvent.keyDown(reopened, { key: "Enter" });
 

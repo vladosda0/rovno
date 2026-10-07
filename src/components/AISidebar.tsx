@@ -55,7 +55,7 @@ import { AIQuotaWarning } from "@/components/billing/AIQuotaWarning";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { MediaImage } from "@/components/MediaImage";
-import { WorkLog } from "@/components/ai/WorkLog";
+import { ActiveWorkLog } from "@/components/ai/WorkLog";
 import { isFreshAssistantReply, ShurikBubble } from "@/components/ai/ShurikBubble";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
@@ -3828,11 +3828,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                   {/* Keep current interactive blocks and animations */}
                   {activeWindow === "worklog" && latestWorkLog && (
                     <div className="w-full min-w-0 space-y-1.5">
-                      <WorkLog
-                        key={latestWorkLog.id}
-                        steps={latestWorkLog.steps}
-                        holdFinalStep={Boolean(latestWorkLog.holdFinalStep)}
-                      />
+                      <ActiveWorkLog log={latestWorkLog} />
                       {proposalQueue?.phase === "executing" && activeExecutionItem && (
                         <div className="glass rounded-card p-2 space-y-1">
                           <p className="text-caption text-foreground font-medium">

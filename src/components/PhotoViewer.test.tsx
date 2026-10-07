@@ -118,7 +118,7 @@ function renderViewer(photo: Media | null) {
   );
 }
 
-describe("PhotoViewer — AI Consult entry", () => {
+describe("PhotoViewer — Ask Shurik entry", () => {
   beforeEach(() => {
     mockUsePermission.mockReset();
     mockIsAuthenticated.mockReset();
@@ -127,16 +127,16 @@ describe("PhotoViewer — AI Consult entry", () => {
     mockUsePermission.mockReturnValue(permStub("owner"));
   });
 
-  it("renders AI Consult button as disabled (coming-soon)", () => {
+  it("renders Ask Shurik button as disabled (coming-soon)", () => {
     renderViewer(buildMedia());
-    const btn = screen.getByRole("button", { name: /AI Consult/i });
+    const btn = screen.getByRole("button", { name: /Ask Shurik/i });
     expect(btn).toBeInTheDocument();
     expect(btn).toBeDisabled();
   });
 
-  it("does not open consult when AI Consult button is clicked (coming-soon)", () => {
+  it("does not open consult when Ask Shurik button is clicked (coming-soon)", () => {
     renderViewer(buildMedia());
-    const btn = screen.getByRole("button", { name: /AI Consult/i });
+    const btn = screen.getByRole("button", { name: /Ask Shurik/i });
     fireEvent.click(btn);
     expect(mockOpenPhotoConsult).not.toHaveBeenCalled();
   });

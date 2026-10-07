@@ -88,3 +88,136 @@ describe("no stray word names Shurik: «ассистент», assistant, AI", ()
     );
   });
 });
+
+/** Keys where «ИИ» / AI used to stand for Shurik himself: the one who answers, suggests, is asked. */
+const HE_IS_NAMED_KEYS = [
+  "onboarding.automation.subtitle",
+  "onboarding.automation.full.desc",
+  "onboarding.automation.assisted.title",
+  "onboarding.automation.assisted.desc",
+  "onboarding.automation.manual.desc",
+  "onboarding.automation.observer.desc",
+  "nav.toggleAiSidebar",
+  "home.documentsHub.leaves.myNotes.subtitle",
+  "home.documentsHub.leaves.myNotes.emptyBody",
+  "projectDashboard.automation.assisted",
+  "quickActions.document.aiScanTooltip",
+  "quickActions.document.createWithAi",
+  "quickActions.document.createWithAiTooltip",
+  "quickActions.document.unavailableSupabaseDescription",
+  "preferences.aiLanguage",
+  "preferences.automation.lowDesc",
+  "preferences.automation.balancedDesc",
+  "preferences.automation.highDesc",
+  "ai.sidebar.automation.assisted.label",
+  "ai.sidebar.automation.assisted.description",
+  "ai.sidebar.liveAssistant.noProjectData",
+  "ai.sidebar.toast.estimateUnavailable.description",
+  "ai.sidebar.toast.procurementUnavailable.description",
+  "ai.sidebar.toast.copy.description",
+  "ai.sidebar.saveDialog.description",
+  "ai.sidebar.learnNote.defaultTitle",
+  "ai.sidebar.toast.aiBusy.title",
+  "ai.sidebar.proposal.executedTitle",
+  "ai.sidebar.proposal.demo.taskDescription",
+  "ai.sidebar.proposal.demo.documentDraftBody",
+  "ai.sidebar.proposal.statusTitle.failed",
+  "ai.sidebar.proposal.statusTitle.declined",
+  "ai.sidebar.filter.aiActions",
+  "ai.sidebar.composer.placeholderDefault",
+  "ai.sidebar.composer.placeholderLearn",
+  "ai.sidebar.consult.actions.addComment",
+  "ai.sidebar.consult.analysisCommentPrefix",
+  "ai.sidebar.guest.loginHint",
+  "ai.sidebar.guest.loginCta",
+  "ai.sidebar.openAria",
+  "photoViewer.aiConsult",
+  "tutorial.media.step1.aiHint",
+  "tasks.newStageModal.createWithAi",
+  "documents.empty.descriptionLocal",
+  "documents.generate.description",
+  "documents.generate.unavailableDescription",
+  "documents.generate.bodyTemplate",
+];
+
+/** Keys that keep «ИИ» / AI: the technology, a plan line, a permission, or landing copy. */
+const TECHNOLOGY_KEYS = [
+  "tutorial.media.step1.description",
+  "projectsTab.aiUnavailable.title",
+  "projectsTab.aiUnavailable.other",
+  "projectsTab.aiHint.supabase",
+  "projectsTab.aiHint.other",
+  "financeTab.aiExperimental",
+  "projectDashboard.aiDescription",
+  "projectDashboard.aiDescriptionPlaceholder",
+  "quickActions.document.aiScan",
+  "settingsNav.project.autopilot",
+  "preferences.ai.title",
+  "preferences.ai.description",
+  "privacy.ai.title",
+  "privacy.ai.description",
+  "privacy.ai.helper",
+  "billing.description",
+  "plans.dialog.limit.chat_one",
+  "plans.dialog.limit.chat_few",
+  "plans.dialog.limit.chat_many",
+  "plans.dialog.limit.chat_other",
+  "quota.meter.chat",
+  "quota.warning.chat",
+  "quota.gate.chat.title",
+  "quota.gate.chat.body",
+  "participants.table.aiAccess",
+  "participants.permission.aiAccess",
+  "participants.aiAccess.none",
+  "participants.summary.ai",
+  "participants.warning.aiProjectPool",
+  "ai.sidebar.toast.accessDenied.generationDescription",
+  "ai.sidebar.toast.accessDenied.photoConsultDescription",
+  "ai.sidebar.toast.supabaseModeUnavailable.documentDescription",
+  "landing.meta.title",
+  "landing.meta.description",
+  "landing.usecases.company.desc",
+  "landing.features.chat.pill",
+  "landing.pricing.master.feat1",
+  "landing.pricing.brigade.feat1",
+  "landing.faq.a1",
+  "landing.faq.q4",
+  "landing.finalCta.subtitle",
+  "landing.footer.tagline",
+  "pricing.plans.free.ai.title",
+  "pricing.plans.free.ai.chat",
+  "pricing.plans.master.ai.title",
+  "pricing.plans.master.ai.chat",
+  "pricing.plans.master.telegram",
+  "pricing.plans.brigade.ai.title",
+  "pricing.plans.brigade.ai.chat",
+  "pricing.plans.brigade.telegram",
+  "pricing.allIncluded.f2",
+  "participants.drawer.axis.ai",
+  "participants.preview.ai",
+  "participants.axisHelp.ai.none",
+  "participants.axisHelp.ai.consult_only",
+  "participants.axisHelp.ai.project_pool",
+];
+
+/** English labels of the assisted mode that had no AI in them to begin with. */
+const EN_NEVER_NAMED_ANYONE = ["projectDashboard.automation.assisted", "ai.sidebar.automation.assisted.label"];
+
+describe("«ИИ» and AI do not stand in for his name", () => {
+  it.each(HE_IS_NAMED_KEYS)("%s names Shurik", (key) => {
+    expect(ru[key]).toMatch(/Шурик/);
+    expect(ru[key]).not.toMatch(/ИИ|\bAI\b/);
+    expect(en[key]).not.toMatch(/\bAI\b/);
+    if (!EN_NEVER_NAMED_ANYONE.includes(key)) {
+      expect(en[key]).toMatch(/Shurik/);
+    }
+  });
+
+  it("keeps «ИИ» and AI only in the listed technology, plan, permission and landing keys", () => {
+    const left = new Set([
+      ...Object.entries(ru).filter(([, value]) => /ИИ|\bAI\b/.test(value)).map(([key]) => key),
+      ...Object.entries(en).filter(([, value]) => /\bAI\b/.test(value)).map(([key]) => key),
+    ]);
+    expect([...left].sort()).toEqual([...TECHNOLOGY_KEYS].sort());
+  });
+});
