@@ -3,6 +3,7 @@ import {
   commitPhotoConsultActions,
   commitProposal,
   filterPhotoConsultProposalChangesBySeam,
+  photoConsultTaskDescription,
   type CommitResult,
 } from "@/lib/commit-proposal";
 import type { AIProposal, ProposalChange } from "@/types/ai";
@@ -194,14 +195,14 @@ describe("commitProposal — enabled actions succeed", () => {
     expect(document?.versions[0]?.content).not.toContain("AI-generated draft for");
   });
 
-  it("keeps the English document draft body when no t is supplied", () => {
+  it("names Shurik in the English document draft body when no t is supplied", () => {
     const result = commitProposal(makeProposal("generate_document"), {
       authoritySeam: seamForRole("owner", "detail"),
     });
 
     expect(result.success).toBe(true);
     const document = getDocuments("project-1").find((candidate) => candidate.title === "Contract");
-    expect(document?.versions[0]?.content).toContain("AI-generated draft for");
+    expect(document?.versions[0]?.content).toBe("Draft prepared by Shurik: Contract");
   });
 
   it("keeps the English default when no t is supplied", () => {
@@ -393,5 +394,22 @@ describe("commitPhotoConsultActions", () => {
     );
     expect(result.success).toBe(true);
     expect(result.count).toBe(1);
+  });
+});
+
+describe("photoConsultTaskDescription", () => {
+  it("writes the photo task description through t when one is supplied", () => {
+    const description = photoConsultTaskDescription(
+      "crack by the window",
+      (key, options) => `[${key}|${String((options ?? {}).caption ?? "")}]`,
+    );
+
+    expect(description).toBe("[ai.sidebar.consult.taskDescription|crack by the window]");
+  });
+
+  it("names Shurik in English when no t is supplied", () => {
+    expect(photoConsultTaskDescription("crack by the window")).toBe(
+      "Shurik spotted an issue in the photo: crack by the window",
+    );
   });
 });

@@ -2828,6 +2828,7 @@
   "ai.sidebar.consult.actions.markDone": "Mark task Done",
   "ai.sidebar.consult.analysisCommentPrefix": "Shurik's photo analysis: {{observations}}",
   "ai.sidebar.consult.analysisComplete": "Analysis complete",
+  "ai.sidebar.consult.taskDescription": "Shurik spotted an issue in the photo: {{caption}}",
   "ai.sidebar.guest.locked": "Shurik is unavailable",
   "ai.sidebar.guest.loginHint": "Log in to ask Shurik.",
   "ai.sidebar.guest.loginCta": "Log in to ask Shurik",

@@ -2878,6 +2878,7 @@
   "ai.sidebar.consult.actions.markDone": "Отметить задачу как готовую",
   "ai.sidebar.consult.analysisCommentPrefix": "Анализ фото от Шурика: {{observations}}",
   "ai.sidebar.consult.analysisComplete": "Анализ завершён",
+  "ai.sidebar.consult.taskDescription": "Шурик заметил проблему на фото: {{caption}}",
   "ai.sidebar.guest.locked": "Шурик недоступен",
   "ai.sidebar.guest.loginHint": "Войди, чтобы спросить Шурика.",
   "ai.sidebar.guest.loginCta": "Войти, чтобы спросить Шурика",

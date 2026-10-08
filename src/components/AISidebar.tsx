@@ -126,6 +126,7 @@ import {
   commitPhotoConsultActions,
   commitProposal,
   filterPhotoConsultProposalChangesBySeam,
+  photoConsultTaskDescription,
   type PhotoConsultApplyAction,
 } from "@/lib/commit-proposal";
 import { proposalFailureReasonKey, resolveProposalFastFail } from "@/lib/ai-proposal-execution";
@@ -2197,7 +2198,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           kind: "create_task",
           projectId: photoConsult.photo.project_id,
           title: action.label,
-          description: `AI-identified issue from photo: ${photoConsult.photo.caption}`,
+          description: photoConsultTaskDescription(photoConsult.photo.caption, t),
           stageId: photoConsult.task?.stage_id ?? stage?.id ?? "",
           photoIds: [photoConsult.photo.id],
         });

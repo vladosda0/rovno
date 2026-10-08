@@ -221,3 +221,10 @@ describe("«ИИ» and AI do not stand in for his name", () => {
     expect([...left].sort()).toEqual([...TECHNOLOGY_KEYS].sort());
   });
 });
+
+describe("text Shurik writes into a task made from a photo", () => {
+  it("comes from the locales and names him", () => {
+    expect(ru["ai.sidebar.consult.taskDescription"]).toMatch(/Шурик.*\{\{caption\}\}/);
+    expect(en["ai.sidebar.consult.taskDescription"]).toMatch(/Shurik.*\{\{caption\}\}/);
+  });
+});
