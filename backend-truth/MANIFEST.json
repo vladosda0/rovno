@@ -583,6 +583,10 @@
     {
       "path": "supabase/migrations/20261001020000_document_shares_pin_file.sql",
       "sha256": "02f25134eedd5af6cde84095b318ff6266cfca5a86179a7bb2e79cc60db7a281"
+    },
+    {
+      "path": "supabase/migrations/20261008020000_notifications_shurik_messages.sql",
+      "sha256": "bf5b4039800820a009b53db67d91de53a4e054991a49cc792db5baefc6dcf34b"
     }
   ],
   "generated_artifacts": [
