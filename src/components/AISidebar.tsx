@@ -57,6 +57,9 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { MediaImage } from "@/components/MediaImage";
 import { ActiveWorkLog } from "@/components/ai/WorkLog";
 import { isFreshAssistantReply, ShurikBubble } from "@/components/ai/ShurikBubble";
+import { ShurikMessageList } from "@/components/ai/ShurikMessageList";
+import { SHURIK_PANEL_TAB_IDS, ShurikPanelTabs, type ShurikPanelTab } from "@/components/ai/ShurikPanelTabs";
+import { useShurikMessages } from "@/hooks/use-shurik-messages";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
 import { GroundingCallout } from "@/components/ai/GroundingCallout";
@@ -553,6 +556,9 @@ interface ScopedAISidebarState {
 interface AISidebarProps {
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
+  /** Which tab is shown. Left out, the panel keeps the choice itself and starts on the chat. */
+  panelTab?: ShurikPanelTab;
+  onPanelTabChange?: (next: ShurikPanelTab) => void;
 }
 
 const scopedSidebarStateByKey = new Map<string, ScopedAISidebarState>();
@@ -745,7 +751,19 @@ function liveAssistantNoProjectDataLine(_lang: AiAssistantUiLanguage, t: Transla
   return t("ai.sidebar.liveAssistant.noProjectData");
 }
 
-export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
+export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabChange }: AISidebarProps) {
+  const [ownPanelTab, setOwnPanelTab] = useState<ShurikPanelTab>("chat");
+  const activePanelTab = panelTab ?? ownPanelTab;
+  const showNotifications = activePanelTab === "notifications";
+  const selectPanelTab = (next: ShurikPanelTab) => {
+    setOwnPanelTab(next);
+    onPanelTabChange?.(next);
+  };
+  const {
+    messages: shurikMessages,
+    unreadCount: shurikUnreadCount,
+    markRead: markShurikMessagesRead,
+  } = useShurikMessages();
   const { t, i18n } = useTranslation();
   const translateKeys = useCallback((keys: string[]) => keys.map((k) => t(k)), [t]);
   const WORK_STEPS_GENERATE = useMemo(() => translateKeys(WORK_STEP_KEYS_GENERATE), [translateKeys]);
@@ -3511,6 +3529,38 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               </div>
             ) : (
               <>
+                <div className="px-3 pt-2 shrink-0">
+                  <ShurikPanelTabs tab={activePanelTab} onTabChange={selectPanelTab} unreadCount={shurikUnreadCount} />
+                </div>
+
+                {showNotifications && (
+                  <ScrollArea
+                    id={SHURIK_PANEL_TAB_IDS.notifications.panel}
+                    role="tabpanel"
+                    aria-labelledby={SHURIK_PANEL_TAB_IDS.notifications.tab}
+                    className="flex-1 min-h-0"
+                  >
+                    <ShurikMessageList
+                      messages={shurikMessages}
+                      onMarkRead={markShurikMessagesRead}
+                      onAction={() => {
+                        // On a phone the panel covers the page the button has just opened.
+                        if (isMobile) onCollapsedChange(true);
+                      }}
+                      className="px-3 py-2"
+                    />
+                  </ScrollArea>
+                )}
+
+                {/* Chat and composer stay mounted behind the Notifications tab, so a half-typed
+                    question and the scroll position are still there on the way back. */}
+                <div
+                  id={SHURIK_PANEL_TAB_IDS.chat.panel}
+                  role="tabpanel"
+                  aria-labelledby={SHURIK_PANEL_TAB_IDS.chat.tab}
+                  hidden={showNotifications}
+                  className={cn("flex-1 min-h-0 min-w-0 flex flex-col", showNotifications && "hidden")}
+                >
                 {/* === MAIN BODY === */}
                 <div className="flex-1 min-h-0 flex flex-col" style={{ width: "100%" }}>
                   {/* Inline filters */}
@@ -4033,6 +4083,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                       </div>
                     </>
                   )}
+                </div>
                 </div>
               </>
             )}

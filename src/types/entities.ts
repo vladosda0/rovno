@@ -414,3 +414,17 @@ export interface Notification {
   event_id: string;
   is_read: boolean;
 }
+
+/** A message Shurik wrote to one person on his own: a `notifications` row with its text. */
+export interface ShurikMessage {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  type: string;
+  title: string;
+  body: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+  payload: Record<string, unknown>;
+}

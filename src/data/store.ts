@@ -10,6 +10,7 @@ import type {
   Media,
   Event,
   Notification,
+  ShurikMessage,
   ContractorProposal,
   EstimateVersion,
   EstimateItem,
@@ -57,6 +58,7 @@ interface BrowserWorkspaceState {
   media: Media[];
   events: Event[];
   notifications: Notification[];
+  shurikMessages: ShurikMessage[];
   contractorProposals: ContractorProposal[];
   invites: WorkspaceProjectInvite[];
 }
@@ -107,6 +109,7 @@ function createSeededDemoState(): BrowserWorkspaceState {
     media: [...seedMedia],
     events: [...seedEvents],
     notifications: [...seedNotifications],
+    shurikMessages: [],
     contractorProposals: [],
     invites: [...seedInvites],
   };
@@ -125,6 +128,7 @@ function createEmptyLocalState(profile: StoredAuthProfile | null): BrowserWorksp
     media: [],
     events: [],
     notifications: [],
+    shurikMessages: [],
     contractorProposals: [],
     invites: [],
   };
@@ -143,6 +147,7 @@ function cloneWorkspaceState(state: BrowserWorkspaceState): BrowserWorkspaceStat
     media: [...state.media],
     events: [...state.events],
     notifications: [...state.notifications],
+    shurikMessages: [...state.shurikMessages],
     contractorProposals: [...state.contractorProposals],
     invites: [...state.invites],
   };
@@ -172,6 +177,7 @@ function loadPersistedDemoState(): BrowserWorkspaceState | null {
       media: parsed.media ?? [...seedMedia],
       events: parsed.events ?? [...seedEvents],
       notifications: parsed.notifications ?? [...seedNotifications],
+      shurikMessages: parsed.shurikMessages ?? [],
       contractorProposals: parsed.contractorProposals ?? [],
       invites: parsed.invites ?? [...seedInvites],
     });
@@ -442,6 +448,29 @@ export function addTask(task: Task, options: AddTaskOptions = {}) {
         ...(options.source ? { source: options.source } : {}),
       },
     });
+  });
+}
+
+/** Newest first, the order the panel shows them in. */
+export function getShurikMessages(userId: string): ShurikMessage[] {
+  return getStateForMode().shurikMessages
+    .filter((message) => message.user_id === userId)
+    .sort((left, right) => right.created_at.localeCompare(left.created_at));
+}
+
+export function addShurikMessage(message: ShurikMessage) {
+  updateWorkspaceState((state) => {
+    state.shurikMessages = [...state.shurikMessages, message];
+  });
+}
+
+export function markShurikMessagesRead(ids: string[]) {
+  if (ids.length === 0) return;
+  const readAt = new Date().toISOString();
+  updateWorkspaceState((state) => {
+    state.shurikMessages = state.shurikMessages.map((message) =>
+      ids.includes(message.id) && !message.is_read ? { ...message, is_read: true, read_at: readAt } : message,
+    );
   });
 }
 

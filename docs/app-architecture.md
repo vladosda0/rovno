@@ -372,7 +372,7 @@ All project routes are nested under `AppLayout` and `ProjectLayout`.
 - Key components:
   - `ProposalQueueCard`
   - `ContextInspector`
-  - `NotificationDrawer`
+  - `ShurikMessageList`
   - `WorkLog`
   - `PreviewCard`
   - `ResultCard`

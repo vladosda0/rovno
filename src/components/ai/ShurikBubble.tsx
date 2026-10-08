@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Shurik } from "@/components/ai/Shurik";
+import { Shurik, type ShurikPose } from "@/components/ai/Shurik";
 import { cn } from "@/lib/utils";
 import type { AIMessage } from "@/types/ai";
 
@@ -17,15 +17,23 @@ export function isFreshAssistantReply(message: Pick<AIMessage, "role" | "timesta
 interface ShurikBubbleProps {
   /** Wink once on mount: for a reply that has just arrived. */
   wink?: boolean;
+  pose?: ShurikPose;
+  /** Accent stripe on the left edge: a message from Shurik the person has not seen yet. */
+  unread?: boolean;
   className?: string;
   children: ReactNode;
 }
 
-export function ShurikBubble({ wink = false, className, children }: ShurikBubbleProps) {
+export function ShurikBubble({ wink = false, pose = "default", unread = false, className, children }: ShurikBubbleProps) {
   return (
     <div data-testid="shurik-bubble" className={cn("flex min-w-0 max-w-full items-end gap-1.5", className)}>
-      <Shurik motion={wink ? "wink" : "still"} decorative />
-      <div className="min-w-0 flex-1 rounded-2xl rounded-bl-[4px] border border-border bg-card px-2.5 py-2">
+      <Shurik pose={pose} motion={wink ? "wink" : "still"} decorative />
+      <div
+        className={cn(
+          "min-w-0 flex-1 rounded-2xl rounded-bl-[4px] border border-border bg-card px-2.5 py-2",
+          unread && "border-accent/45 shadow-[inset_3px_0_0_hsl(var(--accent))]",
+        )}
+      >
         {children}
       </div>
     </div>
