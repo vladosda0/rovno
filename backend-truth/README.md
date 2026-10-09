@@ -177,6 +177,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260924120000_cross_project_transfer_server_owned.sql`
 - `supabase/migrations/20261001020000_document_shares_pin_file.sql`
 - `supabase/migrations/20261008020000_notifications_shurik_messages.sql`
+- `supabase/migrations/20261009030000_briefing_settings.sql`
+- `supabase/migrations/20261009035000_tasks_blocked_at.sql`
 
 ## Exclusions
 

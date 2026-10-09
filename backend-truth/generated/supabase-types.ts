@@ -126,6 +126,9 @@ export type Database = {
           "event_toggles": Json
           "created_at": string
           "updated_at": string
+          "briefing_enabled": boolean
+          "briefing_minute": number
+          "briefing_weekends": boolean
           }
           Insert: {
           "profile_id"?: string
@@ -135,6 +138,9 @@ export type Database = {
           "event_toggles"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "briefing_enabled"?: boolean
+          "briefing_minute"?: number
+          "briefing_weekends"?: boolean
           }
           Update: {
           "profile_id"?: string
@@ -144,6 +150,9 @@ export type Database = {
           "event_toggles"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "briefing_enabled"?: boolean
+          "briefing_minute"?: number
+          "briefing_weekends"?: boolean
           }
           Relationships: []
         }
@@ -352,6 +361,7 @@ export type Database = {
           "created_at": string
           "updated_at": string
           "estimate_work_id": string | null
+          "blocked_at": string | null
           }
           Insert: {
           "id"?: string
@@ -368,6 +378,7 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "estimate_work_id"?: string | null
+          "blocked_at"?: string | null
           }
           Update: {
           "id"?: string
@@ -384,6 +395,7 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "estimate_work_id"?: string | null
+          "blocked_at"?: string | null
           }
           Relationships: []
         }
@@ -2580,6 +2592,27 @@ export type Database = {
           "revoked_at"?: string | null
           "revoked_by"?: string | null
           "storage_object_id"?: string | null
+          }
+          Relationships: []
+        }
+        "notification_project_mutes": {
+          Row: {
+          "profile_id": string
+          "project_id": string
+          "created_at": string
+          "primary": unknown | null
+          }
+          Insert: {
+          "profile_id": string
+          "project_id": string
+          "created_at"?: string
+          "primary"?: unknown | null
+          }
+          Update: {
+          "profile_id"?: string
+          "project_id"?: string
+          "created_at"?: string
+          "primary"?: unknown | null
           }
           Relationships: []
         }

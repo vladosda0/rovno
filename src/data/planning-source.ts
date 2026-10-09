@@ -732,7 +732,7 @@ export async function loadHeroTasksForProject(
 ): Promise<TaskRow[]> {
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, project_id, stage_id, estimate_work_id, title, description, status, assignee_profile_id, created_by, start_at, due_at, completed_at, created_at, updated_at")
+    .select("id, project_id, stage_id, estimate_work_id, title, description, status, assignee_profile_id, created_by, start_at, due_at, completed_at, blocked_at, created_at, updated_at")
     .eq("project_id", projectId);
 
   if (error) {

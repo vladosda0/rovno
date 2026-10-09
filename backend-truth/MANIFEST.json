@@ -587,6 +587,14 @@
     {
       "path": "supabase/migrations/20261008020000_notifications_shurik_messages.sql",
       "sha256": "bf5b4039800820a009b53db67d91de53a4e054991a49cc792db5baefc6dcf34b"
+    },
+    {
+      "path": "supabase/migrations/20261009030000_briefing_settings.sql",
+      "sha256": "00c634dac87392743ae79ada94402a9442663e258b40676cebc3c912777945b2"
+    },
+    {
+      "path": "supabase/migrations/20261009035000_tasks_blocked_at.sql",
+      "sha256": "0a1381e4d1eb83fc6e344c40a0f76e08812a9a00426fe782fc9aacec54e867cf"
     }
   ],
   "generated_artifacts": [
