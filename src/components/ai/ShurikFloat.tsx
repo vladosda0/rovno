@@ -3,7 +3,11 @@ import { useTranslation } from "react-i18next";
 import { Shurik } from "@/components/ai/Shurik";
 import type { ShurikPanelTab } from "@/components/ai/ShurikPanelTabs";
 import { ShurikUnreadBadge } from "@/components/ai/ShurikUnreadBadge";
-import { countUnreadShurikMessages, isMoneyShurikMessage } from "@/data/shurik-messages-source";
+import {
+  countUnreadShurikMessages,
+  isBriefingShurikMessage,
+  isMoneyShurikMessage,
+} from "@/data/shurik-messages-source";
 import { useDocumentVisible } from "@/hooks/use-document-visible";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { shurikOpenLabel } from "@/lib/shurik-open-label";
@@ -16,12 +20,18 @@ export const SHURIK_PEEK_MS = 8000;
 /** Below this width (`md`) the hanging Shurik is not drawn, so nothing next to him would be seen. */
 const HANGING_SHURIK_MIN_WIDTH_PX = 768;
 
+interface ShurikPeek {
+  message: ShurikMessage;
+  /** Above one when the line stands for a batch of briefings: the number of projects in it. */
+  briefingProjects: number;
+}
+
 /**
  * The newest unread message whose first line has not been shown yet, for SHURIK_PEEK_MS.
  * Showing it is remembered per person on this device, so a later visit does not repeat it.
  */
-function useShurikPeek(messages: ShurikMessage[], enabled: boolean): ShurikMessage | null {
-  const [peekId, setPeekId] = useState<string | null>(null);
+function useShurikPeek(messages: ShurikMessage[], enabled: boolean): ShurikPeek | null {
+  const [peek, setPeek] = useState<{ id: string; briefingProjects: number } | null>(null);
 
   useEffect(() => {
     // Read at this moment, not from `useIsMobile`, which only knows the width after the first paint.
@@ -35,18 +45,24 @@ function useShurikPeek(messages: ShurikMessage[], enabled: boolean): ShurikMessa
     if (fresh.length === 0) return;
 
     // Several at once get one line, the newest; the number on Shurik speaks for the rest.
+    // Briefings come one per project at the same minute, so their one line names how many.
     rememberPeekedShurikMessageIds(userId, fresh.map((message) => message.id));
-    setPeekId(fresh[0].id);
+    const briefingProjects = isBriefingShurikMessage(fresh[0])
+      ? new Set(fresh.filter(isBriefingShurikMessage).map((message) => message.project_id)).size
+      : 0;
+    setPeek({ id: fresh[0].id, briefingProjects });
   }, [enabled, messages]);
 
+  const peekId = peek?.id ?? null;
   useEffect(() => {
     if (!peekId) return;
-    const timer = setTimeout(() => setPeekId(null), SHURIK_PEEK_MS);
+    const timer = setTimeout(() => setPeek(null), SHURIK_PEEK_MS);
     return () => clearTimeout(timer);
   }, [peekId]);
 
-  if (!peekId) return null;
-  return messages.find((message) => message.id === peekId && !message.is_read) ?? null;
+  if (!peek) return null;
+  const message = messages.find((candidate) => candidate.id === peek.id && !candidate.is_read);
+  return message ? { message, briefingProjects: peek.briefingProjects } : null;
 }
 
 interface ShurikFloatProps {
@@ -63,7 +79,7 @@ export function ShurikFloat({ messages, onOpen }: ShurikFloatProps) {
   const documentVisible = useDocumentVisible();
   const unreadCount = countUnreadShurikMessages(messages);
   const peek = useShurikPeek(messages, documentVisible && !isMobile);
-  const moneyPeek = peek !== null && isMoneyShurikMessage(peek);
+  const moneyPeek = peek !== null && isMoneyShurikMessage(peek.message);
   const open = () => onOpen(unreadCount > 0 ? "notifications" : undefined);
 
   return (
@@ -87,7 +103,11 @@ export function ShurikFloat({ messages, onOpen }: ShurikFloatProps) {
           className="fixed bottom-9 left-[84px] z-30 hidden max-w-[200px] rounded-xl rounded-bl-[4px] border border-border bg-card px-2.5 py-1.5 text-left text-[11px] leading-snug text-foreground shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:block"
         >
           <span className="block font-semibold">{t("ai.shurik.name")}</span>
-          <span className="line-clamp-2 [overflow-wrap:anywhere]">{peek.title}</span>
+          <span className="line-clamp-2 [overflow-wrap:anywhere]">
+            {peek.briefingProjects > 1
+              ? t("ai.notifications.briefingBatch", { count: peek.briefingProjects })
+              : peek.message.title}
+          </span>
         </button>
       )}
     </>

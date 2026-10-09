@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ShurikBubble } from "@/components/ai/ShurikBubble";
 import { Button } from "@/components/ui/button";
-import { isMoneyShurikMessage, readShurikMessageAction } from "@/data/shurik-messages-source";
+import {
+  isBriefingShurikMessage,
+  isMoneyShurikMessage,
+  readShurikBriefingLines,
+  readShurikMessageAction,
+  type ShurikBriefingLine,
+} from "@/data/shurik-messages-source";
+import type { ShurikPose } from "@/components/ai/Shurik";
 import { useDocumentVisible } from "@/hooks/use-document-visible";
 import { formatShurikMessageTime } from "@/lib/shurik-message-time";
 import { cn } from "@/lib/utils";
@@ -16,6 +23,58 @@ interface ShurikMessageListProps {
   /** After the message's button has sent the person to its page. */
   onAction?: () => void;
   className?: string;
+}
+
+function messagePose(message: ShurikMessage): ShurikPose {
+  if (isMoneyShurikMessage(message)) return "money";
+  return isBriefingShurikMessage(message) ? "notice" : "default";
+}
+
+const MESSAGE_TEXT_CLASS = "max-w-full break-words text-caption text-foreground/95 [overflow-wrap:anywhere]";
+
+/** A briefing: the project line, then what needs attention, names opening what they name. */
+function BriefingText({
+  message,
+  lines,
+  onAction,
+}: {
+  message: ShurikMessage;
+  /** Null when the payload could not be read: the plain text stands in. */
+  lines: ShurikBriefingLine[] | null;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="mt-0.5">
+      <p data-testid="shurik-briefing-title" className="text-[13px] font-bold text-foreground [overflow-wrap:anywhere]">
+        {message.title}
+      </p>
+      {lines ? (
+        <ul className={cn("list-disc pl-4", MESSAGE_TEXT_CLASS)}>
+          {lines.map((line, lineIndex) => (
+            <li key={lineIndex}>
+              {line.parts.map((part, partIndex) =>
+                part.href ? (
+                  <Link
+                    key={partIndex}
+                    to={part.href}
+                    state={part.taskId ? { openTaskId: part.taskId } : undefined}
+                    onClick={onAction}
+                    className="rounded-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {part.text}
+                  </Link>
+                ) : (
+                  <span key={partIndex}>{part.text}</span>
+                ),
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        message.body?.trim() && <p className={cn("whitespace-pre-wrap", MESSAGE_TEXT_CLASS)}>{message.body}</p>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -68,16 +127,20 @@ export function ShurikMessageList({ messages, onMarkRead, onAction, className }:
         const unread = !message.is_read || seenUnreadIds.has(message.id);
         return (
           <div key={message.id} data-testid={`shurik-message-${message.id}`} data-unread={unread}>
-            <ShurikBubble pose={isMoneyShurikMessage(message) ? "money" : "default"} unread={unread}>
+            <ShurikBubble pose={messagePose(message)} unread={unread}>
               <div className="flex items-baseline gap-1.5">
                 <p className="text-caption font-semibold text-foreground">{t("ai.shurik.name")}</p>
                 <span className="ml-auto whitespace-nowrap text-[10px] text-muted-foreground">
                   {formatShurikMessageTime(message.created_at, now, i18n.language, t("ai.notifications.yesterday"))}
                 </span>
               </div>
-              <p className="mt-0.5 max-w-full whitespace-pre-wrap break-words text-caption text-foreground/95 [overflow-wrap:anywhere]">
-                {message.body?.trim() ? message.body : message.title}
-              </p>
+              {isBriefingShurikMessage(message) ? (
+                <BriefingText message={message} lines={readShurikBriefingLines(message)} onAction={onAction} />
+              ) : (
+                <p className={cn("mt-0.5 whitespace-pre-wrap", MESSAGE_TEXT_CLASS)}>
+                  {message.body?.trim() ? message.body : message.title}
+                </p>
+              )}
               {action && (
                 <Button
                   type="button"

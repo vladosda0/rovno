@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHURIK_IDLE_WINK_PAUSE_MS, SHURIK_WINK_MS } from "@/components/ai/Shurik";
 import { SHURIK_PEEK_MS, ShurikFloat } from "@/components/ai/ShurikFloat";
+import i18n from "@/i18n";
 import type { ShurikMessage } from "@/types/entities";
 
 function message(partial: Partial<ShurikMessage> = {}): ShurikMessage {
@@ -18,6 +19,10 @@ function message(partial: Partial<ShurikMessage> = {}): ShurikMessage {
     payload: {},
     ...partial,
   };
+}
+
+function briefing(id: string, projectId: string, title: string, partial: Partial<ShurikMessage> = {}): ShurikMessage {
+  return message({ id, project_id: projectId, type: "briefing", title, body: "Сегодня срок: приёмка плитки.", ...partial });
 }
 
 function figure() {
@@ -190,5 +195,113 @@ describe("ShurikFloat", () => {
 
     render(<ShurikFloat messages={[message()]} onOpen={vi.fn()} />);
     expect(screen.getByTestId("shurik-peek")).toBeInTheDocument();
+  });
+  describe("briefings", () => {
+    const lenina = briefing("b-1", "p1", "Планёрка · Ленина 42");
+    const dacha = briefing("b-2", "p2", "Планёрка · Дача, баня");
+    const office = briefing("b-3", "p3", "Планёрка · Офис на Мира");
+
+    it("shows one line for a batch of them, for 8 seconds, with every message counted on Shurik", () => {
+      render(<ShurikFloat messages={[office, dacha, lenina]} onOpen={vi.fn()} />);
+
+      expect(screen.getAllByTestId("shurik-peek")).toHaveLength(1);
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Briefing · 3 projects");
+      expect(screen.getByTestId("shurik-peek")).not.toHaveTextContent("Офис на Мира");
+      expect(screen.getByTestId("shurik-unread-badge")).toHaveTextContent("3");
+
+      act(() => {
+        vi.advanceTimersByTime(SHURIK_PEEK_MS - 1);
+      });
+      expect(screen.getByTestId("shurik-peek")).toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(screen.queryByTestId("shurik-peek")).not.toBeInTheDocument();
+      expect(screen.getByTestId("shurik-unread-badge")).toHaveTextContent("3");
+    });
+
+    it("counts the whole batch as shown: none of them comes up on the next visit", () => {
+      const first = render(<ShurikFloat messages={[dacha, lenina]} onOpen={vi.fn()} />);
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Briefing · 2 projects");
+      first.unmount();
+
+      const second = render(<ShurikFloat messages={[dacha, lenina]} onOpen={vi.fn()} />);
+      expect(screen.queryByTestId("shurik-peek")).not.toBeInTheDocument();
+      second.unmount();
+
+      render(<ShurikFloat messages={[lenina]} onOpen={vi.fn()} />);
+      expect(screen.queryByTestId("shurik-peek")).not.toBeInTheDocument();
+    });
+
+    it("shows a single briefing by its own first line", () => {
+      render(<ShurikFloat messages={[lenina]} onOpen={vi.fn()} />);
+
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Планёрка · Ленина 42");
+      expect(figure().getAttribute("src")).toBe("/shurik/avatar.png");
+    });
+
+    it("counts projects, not messages: two days of one project are not two projects", () => {
+      const yesterday = briefing("b-0", "p1", "Планёрка · Ленина 42", { created_at: "2026-10-08T06:00:00.000Z" });
+      const { unmount } = render(<ShurikFloat messages={[lenina, yesterday]} onOpen={vi.fn()} />);
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Планёрка · Ленина 42");
+      unmount();
+      localStorage.clear();
+
+      render(<ShurikFloat messages={[dacha, lenina, yesterday]} onOpen={vi.fn()} />);
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Briefing · 2 projects");
+    });
+
+    it("leaves out briefings already read or already shown", () => {
+      const first = render(<ShurikFloat messages={[lenina]} onOpen={vi.fn()} />);
+      first.unmount();
+
+      render(
+        <ShurikFloat
+          messages={[office, { ...dacha, is_read: true, read_at: "2026-10-09T07:00:00.000Z" }, lenina]}
+          onOpen={vi.fn()}
+        />,
+      );
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Планёрка · Офис на Мира");
+    });
+
+    it("gives the line to a newer message of another kind, as before", () => {
+      const money = message({ id: "msg-9", created_at: "2026-10-09T08:00:00.000Z" });
+      render(<ShurikFloat messages={[money, dacha, lenina]} onOpen={vi.fn()} />);
+
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Не прошло списание за подписку");
+      expect(screen.getByTestId("shurik-peek")).not.toHaveTextContent("Briefing");
+    });
+
+    it("counts briefings only: an older unread message of another project does not make a batch", () => {
+      const older = message({ id: "msg-0", project_id: "p9", type: "deadline_soon", created_at: "2026-10-08T06:00:00.000Z" });
+      const { unmount } = render(<ShurikFloat messages={[lenina, older]} onOpen={vi.fn()} />);
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Планёрка · Ленина 42");
+      expect(screen.getByTestId("shurik-peek")).not.toHaveTextContent("Briefing");
+      unmount();
+      localStorage.clear();
+
+      render(<ShurikFloat messages={[dacha, lenina, older]} onOpen={vi.fn()} />);
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Briefing · 2 projects");
+    });
+
+    it("takes the batch line away once the briefings are read", () => {
+      const { rerender } = render(<ShurikFloat messages={[dacha, lenina]} onOpen={vi.fn()} />);
+      expect(screen.getByTestId("shurik-peek")).toBeInTheDocument();
+
+      const read = { is_read: true, read_at: "2026-10-09T07:00:00.000Z" };
+      rerender(<ShurikFloat messages={[{ ...dacha, ...read }, { ...lenina, ...read }]} onOpen={vi.fn()} />);
+      expect(screen.queryByTestId("shurik-peek")).not.toBeInTheDocument();
+    });
+
+    it("says the number of projects in Russian the way it is spoken", () => {
+      const line = (count: number) => i18n.t("ai.notifications.briefingBatch", { count, lng: "ru" });
+
+      expect(line(2)).toBe("Планёрка · 2 проекта");
+      expect(line(4)).toBe("Планёрка · 4 проекта");
+      expect(line(5)).toBe("Планёрка · 5 проектов");
+      expect(line(11)).toBe("Планёрка · 11 проектов");
+      expect(line(21)).toBe("Планёрка · 21 проект");
+      expect(line(22)).toBe("Планёрка · 22 проекта");
+    });
   });
 });

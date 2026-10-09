@@ -1,168 +1,157 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { SettingsSection } from "@/components/settings/SettingsSection";
+import { SignInPrompt } from "@/components/settings/SignInPrompt";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { BRIEFING_MINUTE_STEP } from "@/data/briefing-settings-source";
+import { useBriefingSettings } from "@/hooks/use-briefing-settings";
 import { toast } from "@/hooks/use-toast";
-import {
-  useUpdateWorkspaceNotificationPreferences,
-  useWorkspaceNotificationPreferencesState,
-} from "@/hooks/use-workspace-source";
-import type { NotificationDigestFrequency } from "@/data/workspace-source";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 
-interface NotifToggle {
-  labelKey: string;
-  key: string;
-  enabled: boolean;
+const MINUTES_IN_DAY = 24 * 60;
+
+function formatBriefingMinute(minute: number): string {
+  const hours = String(Math.floor(minute / 60)).padStart(2, "0");
+  return `${hours}:${String(minute % 60).padStart(2, "0")}`;
 }
 
-const DEFAULT_GROUPS: { titleKey: string; items: NotifToggle[] }[] = [
-  {
-    titleKey: "notifications.group.tasks",
-    items: [
-      { labelKey: "notifications.group.tasks.assigned", key: "task_assigned", enabled: true },
-      { labelKey: "notifications.group.tasks.due", key: "task_due", enabled: true },
-      { labelKey: "notifications.group.tasks.status", key: "task_status", enabled: false },
-    ],
-  },
-  {
-    titleKey: "notifications.group.documents",
-    items: [
-      { labelKey: "notifications.group.documents.scan", key: "doc_scan", enabled: true },
-      { labelKey: "notifications.group.documents.risks", key: "doc_risks", enabled: true },
-      { labelKey: "notifications.group.documents.ready", key: "doc_ready", enabled: false },
-    ],
-  },
-  {
-    titleKey: "notifications.group.budget",
-    items: [
-      { labelKey: "notifications.group.budget.over", key: "budget_over", enabled: true },
-      { labelKey: "notifications.group.budget.approval", key: "budget_approval", enabled: true },
-    ],
-  },
-  {
-    titleKey: "notifications.group.mentions",
-    items: [
-      { labelKey: "notifications.group.mentions.mention", key: "mention", enabled: true },
-      { labelKey: "notifications.group.mentions.comment", key: "comment", enabled: true },
-    ],
-  },
-];
+/** 00:00 to 23:30, the slots the database accepts. */
+const BRIEFING_TIMES = Array.from({ length: MINUTES_IN_DAY / BRIEFING_MINUTE_STEP }, (_, slot) => {
+  const minute = slot * BRIEFING_MINUTE_STEP;
+  return { value: String(minute), label: formatBriefingMinute(minute) };
+});
 
-/** Resolve the full toggle map: persisted value wins, otherwise the catalog default. */
-function resolveEventToggles(saved: Record<string, boolean> | undefined): Record<string, boolean> {
-  const resolved: Record<string, boolean> = {};
-  for (const group of DEFAULT_GROUPS) {
-    for (const item of group.items) {
-      resolved[item.key] = saved?.[item.key] ?? item.enabled;
-    }
-  }
-  return resolved;
-}
+const ROW_CLASS = "flex items-center justify-between gap-sp-2 py-1";
+const ROW_LABEL_CLASS = "min-w-0 flex-1 text-body-sm text-foreground";
+const PROJECTS_LIST_ID = "briefing-projects-list";
 
+/** Settings -> Notifications: the briefing, and only what the person can change about it. */
 export function NotificationsPanel() {
   const { t } = useTranslation();
-  const { preferences, isLoading } = useWorkspaceNotificationPreferencesState();
-  const updatePreferences = useUpdateWorkspaceNotificationPreferences();
-  const [inAppEnabled, setInAppEnabled] = useState(true);
-  const [eventToggles, setEventToggles] = useState<Record<string, boolean>>(() => resolveEventToggles(undefined));
-  const [digest, setDigest] = useState<NotificationDigestFrequency>("instant");
-  const hydratedRef = useRef(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const workspaceMode = useWorkspaceMode();
+  const { snapshot, isLoading, isError, isSaving, saveSettings, setProjectMuted } = useBriefingSettings(() => {
+    toast({
+      title: t("notifications.saveFailedToast"),
+      description: t("notifications.saveFailedDescription"),
+      variant: "destructive",
+    });
+  });
 
-  // Seed the form from the loaded preferences ONCE, on first availability. A
-  // later background refetch (window focus after staleTime) must not clobber the
-  // user's unsaved in-progress edits.
-  useEffect(() => {
-    if (!preferences || hydratedRef.current) return;
-    hydratedRef.current = true;
-    setInAppEnabled(preferences.inAppEnabled);
-    setEventToggles(resolveEventToggles(preferences.eventToggles));
-    setDigest(preferences.digestFrequency);
-  }, [preferences]);
+  if (workspaceMode.kind === "guest") {
+    return <SignInPrompt hint={t("notifications.signInHint")} ctaLabel={t("notifications.signIn")} />;
+  }
 
-  const toggleInApp = () => setInAppEnabled((prev) => !prev);
+  if (!snapshot) {
+    if (isLoading) return <Skeleton data-testid="notifications-loading" className="h-24 w-full" />;
+    return isError ? <p className="text-body-sm text-muted-foreground">{t("notifications.loadFailed")}</p> : null;
+  }
 
-  const toggleItem = (key: string) => {
-    setEventToggles((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  const { settings, projects } = snapshot;
+  if (projects.length === 0) {
+    return (
+      <section className="rounded-card border border-border bg-card/70 p-sp-2">
+        <p className="text-caption text-muted-foreground">
+          {t(snapshot.inAnyProject ? "notifications.briefing.notOwner" : "notifications.briefing.noProjects")}
+        </p>
+      </section>
+    );
+  }
 
-  const handleSave = async () => {
-    try {
-      await updatePreferences.mutateAsync({
-        inAppEnabled,
-        digestFrequency: digest,
-        eventToggles: resolveEventToggles(eventToggles),
-      });
-      toast({ title: t("notifications.savedToast") });
-    } catch {
-      toast({
-        title: t("notifications.saveFailedToast"),
-        description: t("notifications.saveFailedDescription"),
-        variant: "destructive",
-      });
-    }
-  };
+  const muted = new Set(snapshot.mutedProjectIds);
+  const selectedCount = projects.filter((project) => !muted.has(project.id)).length;
+  const projectsSummary = selectedCount === projects.length
+    ? t("notifications.briefing.allProjects")
+    : t("notifications.briefing.someProjects", { selected: selectedCount, total: projects.length });
+  const ProjectsChevron = projectsOpen ? ChevronUp : ChevronDown;
 
   return (
     <div className="space-y-sp-3">
-      <SettingsSection title={t("notifications.channels.title")} description={t("notifications.channels.description")}>
-        <div className="flex flex-wrap gap-sp-2">
-          <div className="flex items-center gap-2">
-            <Switch checked={inAppEnabled} onCheckedChange={toggleInApp} />
-            <Label>{t("notifications.channels.inApp")}</Label>
-          </div>
-          <div className="flex items-center gap-2 opacity-50">
-            <Switch checked={false} disabled />
-            <Label>{t("notifications.channels.email")}</Label>
-            <Badge variant="secondary" className="text-[10px]">{t("notifications.channels.comingSoon")}</Badge>
-          </div>
-          <div className="flex items-center gap-2 opacity-50">
-            <Switch checked={false} disabled />
-            <Label>{t("notifications.channels.telegram")}</Label>
-            <Badge variant="secondary" className="text-[10px]">{t("notifications.channels.comingSoon")}</Badge>
-          </div>
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title={t("notifications.events.title")} description={t("notifications.events.description")}>
-        <div className="space-y-sp-2">
-          {DEFAULT_GROUPS.map((group) => (
-            <div key={group.titleKey} className="rounded-card bg-background/60 p-sp-2 space-y-1.5">
-              <p className="text-body-sm font-medium text-foreground">{t(group.titleKey)}</p>
-              {group.items.map((item) => (
-                <div key={item.key} className="flex items-center justify-between gap-sp-2 py-1">
-                  <span className="min-w-0 flex-1 text-caption text-muted-foreground">{t(item.labelKey)}</span>
-                  <Switch checked={eventToggles[item.key] ?? item.enabled} onCheckedChange={() => toggleItem(item.key)} />
-                </div>
-              ))}
+      <SettingsSection title={t("notifications.briefing.title")}>
+        <div>
+          <div className={ROW_CLASS}>
+            <span className={ROW_LABEL_CLASS}>{t("notifications.briefing.attention")}</span>
+            <div className="flex shrink-0 items-center gap-2">
+              <Select
+                value={String(settings.minute)}
+                onValueChange={(value) => saveSettings({ minute: Number(value) })}
+                disabled={isSaving}
+              >
+                <SelectTrigger className="h-8 w-24" aria-label={t("notifications.briefing.time")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BRIEFING_TIMES.map((time) => (
+                    <SelectItem key={time.value} value={time.value}>{time.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Switch
+                checked={settings.enabled}
+                onCheckedChange={(enabled) => saveSettings({ enabled })}
+                disabled={isSaving}
+                aria-label={t("notifications.briefing.attention")}
+              />
             </div>
-          ))}
+          </div>
+
+          <div className={ROW_CLASS}>
+            <span className={ROW_LABEL_CLASS}>{t("notifications.briefing.weekends")}</span>
+            <Switch
+              checked={settings.weekends}
+              onCheckedChange={(weekends) => saveSettings({ weekends })}
+              disabled={isSaving}
+              aria-label={t("notifications.briefing.weekends")}
+            />
+          </div>
+
+          <div className={ROW_CLASS}>
+            <span className={ROW_LABEL_CLASS}>{t("notifications.briefing.projects")}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 gap-1"
+              aria-expanded={projectsOpen}
+              aria-controls={PROJECTS_LIST_ID}
+              aria-label={`${t("notifications.briefing.projects")}: ${projectsSummary}`}
+              onClick={() => setProjectsOpen((open) => !open)}
+              disabled={isSaving}
+            >
+              {projectsSummary}
+              <ProjectsChevron className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          {projectsOpen && (
+            <ul id={PROJECTS_LIST_ID} className="mt-1 space-y-1 rounded-card border border-border bg-background/60 p-sp-2">
+              {projects.map((project) => {
+                const checked = !muted.has(project.id);
+                return (
+                  <li key={project.id}>
+                    <label className="flex cursor-pointer items-center gap-2 py-0.5 text-body-sm">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(next) => setProjectMuted(project.id, next !== true)}
+                        disabled={isSaving}
+                        aria-label={project.title}
+                      />
+                      <span className={checked ? "min-w-0 text-foreground" : "min-w-0 text-muted-foreground"}>
+                        {project.title}
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </SettingsSection>
-
-      <SettingsSection title={t("notifications.digest.title")} description={t("notifications.digest.description")}>
-        <Select value={digest} onValueChange={(value) => setDigest(value as NotificationDigestFrequency)}>
-          <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="instant">{t("notifications.digest.instant")}</SelectItem>
-            <SelectItem value="daily">{t("notifications.digest.daily")}</SelectItem>
-            <SelectItem value="weekly">{t("notifications.digest.weekly")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </SettingsSection>
-
-      <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-        <Button
-          className="w-full sm:w-auto"
-          disabled={isLoading || updatePreferences.isPending}
-          onClick={() => void handleSave()}
-        >
-          {t("notifications.save")}
-        </Button>
-      </div>
     </div>
   );
 }

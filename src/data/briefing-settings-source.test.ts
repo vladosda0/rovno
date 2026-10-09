@@ -1,0 +1,241 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createBrowserBriefingSettingsSource,
+  createSupabaseBriefingSettingsSource,
+  DEFAULT_BRIEFING_SETTINGS,
+} from "@/data/briefing-settings-source";
+import * as store from "@/data/store";
+
+type Result = { data: unknown; error: unknown };
+
+/** One table = one canned answer per verb; every call is recorded per query. */
+function createFakeSupabase(answers: Record<string, Partial<Record<"select" | "upsert" | "insert" | "delete", Result>>>) {
+  const queries: { table: string; calls: { method: string; args: unknown[] }[] }[] = [];
+
+  const client = {
+    from: vi.fn((table: string) => {
+      const calls: { method: string; args: unknown[] }[] = [];
+      queries.push({ table, calls });
+      let verb: "select" | "upsert" | "insert" | "delete" = "select";
+      const answer = () => answers[table]?.[verb] ?? { data: verb === "select" ? [] : null, error: null };
+      const record = (method: string) => (...args: unknown[]) => {
+        calls.push({ method, args });
+        if (method === "upsert" || method === "insert" || method === "delete") verb = method;
+        return query;
+      };
+      const query = {
+        select: record("select"),
+        upsert: record("upsert"),
+        insert: record("insert"),
+        delete: record("delete"),
+        eq: record("eq"),
+        is: record("is"),
+        in: record("in"),
+        order: record("order"),
+        maybeSingle: () => Promise.resolve(answer()),
+        then: (resolve: (value: Result) => void) => resolve(answer()),
+      };
+      return query;
+    }),
+  };
+
+  const queriesOf = (table: string) => queries.filter((query) => query.table === table);
+  return { client, queriesOf };
+}
+
+function source(fake: ReturnType<typeof createFakeSupabase>, profileId = "me") {
+  return createSupabaseBriefingSettingsSource(fake.client as never, profileId);
+}
+
+describe("briefing settings, the database", () => {
+  it("gives the defaults to a person with no preferences row: on, 09:00, no weekends", async () => {
+    const fake = createFakeSupabase({ notification_preferences: { select: { data: null, error: null } } });
+
+    const snapshot = await source(fake).load();
+
+    expect(snapshot.settings).toEqual({ enabled: true, minute: 540, weekends: false });
+    expect(snapshot.settings).toEqual(DEFAULT_BRIEFING_SETTINGS);
+    expect(snapshot.projects).toEqual([]);
+    expect(snapshot.inAnyProject).toBe(false);
+    expect(snapshot.mutedProjectIds).toEqual([]);
+  });
+
+  it("reads the stored settings of this person only", async () => {
+    const fake = createFakeSupabase({
+      notification_preferences: {
+        select: { data: { briefing_enabled: false, briefing_minute: 1110, briefing_weekends: true }, error: null },
+      },
+    });
+
+    const snapshot = await source(fake).load();
+
+    expect(snapshot.settings).toEqual({ enabled: false, minute: 1110, weekends: true });
+    expect(fake.queriesOf("notification_preferences")[0].calls).toContainEqual({ method: "eq", args: ["profile_id", "me"] });
+  });
+
+  it("lists the projects where the person is the owner or a co-owner, and no others", async () => {
+    const fake = createFakeSupabase({
+      projects: {
+        select: {
+          data: [
+            { id: "p-own", title: "Ленина 42", owner_profile_id: "me" },
+            { id: "p-co", title: "Дача, баня", owner_profile_id: "other" },
+            { id: "p-contractor", title: "Чужой объект", owner_profile_id: "other" },
+            { id: "p-viewer", title: "Смотрю", owner_profile_id: "other" },
+            { id: "p-no-row", title: "Без строки участника", owner_profile_id: "other" },
+            { id: "p-own-member", title: "Офис на Мира", owner_profile_id: "other" },
+          ],
+          error: null,
+        },
+      },
+      project_members: {
+        select: {
+          data: [
+            { project_id: "p-co", role: "co_owner" },
+            { project_id: "p-contractor", role: "contractor" },
+            { project_id: "p-viewer", role: "viewer" },
+            { project_id: "p-own-member", role: "owner" },
+          ],
+          error: null,
+        },
+      },
+      notification_project_mutes: { select: { data: [{ project_id: "p-co" }], error: null } },
+    });
+
+    const snapshot = await source(fake).load();
+
+    expect(snapshot.projects).toEqual([
+      { id: "p-own", title: "Ленина 42" },
+      { id: "p-co", title: "Дача, баня" },
+      { id: "p-own-member", title: "Офис на Мира" },
+    ]);
+    expect(snapshot.inAnyProject).toBe(true);
+    expect(snapshot.mutedProjectIds).toEqual(["p-co"]);
+    expect(fake.queriesOf("projects")[0].calls).toContainEqual({ method: "is", args: ["archived_at", null] });
+    expect(fake.queriesOf("project_members")[0].calls).toContainEqual({ method: "eq", args: ["profile_id", "me"] });
+    expect(fake.queriesOf("notification_project_mutes")[0].calls).toContainEqual({ method: "eq", args: ["profile_id", "me"] });
+  });
+
+  it("tells a person who is only a member somewhere from a person with no projects", async () => {
+    const fake = createFakeSupabase({
+      projects: { select: { data: [{ id: "p-contractor", title: "Чужой объект", owner_profile_id: "other" }], error: null } },
+      project_members: { select: { data: [{ project_id: "p-contractor", role: "contractor" }], error: null } },
+    });
+
+    const snapshot = await source(fake).load();
+
+    expect(snapshot.projects).toEqual([]);
+    expect(snapshot.inAnyProject).toBe(true);
+  });
+
+  it("refuses to pass off a failed read as defaults", async () => {
+    const fake = createFakeSupabase({ notification_preferences: { select: { data: null, error: new Error("denied") } } });
+
+    await expect(source(fake).load()).rejects.toThrow("denied");
+  });
+
+  it("writes only the changed column, creating the row when there is none", async () => {
+    const fake = createFakeSupabase({});
+
+    await source(fake).saveSettings({ minute: 1110 });
+
+    const [write] = fake.queriesOf("notification_preferences");
+    expect(write.calls[0]).toEqual({
+      method: "upsert",
+      args: [{ profile_id: "me", briefing_minute: 1110 }, { onConflict: "profile_id" }],
+    });
+  });
+
+  it.each([
+    [{ enabled: false }, { briefing_enabled: false }],
+    [{ weekends: true }, { briefing_weekends: true }],
+    [{ enabled: true, minute: 0, weekends: false }, { briefing_enabled: true, briefing_minute: 0, briefing_weekends: false }],
+  ])("maps %j to its columns", async (patch, columns) => {
+    const fake = createFakeSupabase({});
+
+    await source(fake).saveSettings(patch);
+
+    expect(fake.queriesOf("notification_preferences")[0].calls[0].args[0]).toEqual({ profile_id: "me", ...columns });
+  });
+
+  it.each([-30, 15, 1440, 9.5, Number.NaN])("does not send the time %j, which is not a half-hour slot of the day", async (minute) => {
+    const fake = createFakeSupabase({});
+
+    await expect(source(fake).saveSettings({ minute })).rejects.toThrow();
+    expect(fake.queriesOf("notification_preferences")).toHaveLength(0);
+  });
+
+  it("raises a refused settings write", async () => {
+    const fake = createFakeSupabase({ notification_preferences: { upsert: { data: null, error: new Error("refused") } } });
+
+    await expect(source(fake).saveSettings({ enabled: false })).rejects.toThrow("refused");
+  });
+
+  it("turns a project off by inserting its row", async () => {
+    const fake = createFakeSupabase({});
+
+    await source(fake).setProjectMuted("p1", true);
+
+    expect(fake.queriesOf("notification_project_mutes")[0].calls).toEqual([
+      { method: "insert", args: [{ profile_id: "me", project_id: "p1" }] },
+    ]);
+  });
+
+  it("takes a project that is already off as done", async () => {
+    const fake = createFakeSupabase({
+      notification_project_mutes: { insert: { data: null, error: { code: "23505", message: "duplicate key" } } },
+    });
+
+    await expect(source(fake).setProjectMuted("p1", true)).resolves.toBeUndefined();
+  });
+
+  it("raises any other refused insert", async () => {
+    const fake = createFakeSupabase({
+      notification_project_mutes: { insert: { data: null, error: { code: "42501", message: "denied" } } },
+    });
+
+    await expect(source(fake).setProjectMuted("p1", true)).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("turns a project back on by deleting this person's row for it, and only that row", async () => {
+    const fake = createFakeSupabase({});
+
+    await source(fake).setProjectMuted("p1", false);
+
+    expect(fake.queriesOf("notification_project_mutes")[0].calls).toEqual([
+      { method: "delete", args: [] },
+      { method: "eq", args: ["profile_id", "me"] },
+      { method: "eq", args: ["project_id", "p1"] },
+    ]);
+  });
+
+  it("raises a refused delete", async () => {
+    const fake = createFakeSupabase({ notification_project_mutes: { delete: { data: null, error: new Error("refused") } } });
+
+    await expect(source(fake).setProjectMuted("p1", false)).rejects.toThrow("refused");
+  });
+});
+
+describe("briefing settings, without a backend", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    store.__unsafeResetStoreForTests();
+  });
+
+  it("starts from the defaults and keeps what is changed on this device", async () => {
+    const local = createBrowserBriefingSettingsSource("local");
+    expect((await local.load()).settings).toEqual(DEFAULT_BRIEFING_SETTINGS);
+
+    await local.saveSettings({ minute: 1110 });
+    await local.saveSettings({ weekends: true });
+    await local.setProjectMuted("project-1", true);
+    await local.setProjectMuted("project-1", true);
+
+    const snapshot = await createBrowserBriefingSettingsSource("local").load();
+    expect(snapshot.settings).toEqual({ enabled: true, minute: 1110, weekends: true });
+    expect(snapshot.mutedProjectIds).toEqual(["project-1"]);
+
+    await local.setProjectMuted("project-1", false);
+    expect((await local.load()).mutedProjectIds).toEqual([]);
+  });
+});

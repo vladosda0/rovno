@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHURIK_IDLE_WINK_PAUSE_MS, SHURIK_WINK_MS } from "@/components/ai/Shurik";
@@ -26,7 +26,43 @@ function message(partial: Partial<ShurikMessage> = {}): ShurikMessage {
 
 function Where() {
   const location = useLocation();
-  return <span data-testid="where">{location.pathname + location.search}</span>;
+  return (
+    <>
+      <span data-testid="where">{location.pathname + location.search}</span>
+      <span data-testid="where-state">{JSON.stringify(location.state)}</span>
+    </>
+  );
+}
+
+function briefing(partial: Partial<ShurikMessage> = {}): ShurikMessage {
+  return message({
+    id: "briefing-1",
+    project_id: "p1",
+    type: "briefing",
+    title: "Планёрка · Ленина 42",
+    body: "Сегодня срок по 2 задачам: приёмка плитки и вывоз мусора.\nЗаказ «Брус 150×150» должен был прийти 5 октября, приёмки нет.",
+    payload: {
+      lines: [
+        {
+          parts: [
+            { text: "Сегодня срок по 2 задачам: " },
+            { text: "приёмка плитки", href: "/project/p1/tasks", task_id: "t1" },
+            { text: " и " },
+            { text: "вывоз мусора", href: "/project/p1/tasks", task_id: "t2" },
+            { text: "." },
+          ],
+        },
+        {
+          parts: [
+            { text: "Заказ «" },
+            { text: "Брус 150×150", href: "/project/p1/procurement/order/o1" },
+            { text: "» должен был прийти 5 октября, приёмки нет." },
+          ],
+        },
+      ],
+    },
+    ...partial,
+  });
 }
 
 function renderList(messages: ShurikMessage[], onMarkRead = vi.fn(), onAction = vi.fn()) {
@@ -166,6 +202,109 @@ describe("ShurikMessageList", () => {
     renderList([]);
 
     expect(screen.getByText("No notifications")).toBeInTheDocument();
+  });
+});
+
+describe("ShurikMessageList, a briefing", () => {
+  it("opens with the project line and lists the rest, naming tasks and orders as links", () => {
+    renderList([briefing()]);
+
+    const row = screen.getByTestId("shurik-bubble");
+    expect(screen.getByTestId("shurik-briefing-title")).toHaveTextContent("Планёрка · Ленина 42");
+    const items = within(row).getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("Сегодня срок по 2 задачам: приёмка плитки и вывоз мусора.");
+    expect(items[1]).toHaveTextContent("Заказ «Брус 150×150» должен был прийти 5 октября, приёмки нет.");
+    expect(within(row).getAllByRole("link").map((link) => link.textContent)).toEqual([
+      "приёмка плитки",
+      "вывоз мусора",
+      "Брус 150×150",
+    ]);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("stands Shurik pointing at it, still", () => {
+    vi.useFakeTimers();
+    try {
+      renderList([briefing()]);
+      const figure = screen.getByTestId("shurik-bubble").querySelector("img")!;
+      expect(figure.getAttribute("src")).toBe("/shurik/pointing.png");
+
+      act(() => {
+        vi.advanceTimersByTime((SHURIK_IDLE_WINK_PAUSE_MS + SHURIK_WINK_MS) * 3);
+      });
+      expect(figure.getAttribute("src")).toBe("/shurik/pointing.png");
+      expect(figure).not.toHaveClass("animate-shurik-pop");
+      expect(figure.parentElement).not.toHaveClass("animate-shurik-sway");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens the task on the project's tasks page from its name", () => {
+    const { onAction } = renderList([briefing()]);
+
+    fireEvent.click(screen.getByRole("link", { name: "вывоз мусора" }));
+
+    expect(screen.getByTestId("where")).toHaveTextContent("/project/p1/tasks");
+    expect(screen.getByTestId("where-state")).toHaveTextContent(JSON.stringify({ openTaskId: "t2" }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes to the page a link without a task names, carrying no task", () => {
+    renderList([briefing()]);
+
+    fireEvent.click(screen.getByRole("link", { name: "Брус 150×150" }));
+
+    expect(screen.getByTestId("where")).toHaveTextContent("/project/p1/procurement/order/o1");
+    expect(screen.getByTestId("where-state")).toHaveTextContent("null");
+  });
+
+  it.each([
+    "https://example.com/project/p1/tasks",
+    "//example.com/tasks",
+    "javascript:alert(1)",
+    "/project/p1\ttasks",
+    "project/p1/tasks",
+    42,
+  ])("writes a part as plain text when its address %j does not lead inside the app", (href) => {
+    renderList([
+      briefing({ payload: { lines: [{ parts: [{ text: "Сегодня срок: " }, { text: "приёмка плитки", href, task_id: "t1" }] }] } }),
+    ]);
+
+    expect(screen.getByRole("listitem")).toHaveTextContent("Сегодня срок: приёмка плитки");
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["no lines", {}],
+    ["lines that are not a list", { lines: "Сегодня срок" }],
+    ["an empty list", { lines: [] }],
+    ["a line without parts", { lines: [{ text: "Сегодня срок" }] }],
+    ["a line with no parts in it", { lines: [{ parts: [] }] }],
+    ["a part without text", { lines: [{ parts: [{ href: "/project/p1/tasks" }] }] }],
+    ["a part that is not an object", { lines: [{ parts: ["Сегодня срок"] }] }],
+    ["one good line and one broken", { lines: [{ parts: [{ text: "Сегодня срок." }] }, null] }],
+  ])("shows the plain text instead when the payload has %s", (_name, payload) => {
+    renderList([briefing({ payload })]);
+
+    const row = screen.getByTestId("shurik-bubble");
+    expect(screen.getByTestId("shurik-briefing-title")).toHaveTextContent("Планёрка · Ленина 42");
+    expect(row).toHaveTextContent("Сегодня срок по 2 задачам: приёмка плитки и вывоз мусора.");
+    expect(row).toHaveTextContent("приёмки нет.");
+    expect(within(row).queryByRole("listitem")).not.toBeInTheDocument();
+    expect(within(row).queryByRole("link")).not.toBeInTheDocument();
+    expect(row.querySelector("img")!.getAttribute("src")).toBe("/shurik/pointing.png");
+  });
+
+  it("is one message per project, each read like any other", () => {
+    const { onMarkRead } = renderList([
+      briefing({ id: "briefing-2", project_id: "p2", title: "Планёрка · Дача, баня" }),
+      briefing(),
+    ]);
+
+    expect(screen.getAllByTestId("shurik-bubble")).toHaveLength(2);
+    expect(onMarkRead).toHaveBeenCalledWith(["briefing-2", "briefing-1"]);
   });
 });
 

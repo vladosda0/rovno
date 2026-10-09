@@ -11,10 +11,23 @@ const MESSAGE_COLUMNS = "id, profile_id, project_id, type, title, body, is_read,
 /** The panel is a short feed, not an archive; the newest hundred is more than it ever shows at once. */
 const MESSAGES_LIMIT = 100;
 const MONEY_TYPE_PREFIX = "billing_";
+const BRIEFING_TYPE = "briefing";
 
 export interface ShurikMessageAction {
   label: string;
   href: string;
+}
+
+/** A stretch of a briefing line: plain text, or the name of something that can be opened. */
+export interface ShurikBriefingPart {
+  text: string;
+  href?: string;
+  /** The task that `href`, the project's tasks page, should open. */
+  taskId?: string;
+}
+
+export interface ShurikBriefingLine {
+  parts: ShurikBriefingPart[];
 }
 
 export interface ShurikMessagesSource {
@@ -54,6 +67,10 @@ export function isMoneyShurikMessage(message: Pick<ShurikMessage, "type">): bool
   return message.type.startsWith(MONEY_TYPE_PREFIX);
 }
 
+export function isBriefingShurikMessage(message: Pick<ShurikMessage, "type">): boolean {
+  return message.type === BRIEFING_TYPE;
+}
+
 let subscriptionSeq = 0;
 
 function hasControlSpaceOrBackslash(href: string): boolean {
@@ -81,6 +98,36 @@ export function readShurikMessageAction(message: Pick<ShurikMessage, "payload">)
   if (typeof label !== "string" || label.trim().length === 0) return null;
   if (typeof href !== "string" || !isInAppPath(href)) return null;
   return { label, href };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * The lines of a briefing, or null when the payload is not the shape the server writes; the
+ * caller then shows the plain text. A link that does not lead inside the app loses the link only.
+ */
+export function readShurikBriefingLines(message: Pick<ShurikMessage, "payload">): ShurikBriefingLine[] | null {
+  const rawLines = message.payload.lines;
+  if (!Array.isArray(rawLines) || rawLines.length === 0) return null;
+
+  const lines: ShurikBriefingLine[] = [];
+  for (const rawLine of rawLines) {
+    if (!isRecord(rawLine) || !Array.isArray(rawLine.parts) || rawLine.parts.length === 0) return null;
+    const parts: ShurikBriefingPart[] = [];
+    for (const rawPart of rawLine.parts) {
+      if (!isRecord(rawPart) || typeof rawPart.text !== "string") return null;
+      const part: ShurikBriefingPart = { text: rawPart.text };
+      if (typeof rawPart.href === "string" && isInAppPath(rawPart.href)) {
+        part.href = rawPart.href;
+        if (typeof rawPart.task_id === "string") part.taskId = rawPart.task_id;
+      }
+      parts.push(part);
+    }
+    lines.push({ parts });
+  }
+  return lines;
 }
 
 export function countUnreadShurikMessages(messages: ShurikMessage[]): number {
