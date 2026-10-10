@@ -179,6 +179,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261008020000_notifications_shurik_messages.sql`
 - `supabase/migrations/20261009030000_briefing_settings.sql`
 - `supabase/migrations/20261009035000_tasks_blocked_at.sql`
+- `supabase/migrations/20261011020000_notification_channel_settings.sql`
 
 ## Exclusions
 

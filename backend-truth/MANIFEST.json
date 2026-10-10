@@ -595,6 +595,10 @@
     {
       "path": "supabase/migrations/20261009035000_tasks_blocked_at.sql",
       "sha256": "0a1381e4d1eb83fc6e344c40a0f76e08812a9a00426fe782fc9aacec54e867cf"
+    },
+    {
+      "path": "supabase/migrations/20261011020000_notification_channel_settings.sql",
+      "sha256": "696ae1cdc3f72d86f6b3d364b0056c3eb36e2308167b2b223366b81bc33eee2a"
     }
   ],
   "generated_artifacts": [
