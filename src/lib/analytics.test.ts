@@ -328,12 +328,29 @@ describe("the secret-route boundary (rovno#153)", () => {
     expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
   });
 
+  it("never starts the tag in a document that opened on a percent-encoded share link", async () => {
+    vi.useFakeTimers();
+    setUrl("/share/%65stimate/QA-SHARE-TOKEN");
+    const analytics = await loadAnalytics();
+    vi.spyOn(analytics.documentNavigation, "replace").mockImplementation(() => {});
+
+    analytics.initMetrika();
+    vi.advanceTimersByTime(30_000);
+    analytics.ensureMetrikaStarted();
+
+    expect(initCalls(ym)).toHaveLength(0);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
+  });
+
   it.each([
     ["into a share link from a page that may run the tag", "/home", "/share/estimate/QA-SHARE-TOKEN", true],
     ["into an invite from a page that may run the tag", "/project/p1/tasks", "/invite/accept/QA-INVITE", true],
     ["out of a share link", "/share/document/QA-DOC-TOKEN", "/home", true],
     ["between two ordinary pages", "/home", "/project/p1/tasks", false],
     ["between two share links", "/share/estimate/QA-OLD", "/share/estimate/QA-NEWER", false],
+    ["into a share link with a percent-encoded segment", "/home", "/share/%65stimate/QA-SHARE-TOKEN", true],
+    ["into an invite with a percent-encoded segment", "/home", "/invite/%61ccept/QA-INVITE", true],
+    ["onto a path with a malformed escape", "/home", "/project/%E0%A4%A/tasks", false],
   ])("a navigation %s (%s -> %s) needs a fresh page load: %s", async (_label, from, to, fresh) => {
     setUrl(from);
     const analytics = await loadAnalytics();
@@ -417,6 +434,16 @@ describe("analyticsPageUrl path sanitising", () => {
 
   it("replaces a share token in the path with the route template", async () => {
     setUrl("/share/estimate/QA-SHARE-TOKEN");
+    const { analyticsPageUrl } = await loadAnalytics();
+
+    const url = analyticsPageUrl();
+
+    expect(url).toBe(`${window.location.origin}/share/estimate/:shareId`);
+    expect(url).not.toContain("QA-SHARE-TOKEN");
+  });
+
+  it("replaces a share token in the path when a segment is percent-encoded", async () => {
+    setUrl("/share/%65stimate/QA-SHARE-TOKEN");
     const { analyticsPageUrl } = await loadAnalytics();
 
     const url = analyticsPageUrl();

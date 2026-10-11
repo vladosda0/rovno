@@ -26,6 +26,7 @@ import {
 import { computeFactFromDataSources } from "@/lib/estimate-v2/rollups";
 import * as store from "@/data/store";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { captureException } from "@/lib/observability/sentry";
 import type { Project } from "@/types/entities";
 import type { EstimateV2Version } from "@/types/estimate-v2";
 
@@ -100,11 +101,15 @@ export function useEstimateV2Project(projectId: string): EstimateV2ProjectView &
 
     void hydrateEstimateV2ProjectFromWorkspace(projectId, {
       profileId: workspaceMode.profileId,
-    }).finally(() => {
-      if (cancelled) return;
-      setValue(getter());
-      setIsLoading(false);
-    });
+    })
+      .catch((error) =>
+        captureException(error, { tags: { source: "estimate-hydrate", trigger: "mount" } }),
+      )
+      .finally(() => {
+        if (cancelled) return;
+        setValue(getter());
+        setIsLoading(false);
+      });
 
     return () => {
       cancelled = true;

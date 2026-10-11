@@ -371,8 +371,15 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
 /** What an unrecognised path is reported as. */
 const ANALYTICS_UNKNOWN_PATH = "/unknown";
 
+// Decoded the way the router decodes before it matches (decodePath in
+// @remix-run/router): per segment, and the raw path when an escape is malformed.
 function pathSegments(path: string): string[] {
-  return path.split("/").filter((segment) => segment !== "");
+  const raw = path.split("/").filter((segment) => segment !== "");
+  try {
+    return raw.map((segment) => decodeURIComponent(segment).replace(/\//g, "%2F"));
+  } catch {
+    return raw;
+  }
 }
 
 // Case-insensitive because the router is: react-router-dom 6.30.3 renders

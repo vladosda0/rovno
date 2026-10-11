@@ -82,7 +82,7 @@ const SCRUB_RULES: ScrubRule[] = [
     // other rule. Personal data under 152-ФЗ, which is what this module is for.
     name: "sensitive-query-param",
     pattern:
-      /([?&](?:apikey|api[_-]?key|access[_-]?token|refresh[_-]?token|provider_refresh_token|provider_token|token_hash|token|password|secret|code|email)=)[^&#\s]+/gi,
+      /((?:^|[?&#])(?:apikey|api[_-]?key|access[_-]?token|refresh[_-]?token|provider_refresh_token|provider_token|token_hash|token|password|secret|code|email)=)[^&#\s]+/gim,
     replacement: "$1[FILTERED]",
   },
   {

@@ -97,6 +97,23 @@ describe("scrubText", () => {
     );
   });
 
+  it("filters a sensitive param in first position and right after the fragment mark", () => {
+    expect(scrubText("token_hash=pkce_abc123&type=signup")).toBe("token_hash=[FILTERED]&type=signup");
+    expect(scrubText("https://rovno.ai/auth/reset#refresh_token=r3fr3sh&type=recovery")).toBe(
+      "https://rovno.ai/auth/reset#refresh_token=[FILTERED]&type=recovery",
+    );
+  });
+
+  it("filters a sensitive param that starts a later line", () => {
+    expect(scrubText("request failed\nrefresh_token=r3fr3sh&type=recovery")).toBe(
+      "request failed\nrefresh_token=[FILTERED]&type=recovery",
+    );
+  });
+
+  it("leaves a look-alike name in the middle of a word alone", () => {
+    expect(scrubText("see barcode=4607 on the label")).toBe("see barcode=4607 on the label");
+  });
+
   it("filters an email carried as a query param, including percent-encoded", () => {
     // Signup navigates to /auth/email-sent?email=<encodeURIComponent(email)>,
     // so the `@` the email rule needs has become %40 by the time it is scrubbed.
