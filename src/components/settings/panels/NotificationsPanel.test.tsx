@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotificationsPanel } from "@/components/settings/panels/NotificationsPanel";
 import * as briefingSettingsSource from "@/data/briefing-settings-source";
 import type { BriefingSettings, BriefingSettingsSnapshot } from "@/data/briefing-settings-source";
+import * as telegramDeliverySource from "@/data/telegram-delivery-source";
 import { toast } from "@/hooks/use-toast";
 import i18n from "@/i18n";
 import { authenticateRuntimeAuth, guestRuntimeAuth, loadingRuntimeAuth } from "@/test/runtime-auth";
@@ -94,6 +95,8 @@ describe("NotificationsPanel", () => {
     vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
     authenticateRuntimeAuth("profile-1");
     vi.mocked(toast).mockClear();
+    // The "Where to send" section has its own suite; here it stays out of the way.
+    vi.spyOn(telegramDeliverySource, "getTelegramDeliverySource").mockResolvedValue(null);
   });
 
   afterEach(() => {

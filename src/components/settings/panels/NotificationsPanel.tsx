@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { SignInPrompt } from "@/components/settings/SignInPrompt";
+import { TelegramDeliverySection } from "@/components/settings/panels/TelegramDeliverySection";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -55,11 +56,14 @@ export function NotificationsPanel() {
   const { settings, projects } = snapshot;
   if (projects.length === 0) {
     return (
-      <section className="rounded-card border border-border bg-card/70 p-sp-2">
-        <p className="text-caption text-muted-foreground">
-          {t(snapshot.inAnyProject ? "notifications.briefing.notOwner" : "notifications.briefing.noProjects")}
-        </p>
-      </section>
+      <div className="space-y-sp-3">
+        <section className="rounded-card border border-border bg-card/70 p-sp-2">
+          <p className="text-caption text-muted-foreground">
+            {t(snapshot.inAnyProject ? "notifications.briefing.notOwner" : "notifications.briefing.noProjects")}
+          </p>
+        </section>
+        <TelegramDeliverySection />
+      </div>
     );
   }
 
@@ -152,6 +156,7 @@ export function NotificationsPanel() {
           )}
         </div>
       </SettingsSection>
+      <TelegramDeliverySection />
     </div>
   );
 }

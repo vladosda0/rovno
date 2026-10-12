@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useProject, usePermission, useMedia, useWorkspaceMode } from "@/hooks/use-mock-data";
 import {
@@ -104,7 +104,7 @@ export default function ProjectTasks() {
   const { id: projectId } = useParams<{ id: string }>();
   const pid = projectId!;
   const { project, stages, members } = useProject(pid);
-  const { tasks, isLoading: isTasksLoading } = usePlanningProjectTasksState(pid);
+  const { tasks, isLoading: isTasksLoading, isFetching: isTasksFetching } = usePlanningProjectTasksState(pid);
   const media = useMedia(pid);
   const perm = usePermission(pid);
   const { role } = perm;
@@ -175,6 +175,21 @@ export default function ProjectTasks() {
       window.history.replaceState({}, "");
     }
   }, [location.state]);
+
+  // Deep-link: /project/<id>/tasks?task=<id>. A link from outside the app
+  // (Telegram, email) cannot carry navigation state, so the address names the task.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const taskParam = searchParams.get("task");
+  useEffect(() => {
+    if (!taskParam) return;
+    const known = tasks.some((entry) => entry.id === taskParam);
+    // An id is called unknown only against a list that has finished loading.
+    if (!known && (isTasksLoading || isTasksFetching)) return;
+    if (known) setSelectedTaskId(taskParam);
+    const next = new URLSearchParams(searchParams);
+    next.delete("task");
+    setSearchParams(next, { replace: true });
+  }, [taskParam, isTasksLoading, isTasksFetching, tasks, searchParams, setSearchParams]);
 
   // New stage modal
   const [stageModalOpen, setStageModalOpen] = useState(false);
