@@ -965,6 +965,7 @@
   "billing.plan.business": "Business",
   "billing.planSuffix": "{{plan}} plan",
   "billing.currentTier": "Your current subscription tier",
+  "billing.planLoadError": "Couldn't load your plan.",
   "billing.comparePlans": "Compare plans",
   "billing.upgradePlan": "Upgrade plan",
   "billing.signInHint": "Sign in to manage your subscription.",

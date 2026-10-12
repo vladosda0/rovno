@@ -979,6 +979,7 @@
   "billing.plan.business": "Business",
   "billing.planSuffix": "Тариф {{plan}}",
   "billing.currentTier": "Твоя текущая подписка",
+  "billing.planLoadError": "Не удалось загрузить тариф.",
   "billing.comparePlans": "Сравнить тарифы",
   "billing.upgradePlan": "Улучшить тариф",
   "billing.signInHint": "Войди, чтобы управлять подпиской.",
