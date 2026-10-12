@@ -11,6 +11,7 @@ const SAVED: briefingSettingsSource.BriefingSettingsSnapshot = {
   projects: [{ id: "p1", title: "Ленина 42" }],
   inAnyProject: true,
   mutedProjectIds: [],
+  peopleEnabled: true,
 };
 
 function setup() {
@@ -24,6 +25,7 @@ function setup() {
       refuse = reject;
     })),
     setProjectMuted: vi.fn(async () => {}),
+    setPeopleEnabled: vi.fn(async () => {}),
   };
   vi.spyOn(briefingSettingsSource, "getBriefingSettingsSource").mockResolvedValue(source);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });

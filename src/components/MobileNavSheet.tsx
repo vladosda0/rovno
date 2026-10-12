@@ -9,6 +9,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { ProjectMuteRow } from "@/components/ProjectMuteControl";
 import { useVisibleProjectTabs } from "@/components/ProjectTabs";
 import { HOME_TABS, VALID_HOME_TABS } from "@/components/HomeTabs";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,7 @@ export function MobileNavSheet({
 
   const visibleProjectTabs = useVisibleProjectTabs(projectId);
   const inProject = Boolean(projectId);
+  const currentProject = projects.find((project) => project.id === projectId);
 
   const close = () => onOpenChange(false);
 
@@ -142,6 +144,8 @@ export function MobileNavSheet({
                 <span>{t("projectTabs.ai")}</span>
               </button>
             ) : null}
+
+            {currentProject && <ProjectMuteRow projectId={currentProject.id} projectTitle={currentProject.title} />}
 
             {!isDemo && (
               <Link

@@ -58,6 +58,44 @@ describe("briefing settings, the database", () => {
     expect(snapshot.projects).toEqual([]);
     expect(snapshot.inAnyProject).toBe(false);
     expect(snapshot.mutedProjectIds).toEqual([]);
+    expect(snapshot.peopleEnabled).toBe(true);
+  });
+
+  it("reads whether messages from people are on, from the same row", async () => {
+    const fake = createFakeSupabase({
+      notification_preferences: {
+        select: {
+          data: { briefing_enabled: true, briefing_minute: 540, briefing_weekends: false, people_enabled: false },
+          error: null,
+        },
+      },
+    });
+
+    const snapshot = await source(fake).load();
+
+    expect(snapshot.peopleEnabled).toBe(false);
+    expect(fake.queriesOf("notification_preferences")[0].calls[0]).toEqual({
+      method: "select",
+      args: ["briefing_enabled, briefing_minute, briefing_weekends, people_enabled"],
+    });
+  });
+
+  it.each([false, true])("writes messages from people = %j as that column alone, creating the row when there is none", async (enabled) => {
+    const fake = createFakeSupabase({});
+
+    await source(fake).setPeopleEnabled(enabled);
+
+    const [write] = fake.queriesOf("notification_preferences");
+    expect(write.calls[0]).toEqual({
+      method: "upsert",
+      args: [{ profile_id: "me", people_enabled: enabled }, { onConflict: "profile_id" }],
+    });
+  });
+
+  it("raises a refused write of messages from people", async () => {
+    const fake = createFakeSupabase({ notification_preferences: { upsert: { data: null, error: new Error("refused") } } });
+
+    await expect(source(fake).setPeopleEnabled(false)).rejects.toThrow("refused");
   });
 
   it("reads the stored settings of this person only", async () => {
@@ -237,5 +275,17 @@ describe("briefing settings, without a backend", () => {
 
     await local.setProjectMuted("project-1", false);
     expect((await local.load()).mutedProjectIds).toEqual([]);
+  });
+
+  it("keeps messages from people on until switched off, on this device", async () => {
+    const local = createBrowserBriefingSettingsSource("local");
+    expect((await local.load()).peopleEnabled).toBe(true);
+
+    await local.setPeopleEnabled(false);
+    expect((await createBrowserBriefingSettingsSource("local").load()).peopleEnabled).toBe(false);
+    expect((await local.load()).settings).toEqual(DEFAULT_BRIEFING_SETTINGS);
+
+    await local.setPeopleEnabled(true);
+    expect((await local.load()).peopleEnabled).toBe(true);
   });
 });

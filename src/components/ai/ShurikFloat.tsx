@@ -7,6 +7,7 @@ import {
   countUnreadShurikMessages,
   isBriefingShurikMessage,
   isMoneyShurikMessage,
+  isPeopleShurikMessage,
 } from "@/data/shurik-messages-source";
 import { useDocumentVisible } from "@/hooks/use-document-visible";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -80,6 +81,10 @@ export function ShurikFloat({ messages, onOpen }: ShurikFloatProps) {
   const unreadCount = countUnreadShurikMessages(messages);
   const peek = useShurikPeek(messages, documentVisible && !isMobile);
   const moneyPeek = peek !== null && isMoneyShurikMessage(peek.message);
+  // A message about a person names its project in the first line; what was done is in the text.
+  const peopleText = peek !== null && isPeopleShurikMessage(peek.message)
+    ? peek.message.body?.trim() || null
+    : null;
   const open = () => onOpen(unreadCount > 0 ? "notifications" : undefined);
 
   return (
@@ -102,12 +107,21 @@ export function ShurikFloat({ messages, onOpen }: ShurikFloatProps) {
           onClick={() => onOpen("notifications")}
           className="fixed bottom-9 left-[84px] z-30 hidden max-w-[200px] rounded-xl rounded-bl-[4px] border border-border bg-card px-2.5 py-1.5 text-left text-[11px] leading-snug text-foreground shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:block"
         >
-          <span className="block font-semibold">{t("ai.shurik.name")}</span>
-          <span className="line-clamp-2 [overflow-wrap:anywhere]">
-            {peek.briefingProjects > 1
-              ? t("ai.notifications.briefingBatch", { count: peek.briefingProjects })
-              : peek.message.title}
-          </span>
+          {peopleText ? (
+            <>
+              <span className="block font-semibold [overflow-wrap:anywhere]">{peek.message.title}</span>
+              <span className="line-clamp-2 [overflow-wrap:anywhere]">{peopleText}</span>
+            </>
+          ) : (
+            <>
+              <span className="block font-semibold">{t("ai.shurik.name")}</span>
+              <span className="line-clamp-2 [overflow-wrap:anywhere]">
+                {peek.briefingProjects > 1
+                  ? t("ai.notifications.briefingBatch", { count: peek.briefingProjects })
+                  : peek.message.title}
+              </span>
+            </>
+          )}
         </button>
       )}
     </>

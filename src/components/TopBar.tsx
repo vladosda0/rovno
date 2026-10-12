@@ -21,6 +21,7 @@ import {
 import { ProjectTabs } from "@/components/ProjectTabs";
 import { HomeTabs } from "@/components/HomeTabs";
 import { MobileNavSheet } from "@/components/MobileNavSheet";
+import { ProjectMuteBell } from "@/components/ProjectMuteControl";
 import { Shurik } from "@/components/ai/Shurik";
 import { ShurikUnreadBadge } from "@/components/ai/ShurikUnreadBadge";
 import { clearWorkspaceUserCache } from "@/data/workspace-profile-cache";
@@ -416,6 +417,8 @@ export function TopBar({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {currentProject && <ProjectMuteBell projectId={currentProject.id} projectTitle={currentProject.title} />}
 
           {!aiSidebarCollapsed && (
             <Button

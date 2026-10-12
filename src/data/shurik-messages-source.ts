@@ -12,6 +12,7 @@ const MESSAGE_COLUMNS = "id, profile_id, project_id, type, title, body, is_read,
 const MESSAGES_LIMIT = 100;
 const MONEY_TYPE_PREFIX = "billing_";
 const BRIEFING_TYPE = "briefing";
+const PEOPLE_TYPE_PREFIX = "people_";
 
 export interface ShurikMessageAction {
   label: string;
@@ -69,6 +70,11 @@ export function isMoneyShurikMessage(message: Pick<ShurikMessage, "type">): bool
 
 export function isBriefingShurikMessage(message: Pick<ShurikMessage, "type">): boolean {
   return message.type === BRIEFING_TYPE;
+}
+
+/** A comment or an assignment: what another person did in a project. */
+export function isPeopleShurikMessage(message: Pick<ShurikMessage, "type">): boolean {
+  return message.type.startsWith(PEOPLE_TYPE_PREFIX);
 }
 
 let subscriptionSeq = 0;

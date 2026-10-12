@@ -28,8 +28,12 @@ const THREE_PROJECTS = [
 ];
 
 /** An in-memory stand-in for the tables: a reload reads what the writes left. */
-function createFakeBackend(initial: Partial<BriefingSettingsSnapshot> & { storedSettings?: BriefingSettings | null } = {}) {
+function createFakeBackend(
+  initial: Partial<BriefingSettingsSnapshot> & { storedSettings?: BriefingSettings | null; storedPeopleEnabled?: boolean } = {},
+) {
   let stored: BriefingSettings | null = initial.storedSettings ?? null;
+  // Undefined stands for "no value written yet", which reads as on.
+  let peopleEnabled: boolean | undefined = initial.storedPeopleEnabled;
   let muted = [...(initial.mutedProjectIds ?? [])];
   const projects = initial.projects ?? THREE_PROJECTS;
   const inAnyProject = initial.inAnyProject ?? true;
@@ -40,16 +44,20 @@ function createFakeBackend(initial: Partial<BriefingSettingsSnapshot> & { stored
       projects,
       inAnyProject,
       mutedProjectIds: [...muted],
+      peopleEnabled: peopleEnabled ?? true,
     })),
     saveSettings: vi.fn(async (patch: Partial<BriefingSettings>) => {
       stored = { ...(stored ?? briefingSettingsSource.DEFAULT_BRIEFING_SETTINGS), ...patch };
+    }),
+    setPeopleEnabled: vi.fn(async (enabled: boolean) => {
+      peopleEnabled = enabled;
     }),
     setProjectMuted: vi.fn(async (projectId: string, isMuted: boolean) => {
       muted = isMuted ? [...muted.filter((id) => id !== projectId), projectId] : muted.filter((id) => id !== projectId);
     }),
   };
   vi.spyOn(briefingSettingsSource, "getBriefingSettingsSource").mockResolvedValue(source);
-  return { source, hasRow: () => stored !== null };
+  return { source, hasRow: () => stored !== null, peopleEnabled: () => peopleEnabled };
 }
 
 function renderPanel() {
@@ -69,6 +77,7 @@ const briefingSwitch = () => screen.getByRole("switch", { name: "What needs atte
 const weekendsSwitch = () => screen.getByRole("switch", { name: "Also send on Saturday and Sunday" });
 const timeSelect = () => screen.getByRole("combobox", { name: "Briefing time" });
 const projectsButton = () => screen.getByRole("button", { name: /^For which projects/ });
+const peopleSwitch = () => screen.getByRole("switch", { name: "Messages from people in a project" });
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -124,7 +133,7 @@ describe("NotificationsPanel", () => {
     renderPanel();
     await loaded();
 
-    expect(screen.getAllByRole("switch")).toHaveLength(2);
+    expect(screen.getAllByRole("switch")).toHaveLength(3);
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
     for (const gone of [/in-app/i, /email/i, /telegram/i, /coming soon/i, /digest/i, /assigned to me/i, /billing/i, /subscription/i]) {
@@ -238,20 +247,109 @@ describe("NotificationsPanel", () => {
     expect(projectsButton()).toHaveTextContent("All projects");
   });
 
-  it("tells a person with no projects at all that there are none yet", async () => {
-    createFakeBackend({ projects: [], inAnyProject: false });
+  it.each([
+    ["has no projects at all", { projects: [], inAnyProject: false }],
+    ["is only a member of projects, a contractor or a viewer", { projects: [], inAnyProject: true }],
+  ])("shows the instant section, and no briefing, to a person who %s", async (_who, initial) => {
+    createFakeBackend(initial);
     renderPanel();
 
-    expect(
-      await screen.findByText(
-        "Shurik sends the briefing to a project's owner and co-owner. You have no projects yet, so there is nothing to set up here yet.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/you are a member/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
-    expect(i18n.t("notifications.briefing.noProjects", { lng: "ru" })).toBe(
-      "Планёрку Шурик присылает владельцу и совладельцу проекта. У тебя пока нет проектов, поэтому настраивать здесь пока нечего.",
-    );
+    expect(await screen.findByRole("heading", { name: "Instant" })).toBeInTheDocument();
+    expect(peopleSwitch()).toBeChecked();
+    expect(screen.getAllByRole("switch")).toHaveLength(1);
+    expect(screen.queryByRole("heading", { name: "Shurik's briefing" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing to set up/)).not.toBeInTheDocument();
+  });
+
+  it("shows such a person where to send as well, under the instant section", async () => {
+    createFakeBackend({ projects: [] });
+    vi.mocked(telegramDeliverySource.getTelegramDeliverySource).mockResolvedValue({
+      load: vi.fn(async () => ({
+        linked: true,
+        linkedName: "@ivan_stroit",
+        settings: telegramDeliverySource.DEFAULT_TELEGRAM_DELIVERY_SETTINGS,
+      })),
+      saveSettings: vi.fn(async () => {}),
+    });
+    renderPanel();
+
+    const delivery = await screen.findByRole("heading", { name: "Where to send" });
+    const instant = screen.getByRole("heading", { name: "Instant" });
+    expect(instant.compareDocumentPosition(delivery) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("puts the instant section between the briefing and where to send, with what the switch means", async () => {
+    createFakeBackend();
+    vi.mocked(telegramDeliverySource.getTelegramDeliverySource).mockResolvedValue({
+      load: vi.fn(async () => ({
+        linked: true,
+        linkedName: "@ivan_stroit",
+        settings: telegramDeliverySource.DEFAULT_TELEGRAM_DELIVERY_SETTINGS,
+      })),
+      saveSettings: vi.fn(async () => {}),
+    });
+    renderPanel();
+    await loaded();
+
+    const briefingHeading = screen.getByRole("heading", { name: "Shurik's briefing" });
+    const instant = screen.getByRole("heading", { name: "Instant" });
+    const delivery = await screen.findByRole("heading", { name: "Where to send" });
+    expect(briefingHeading.compareDocumentPosition(instant) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(instant.compareDocumentPosition(delivery) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Messages from people in a project")).toBeInTheDocument();
+    expect(screen.getByText("Someone wrote in a task or assigned a task to you")).toBeInTheDocument();
+    expect(peopleSwitch()).toBeChecked();
+  });
+
+  it("shows messages from people as off when that is what is stored", async () => {
+    createFakeBackend({ storedPeopleEnabled: false });
+    renderPanel();
+    await loaded();
+
+    expect(peopleSwitch()).not.toBeChecked();
+    expect(briefingSwitch()).toBeChecked();
+  });
+
+  it("saves the messages-from-people switch at once, that value alone: off, then back on", async () => {
+    const { source, peopleEnabled, hasRow } = createFakeBackend();
+    renderPanel();
+    await loaded();
+
+    fireEvent.click(peopleSwitch());
+    await waitFor(() => expect(source.setPeopleEnabled).toHaveBeenCalledWith(false));
+    await waitFor(() => expect(peopleSwitch()).not.toBeChecked());
+    await waitFor(() => expect(peopleSwitch()).toBeEnabled());
+    expect(peopleEnabled()).toBe(false);
+    expect(source.saveSettings).not.toHaveBeenCalled();
+    expect(hasRow()).toBe(false);
+
+    fireEvent.click(peopleSwitch());
+    await waitFor(() => expect(source.setPeopleEnabled).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(peopleSwitch()).toBeChecked());
+    expect(peopleEnabled()).toBe(true);
+  });
+
+  it("puts the messages-from-people switch back and says so when the write is refused", async () => {
+    const { source } = createFakeBackend({ projects: [] });
+    let refuse!: (reason: Error) => void;
+    vi.mocked(source.setPeopleEnabled).mockReturnValueOnce(new Promise((_resolve, reject) => { refuse = reject; }));
+    renderPanel();
+    await screen.findByRole("heading", { name: "Instant" });
+
+    fireEvent.click(peopleSwitch());
+    await waitFor(() => expect(peopleSwitch()).not.toBeChecked());
+    expect(peopleSwitch()).toBeDisabled();
+    expect(toast).not.toHaveBeenCalled();
+
+    holdReloads(source);
+    refuse(new Error("refused"));
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(toast).mock.calls[0][0]).toMatchObject({
+      title: "Could not save notification preferences",
+      variant: "destructive",
+    });
+    await waitFor(() => expect(peopleSwitch()).toBeChecked());
   });
 
   it("offers a guest the way to sign in, and reads nothing", async () => {
@@ -284,6 +382,7 @@ describe("NotificationsPanel", () => {
       projects: THREE_PROJECTS,
       inAnyProject: true,
       mutedProjectIds: [],
+      peopleEnabled: true,
     });
     await loaded();
     expect(screen.queryByTestId("notifications-loading")).not.toBeInTheDocument();
@@ -363,23 +462,10 @@ describe("NotificationsPanel", () => {
       projects: THREE_PROJECTS,
       inAnyProject: true,
       mutedProjectIds: [],
+      peopleEnabled: true,
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(briefingSwitch()).not.toBeChecked();
-  });
-
-  it("says so, and shows no section, to a person who is nowhere an owner or a co-owner", async () => {
-    createFakeBackend({ projects: [] });
-    renderPanel();
-
-    expect(
-      await screen.findByText(
-        "Shurik sends the briefing to a project's owner and co-owner. In your projects you are a member, so there is nothing to set up here yet.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Shurik's briefing" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
   it("puts a switch back and says so when the write is refused", async () => {
@@ -454,8 +540,8 @@ describe("NotificationsPanel", () => {
     expect(ru("notifications.briefing.projects")).toBe("По каким проектам");
     expect(ru("notifications.briefing.allProjects")).toBe("Все проекты");
     expect(ru("notifications.briefing.someProjects", { selected: 2, total: 3 })).toBe("2 из 3");
-    expect(ru("notifications.briefing.notOwner")).toBe(
-      "Планёрку Шурик присылает владельцу и совладельцу проекта. В твоих проектах ты участник, поэтому настраивать здесь пока нечего.",
-    );
+    expect(ru("notifications.instant.title")).toBe("Мгновенные");
+    expect(ru("notifications.instant.people")).toBe("Сообщения от людей в проекте");
+    expect(ru("notifications.instant.peopleHint")).toBe("Кто-то написал в задаче или назначил тебе задачу");
   });
 });

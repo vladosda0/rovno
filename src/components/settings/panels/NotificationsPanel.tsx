@@ -31,12 +31,12 @@ const ROW_CLASS = "flex items-center justify-between gap-sp-2 py-1";
 const ROW_LABEL_CLASS = "min-w-0 flex-1 text-body-sm text-foreground";
 const PROJECTS_LIST_ID = "briefing-projects-list";
 
-/** Settings -> Notifications: the briefing, and only what the person can change about it. */
+/** Settings -> Notifications: the briefing, the instant messages and where to send, each only as far as the person can change it. */
 export function NotificationsPanel() {
   const { t } = useTranslation();
   const [projectsOpen, setProjectsOpen] = useState(false);
   const workspaceMode = useWorkspaceMode();
-  const { snapshot, isLoading, isError, isSaving, saveSettings, setProjectMuted } = useBriefingSettings(() => {
+  const { snapshot, isLoading, isError, isSaving, saveSettings, setProjectMuted, setPeopleEnabled } = useBriefingSettings(() => {
     toast({
       title: t("notifications.saveFailedToast"),
       description: t("notifications.saveFailedDescription"),
@@ -54,14 +54,28 @@ export function NotificationsPanel() {
   }
 
   const { settings, projects } = snapshot;
+  const instantSection = (
+    <SettingsSection title={t("notifications.instant.title")}>
+      <div className={ROW_CLASS}>
+        <span className="min-w-0 flex-1">
+          <span className="block text-body-sm text-foreground">{t("notifications.instant.people")}</span>
+          <span className="block text-caption text-muted-foreground">{t("notifications.instant.peopleHint")}</span>
+        </span>
+        <Switch
+          checked={snapshot.peopleEnabled}
+          onCheckedChange={setPeopleEnabled}
+          disabled={isSaving}
+          aria-label={t("notifications.instant.people")}
+        />
+      </div>
+    </SettingsSection>
+  );
+
+  // The briefing is written for owners and co-owners only; anyone else has nothing to set up about it.
   if (projects.length === 0) {
     return (
       <div className="space-y-sp-3">
-        <section className="rounded-card border border-border bg-card/70 p-sp-2">
-          <p className="text-caption text-muted-foreground">
-            {t(snapshot.inAnyProject ? "notifications.briefing.notOwner" : "notifications.briefing.noProjects")}
-          </p>
-        </section>
+        {instantSection}
         <TelegramDeliverySection />
       </div>
     );
@@ -156,6 +170,7 @@ export function NotificationsPanel() {
           )}
         </div>
       </SettingsSection>
+      {instantSection}
       <TelegramDeliverySection />
     </div>
   );

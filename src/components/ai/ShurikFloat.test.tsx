@@ -196,6 +196,45 @@ describe("ShurikFloat", () => {
     render(<ShurikFloat messages={[message()]} onOpen={vi.fn()} />);
     expect(screen.getByTestId("shurik-peek")).toBeInTheDocument();
   });
+  it("shows the first line and the start of the text for a message about what a person did", () => {
+    render(
+      <ShurikFloat
+        messages={[
+          message({
+            id: "people-1",
+            project_id: "p1",
+            type: "people_comment",
+            title: "Комментарий · Ленина 42",
+            body: "Иван Петров написал(а) в задаче «Штукатурка стен»: «Плитку привезут в четверг, не в среду.»",
+          }),
+        ]}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    const peek = screen.getByTestId("shurik-peek");
+    expect(peek).toHaveTextContent("Комментарий · Ленина 42");
+    expect(peek).toHaveTextContent("Иван Петров написал(а) в задаче «Штукатурка стен»");
+    expect(figure().getAttribute("src")).toBe("/shurik/avatar.png");
+
+    act(() => {
+      vi.advanceTimersByTime(SHURIK_PEEK_MS);
+    });
+    expect(screen.queryByTestId("shurik-peek")).not.toBeInTheDocument();
+    expect(screen.getByTestId("shurik-unread-badge")).toHaveTextContent("1");
+  });
+
+  it("shows the first line alone for a message about a person that has no text", () => {
+    render(
+      <ShurikFloat
+        messages={[message({ id: "people-2", type: "people_assignment", title: "Назначение · Ленина 42", body: null })]}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Назначение · Ленина 42");
+  });
+
   describe("briefings", () => {
     const lenina = briefing("b-1", "p1", "Планёрка · Ленина 42");
     const dacha = briefing("b-2", "p2", "Планёрка · Дача, баня");

@@ -131,6 +131,7 @@ export type Database = {
           "briefing_weekends": boolean
           "telegram_enabled": boolean
           "telegram_quiet_night": boolean
+          "people_enabled": boolean
           }
           Insert: {
           "profile_id"?: string
@@ -145,6 +146,7 @@ export type Database = {
           "briefing_weekends"?: boolean
           "telegram_enabled"?: boolean
           "telegram_quiet_night"?: boolean
+          "people_enabled"?: boolean
           }
           Update: {
           "profile_id"?: string
@@ -159,6 +161,7 @@ export type Database = {
           "briefing_weekends"?: boolean
           "telegram_enabled"?: boolean
           "telegram_quiet_night"?: boolean
+          "people_enabled"?: boolean
           }
           Relationships: []
         }

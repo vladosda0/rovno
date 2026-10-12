@@ -308,6 +308,98 @@ describe("ShurikMessageList, a briefing", () => {
   });
 });
 
+function comment(partial: Partial<ShurikMessage> = {}): ShurikMessage {
+  return message({
+    id: "people-1",
+    project_id: "p1",
+    type: "people_comment",
+    title: "Комментарий · Ленина 42",
+    body: "Иван Петров написал(а) в задаче «Штукатурка стен»: «Плитку привезут в четверг, не в среду.»",
+    payload: {
+      action_label: "Открыть",
+      action_href: "/project/p1/tasks?task=t1",
+      task_id: "t1",
+      actor_id: "profile-2",
+      comment_id: "c1",
+    },
+    ...partial,
+  });
+}
+
+describe("ShurikMessageList, a message about what a person did", () => {
+  it("shows the first line and the text of a comment, and opens the task from its button", () => {
+    const { onAction } = renderList([comment()]);
+
+    const row = screen.getByTestId("shurik-bubble");
+    expect(screen.getByTestId("shurik-message-title")).toHaveTextContent("Комментарий · Ленина 42");
+    expect(row).toHaveTextContent(
+      "Иван Петров написал(а) в задаче «Штукатурка стен»: «Плитку привезут в четверг, не в среду.»",
+    );
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть" }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/project/p1/tasks?task=t1");
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an assignment the same way", () => {
+    renderList([
+      comment({
+        type: "people_assignment",
+        title: "Назначение · Ленина 42",
+        body: "Иван Петров назначил(а) тебе задачу «Приёмка плитки», срок 4 октября.",
+      }),
+    ]);
+
+    expect(screen.getByTestId("shurik-message-title")).toHaveTextContent("Назначение · Ленина 42");
+    expect(screen.getByTestId("shurik-bubble")).toHaveTextContent(
+      "Иван Петров назначил(а) тебе задачу «Приёмка плитки», срок 4 октября.",
+    );
+  });
+
+  it("opens the list of tasks from several assignments in one message", () => {
+    renderList([
+      comment({
+        type: "people_assignment",
+        title: "Назначение · Ленина 42",
+        body: "Иван Петров назначил(а) тебе 3 задачи: «Демонтаж перегородок», «Штукатурка стен» и ещё 1.",
+        payload: {
+          action_label: "Открыть задачи",
+          action_href: "/project/p1/tasks",
+          task_ids: ["t1", "t2", "t3"],
+          task_titles: ["Демонтаж перегородок", "Штукатурка стен", "Приёмка плитки"],
+        },
+      }),
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть задачи" }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/project/p1/tasks");
+    expect(screen.getByTestId("where")).not.toHaveTextContent("task=");
+  });
+
+  it("stands Shurik as he is in the chat, with no pose of its own", () => {
+    renderList([comment()]);
+
+    const figure = screen.getByTestId("shurik-bubble").querySelector("img")!;
+    expect(figure.getAttribute("src")).toBe("/shurik/avatar.png");
+    expect(figure).not.toHaveClass("animate-shurik-pop");
+  });
+
+  it("says the first line once when there is no text under it", () => {
+    renderList([comment({ body: " " })]);
+
+    expect(screen.queryByTestId("shurik-message-title")).not.toBeInTheDocument();
+    expect(screen.getByTestId("shurik-bubble")).toHaveTextContent("Комментарий · Ленина 42");
+  });
+
+  it("keeps a money message to its text alone", () => {
+    renderList([message()]);
+
+    expect(screen.queryByTestId("shurik-message-title")).not.toBeInTheDocument();
+    expect(screen.getByTestId("shurik-bubble")).not.toHaveTextContent("Не прошло списание за подписку");
+  });
+});
+
 describe("formatShurikMessageTime", () => {
   const now = new Date(2026, 9, 9, 15, 0, 0);
 

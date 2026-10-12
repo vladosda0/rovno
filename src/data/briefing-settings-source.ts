@@ -23,6 +23,7 @@ const BRIEFING_ROLES = new Set(["owner", "co_owner"]);
 const UNIQUE_VIOLATION = "23505";
 const LOCAL_SETTINGS_KEY = "briefing-settings";
 const LOCAL_MUTES_KEY = "briefing-muted-projects";
+const LOCAL_PEOPLE_KEY = "people-messages-enabled";
 
 export interface BriefingProject {
   id: string;
@@ -35,8 +36,10 @@ export interface BriefingSettingsSnapshot {
   projects: BriefingProject[];
   /** False for a person with no project of any kind; a mere member of one still has `projects` empty. */
   inAnyProject: boolean;
-  /** A briefing comes for every project of the person except these. */
+  /** Nothing about these projects reaches the person: no briefing, no message about what people did. */
   mutedProjectIds: string[];
+  /** Whether comments and assignments from other people are sent at all; on for a person with no row. */
+  peopleEnabled: boolean;
 }
 
 export interface BriefingSettingsSource {
@@ -45,6 +48,8 @@ export interface BriefingSettingsSource {
   /** Writes the given fields only; the first write creates the person's row. */
   saveSettings: (patch: Partial<BriefingSettings>) => Promise<void>;
   setProjectMuted: (projectId: string, muted: boolean) => Promise<void>;
+  /** Writes this one value; the first write creates the person's row. */
+  setPeopleEnabled: (enabled: boolean) => Promise<void>;
 }
 
 export function isBriefingMinute(minute: number): boolean {
@@ -97,6 +102,7 @@ export function createBrowserBriefingSettingsSource(mode: "demo" | "local"): Bri
         projects: projects.map((project) => ({ id: project.id, title: project.title })),
         inAnyProject: visible.length > 0,
         mutedProjectIds: readLocalMutes(),
+        peopleEnabled: readLocalJson(LOCAL_PEOPLE_KEY) !== false,
       };
     },
     async saveSettings(patch) {
@@ -106,6 +112,9 @@ export function createBrowserBriefingSettingsSource(mode: "demo" | "local"): Bri
     async setProjectMuted(projectId, muted) {
       const others = readLocalMutes().filter((id) => id !== projectId);
       localStorage.setItem(LOCAL_MUTES_KEY, JSON.stringify(muted ? [...others, projectId] : others));
+    },
+    async setPeopleEnabled(enabled) {
+      localStorage.setItem(LOCAL_PEOPLE_KEY, JSON.stringify(enabled));
     },
   };
 }
@@ -120,7 +129,7 @@ export function createSupabaseBriefingSettingsSource(
       const [preferences, projects, memberships, mutes] = await Promise.all([
         supabase
           .from("notification_preferences")
-          .select("briefing_enabled, briefing_minute, briefing_weekends")
+          .select("briefing_enabled, briefing_minute, briefing_weekends, people_enabled")
           .eq("profile_id", profileId)
           .maybeSingle(),
         supabase
@@ -153,6 +162,7 @@ export function createSupabaseBriefingSettingsSource(
           .map((project) => ({ id: project.id, title: project.title })),
         inAnyProject: (projects.data ?? []).length > 0,
         mutedProjectIds: (mutes.data ?? []).map((mute) => mute.project_id),
+        peopleEnabled: preferences.data ? preferences.data.people_enabled : true,
       };
     },
     async saveSettings(patch) {
@@ -162,6 +172,13 @@ export function createSupabaseBriefingSettingsSource(
       if (patch.minute !== undefined) row.briefing_minute = patch.minute;
       if (patch.weekends !== undefined) row.briefing_weekends = patch.weekends;
 
+      const { error } = await supabase.from("notification_preferences").upsert(row, { onConflict: "profile_id" });
+      if (error) {
+        throw error;
+      }
+    },
+    async setPeopleEnabled(enabled) {
+      const row: PreferencesInsert = { profile_id: profileId, people_enabled: enabled };
       const { error } = await supabase.from("notification_preferences").upsert(row, { onConflict: "profile_id" });
       if (error) {
         throw error;

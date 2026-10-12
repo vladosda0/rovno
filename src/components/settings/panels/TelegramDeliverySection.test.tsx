@@ -163,9 +163,11 @@ describe("TelegramDeliverySection", () => {
         projects: [{ id: "p1", title: "Ленина 42" }],
         inAnyProject: true,
         mutedProjectIds: [],
+        peopleEnabled: true,
       })),
       saveSettings: vi.fn(async () => {}),
       setProjectMuted: vi.fn(async () => {}),
+      setPeopleEnabled: vi.fn(async () => {}),
     };
     vi.spyOn(briefingSettingsSource, "getBriefingSettingsSource").mockResolvedValue(briefing);
     const first = renderWithProviders(<NotificationsPanel />);
@@ -180,6 +182,7 @@ describe("TelegramDeliverySection", () => {
       projects: [],
       inAnyProject: true,
       mutedProjectIds: [],
+      peopleEnabled: true,
     });
     renderWithProviders(<NotificationsPanel />);
     expect(await screen.findByRole("heading", { name: "Where to send" })).toBeInTheDocument();

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   isBriefingShurikMessage,
   isMoneyShurikMessage,
+  isPeopleShurikMessage,
   readShurikBriefingLines,
   readShurikMessageAction,
   type ShurikBriefingLine,
@@ -136,6 +137,16 @@ export function ShurikMessageList({ messages, onMarkRead, onAction, className }:
               </div>
               {isBriefingShurikMessage(message) ? (
                 <BriefingText message={message} lines={readShurikBriefingLines(message)} onAction={onAction} />
+              ) : isPeopleShurikMessage(message) && message.body?.trim() ? (
+                <div className="mt-0.5">
+                  <p
+                    data-testid="shurik-message-title"
+                    className="text-[13px] font-bold text-foreground [overflow-wrap:anywhere]"
+                  >
+                    {message.title}
+                  </p>
+                  <p className={cn("whitespace-pre-wrap", MESSAGE_TEXT_CLASS)}>{message.body}</p>
+                </div>
               ) : (
                 <p className={cn("mt-0.5 whitespace-pre-wrap", MESSAGE_TEXT_CLASS)}>
                   {message.body?.trim() ? message.body : message.title}

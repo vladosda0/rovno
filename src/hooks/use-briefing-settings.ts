@@ -18,7 +18,7 @@ type BriefingSettingsChange = {
 };
 
 /**
- * The briefing settings of the signed-in person. A change is shown at once and written at once,
+ * The notification settings of the signed-in person. A change is shown at once and written at once,
  * one at a time: while a write is on its way `isSaving` is set and further changes are dropped.
  * A refused write puts back what was on screen before it; a reload follows every write.
  */
@@ -29,6 +29,7 @@ export function useBriefingSettings(onSaveError: () => void): {
   isSaving: boolean;
   saveSettings: (patch: Partial<BriefingSettings>) => void;
   setProjectMuted: (projectId: string, muted: boolean) => void;
+  setPeopleEnabled: (enabled: boolean) => void;
 } {
   const mode = useWorkspaceMode();
   const queryClient = useQueryClient();
@@ -91,6 +92,11 @@ export function useBriefingSettings(onSaveError: () => void): {
           return { ...snapshot, mutedProjectIds: muted ? [...others, projectId] : others };
         },
         send: (source) => source.setProjectMuted(projectId, muted),
+      }),
+    setPeopleEnabled: (enabled) =>
+      run({
+        apply: (snapshot) => ({ ...snapshot, peopleEnabled: enabled }),
+        send: (source) => source.setPeopleEnabled(enabled),
       }),
   };
 }
