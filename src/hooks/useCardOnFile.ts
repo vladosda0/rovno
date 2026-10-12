@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
@@ -18,9 +18,11 @@ export interface CardOnFile {
 export function useCardOnFile() {
   const { status, profileId } = useRuntimeAuth();
   const enabled = status === "authenticated" && !!profileId;
+  const queryClient = useQueryClient();
+  const queryKey = ["card-on-file", profileId];
 
   return useQuery({
-    queryKey: ["card-on-file", profileId],
+    queryKey,
     enabled,
     queryFn: async (): Promise<CardOnFile | null> => {
       // get_card_on_file is a tbank RPC reached via the untyped client and is
@@ -28,8 +30,9 @@ export function useCardOnFile() {
       // other tbank RPCs). If it is not yet applied to the target environment,
       // degrade silently — hide the card line — rather than surfacing a
       // missing-function error; the rest of billing is unaffected (codex P2).
+      // A failed reread keeps the card already on screen instead of hiding it.
       const { data, error } = await rawSupabase.rpc("get_card_on_file");
-      if (error) return null;
+      if (error) return queryClient.getQueryData<CardOnFile | null>(queryKey) ?? null;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row || !row.last4) return null;
       return { last4: row.last4 as string, brand: (row.brand as string | null) ?? null };

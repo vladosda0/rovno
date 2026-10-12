@@ -34,12 +34,25 @@ export function TBankAddCardForm({ paymentUrl, onSuccess, onFailed }: TBankAddCa
   useEffect(() => {
     let active = true;
     let alive = false;
+    let signalled = false;
+    const signalFailed = () => {
+      if (signalled) return;
+      signalled = true;
+      onFailed?.();
+    };
+    // Non-destructive backstop (audit M3 + codex P2): if the iframe never signals it is
+    // alive (no loadedCallback / no status event), REVEAL the hosted-page fallback WITHOUT
+    // tearing down the iframe, so a working-but-silent form stays usable.
+    const timer = window.setTimeout(() => {
+      if (active && !alive) signalFailed();
+    }, ADDCARD_LOAD_TIMEOUT_MS);
     // Hard failure (no terminal key / script load / init reject): the iframe cannot mount,
     // so unmount the empty box and let the dialog show the hosted-page fallback.
     const hardFail = () => {
       if (!active) return;
+      window.clearTimeout(timer);
       setFailed(true);
-      onFailed?.();
+      signalFailed();
     };
     // Any loaded/status signal means the form is alive (the backstop below then no-ops).
     const markAlive = () => {
@@ -54,12 +67,6 @@ export function TBankAddCardForm({ paymentUrl, onSuccess, onFailed }: TBankAddCa
       hardFail();
       return;
     }
-    // Non-destructive backstop (audit M3 + codex P2): if the iframe never signals it is
-    // alive (no loadedCallback / no status event), REVEAL the hosted-page fallback WITHOUT
-    // tearing down the iframe, so a working-but-silent form stays usable.
-    const timer = window.setTimeout(() => {
-      if (active && !alive) onFailed?.();
-    }, ADDCARD_LOAD_TIMEOUT_MS);
     loadTbankIntegration()
       .then((integration) => {
         if (!active || !containerRef.current) return undefined;

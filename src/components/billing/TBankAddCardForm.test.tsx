@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 
 // The card-binding form is the `addcard.iframe` feature of T-Bank's integration.js.
 // The script rejects any other key ("Объект features пустой или содержит недопустимые
@@ -110,6 +110,46 @@ describe("TBankAddCardForm", () => {
 
     await waitFor(() => expect(onFailed).toHaveBeenCalledTimes(1));
     expect(queryByTestId("tbank-addcard")).toBeNull();
+  });
+
+  it("signals onFailed only once when init rejects and the load timer elapses", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const init = vi.fn().mockRejectedValue(new Error("features rejected"));
+      loadIntegration.mockResolvedValue({ init });
+      const onFailed = vi.fn();
+
+      render(<TBankAddCardForm paymentUrl={PAYMENT_URL} onFailed={onFailed} />);
+
+      await waitFor(() => expect(onFailed).toHaveBeenCalledTimes(1));
+      vi.advanceTimersByTime(9000);
+      expect(onFailed).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("signals onFailed only once when the load timer elapses and the script then fails", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let rejectLoad: (error: Error) => void = () => {};
+      loadIntegration.mockReturnValue(
+        new Promise((_resolve, reject) => {
+          rejectLoad = reject;
+        }),
+      );
+      const onFailed = vi.fn();
+
+      render(<TBankAddCardForm paymentUrl={PAYMENT_URL} onFailed={onFailed} />);
+
+      vi.advanceTimersByTime(9000);
+      expect(onFailed).toHaveBeenCalledTimes(1);
+      rejectLoad(new Error("script never became ready"));
+      await waitFor(() => expect(screen.queryByTestId("tbank-addcard")).not.toBeInTheDocument());
+      expect(onFailed).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("signals onFailed at once when the terminal key is missing", () => {
