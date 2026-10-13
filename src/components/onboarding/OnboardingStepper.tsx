@@ -17,6 +17,7 @@ import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
 import { captureException } from "@/lib/observability/sentry";
 import { type AppLanguage, getActiveLanguage, setAppLanguage } from "@/i18n";
+import { GenderChoice, type GenderChoiceValue } from "@/components/settings/GenderChoice";
 
 const MAX_ONBOARDING_STAGES = 5;
 
@@ -41,6 +42,8 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
   const [selectedLevel, setSelectedLevel] = useState("manual");
   const [language, setLanguage] = useState<AppLanguage>(() => getActiveLanguage());
   const [units, setUnits] = useState("metric");
+  // «Не указывать» is the start: «Далее» works with no choice made.
+  const [gender, setGender] = useState<GenderChoiceValue>(null);
 
   // Apply + persist the interface language immediately when chosen. Previously the
   // selection was discarded — it never reached i18n or localStorage.
@@ -155,12 +158,32 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
       workspaceMode.kind === "pending-supabase" ? await resolveRuntimeWorkspaceMode() : workspaceMode;
     if (resolvedMode.kind === "guest") return;
     const workspaceSource = await getWorkspaceSource(resolvedMode);
-    await workspaceSource.updateProfilePreferences({ units: units as ProfileUnits });
-    if (resolvedMode.kind === "supabase") {
+
+    async function saveUnits() {
+      await workspaceSource.updateProfilePreferences({ units: units as ProfileUnits });
+      if (resolvedMode.kind === "supabase") {
+        await queryClient.invalidateQueries({
+          queryKey: workspaceQueryKeys.profilePreferences(resolvedMode.profileId),
+        });
+      }
+    }
+
+    async function saveGender() {
+      // Written only when the person picked one: the untouched «Не указывать» must not
+      // clear a value the profile already carries.
+      if (gender === null) return;
+      await workspaceSource.updateProfileIdentity({ gender });
       await queryClient.invalidateQueries({
-        queryKey: workspaceQueryKeys.profilePreferences(resolvedMode.profileId),
+        queryKey: workspaceQueryKeys.currentUser(
+          resolvedMode.kind === "supabase" ? resolvedMode.profileId : resolvedMode.kind,
+        ),
       });
     }
+
+    // Two tables, two writes: one failing must not skip the other.
+    const results = await Promise.allSettled([saveUnits(), saveGender()]);
+    const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    if (failed) throw failed.reason;
   }
 
   async function handleContinueFromPreferences() {
@@ -355,6 +378,11 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
                   <SelectItem value="imperial">{t("onboarding.preferences.imperial")}</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-body-sm font-medium text-foreground">{t("profile.gender.label")}</label>
+              <GenderChoice value={gender} onChange={setGender} />
+              <p className="text-caption text-muted-foreground">{t("onboarding.preferences.genderHint")}</p>
             </div>
           </div>
           <div className="flex gap-sp-2">

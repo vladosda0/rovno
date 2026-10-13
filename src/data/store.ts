@@ -70,6 +70,10 @@ function getResolvedTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
 
+// Demo and local identity is rebuilt from seed data or the stored auth profile; the gender a
+// person picks there lives here, for the session.
+const sessionGender: Partial<Record<BrowserWorkspaceKind, User["gender"]>> = {};
+
 function createLocalUser(profile: StoredAuthProfile | null): User {
   if (!profile || !isAuthenticated()) {
     return {
@@ -81,6 +85,7 @@ function createLocalUser(profile: StoredAuthProfile | null): User {
       plan: "free",
       credits_free: 0,
       credits_paid: 0,
+      ...(sessionGender.local ? { gender: sessionGender.local } : {}),
     };
   }
 
@@ -93,6 +98,7 @@ function createLocalUser(profile: StoredAuthProfile | null): User {
     plan: profile.plan === "pro" || profile.plan === "business" ? profile.plan : "free",
     credits_free: seedUser.credits_free,
     credits_paid: 0,
+    ...(sessionGender.local ? { gender: sessionGender.local } : {}),
   };
 }
 
@@ -156,7 +162,7 @@ function cloneWorkspaceState(state: BrowserWorkspaceState): BrowserWorkspaceStat
 function sanitizeDemoState(state: BrowserWorkspaceState): BrowserWorkspaceState {
   return {
     ...state,
-    user: { ...seedUser },
+    user: { ...seedUser, ...(sessionGender.demo ? { gender: sessionGender.demo } : {}) },
   };
 }
 
@@ -295,6 +301,12 @@ function notify() {
 
 export function getCurrentUserForMode(mode: BrowserWorkspaceKind): User {
   return getStateForMode(mode).user;
+}
+
+/** Demo and local keep the gender for the session only; nothing else of the identity is written. */
+export function setCurrentUserGender(mode: BrowserWorkspaceKind, gender: User["gender"]) {
+  sessionGender[mode] = gender ?? null;
+  updateWorkspaceState(() => {}, mode);
 }
 
 export function getProjectsForMode(mode: BrowserWorkspaceKind): Project[] {
@@ -916,6 +928,7 @@ function resetDemoState() {
   } catch {
     // Ignore storage failures; the in-memory reset below still applies.
   }
+  delete sessionGender.demo;
   demoState = sanitizeDemoState(createSeededDemoState());
   notify();
 }
@@ -926,6 +939,8 @@ function resetDemoState() {
 onDemoSessionDeactivated(resetDemoState);
 
 export function __unsafeResetStoreForTests() {
+  delete sessionGender.demo;
+  delete sessionGender.local;
   demoState = sanitizeDemoState(loadPersistedDemoState() ?? createSeededDemoState());
   localState = createEmptyLocalState(getStoredAuthProfile());
   localProfileId = localState.user.id;

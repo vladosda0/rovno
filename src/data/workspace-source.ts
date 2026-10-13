@@ -9,6 +9,7 @@ import type {
   Member,
   Project,
   User,
+  UserGender,
   ViewerRegime,
 } from "@/types/entities";
 import { isDemoSessionActive } from "@/lib/auth-state";
@@ -83,6 +84,8 @@ export interface ProfileIdentity {
   avatarUrl: string | null;
   locale: NonNullable<ProfilesUpdate["locale"]>;
   timezone: string;
+  /** null clears the value: the person chose not to state it. */
+  gender: UserGender | null;
 }
 export type ProfileIdentityPatch = Partial<ProfileIdentity>;
 
@@ -259,8 +262,9 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
     async getProfileContactInfo() {
       return { roleTitle: null, phone: null, bio: null, signatureBlock: null };
     },
-    async updateProfileIdentity() {
-      // Demo/local identity is seed data and not persisted; echo the current user.
+    async updateProfileIdentity(patch: ProfileIdentityPatch) {
+      // Demo/local identity is seed data and not persisted; only the gender is kept, for the session.
+      if (patch.gender !== undefined) store.setCurrentUserGender(mode, patch.gender);
       return store.getCurrentUserForMode(mode);
     },
     async updateProfileContactInfo(patch: ProfileContactInfoPatch) {
@@ -316,8 +320,12 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
   };
 }
 
+/** The profiles columns a User is built from; every read that feeds mapProfileRowToUser selects these. */
+export const PROFILE_USER_COLUMNS =
+  "id, email, full_name, avatar_url, locale, timezone, plan, credits_free, credits_paid, gender";
+
 export function mapProfileRowToUser(
-  row: Pick<ProfileRow, "id" | "email" | "full_name" | "avatar_url" | "locale" | "timezone" | "plan" | "credits_free" | "credits_paid">,
+  row: Pick<ProfileRow, "id" | "email" | "full_name" | "avatar_url" | "locale" | "timezone" | "plan" | "credits_free" | "credits_paid" | "gender">,
 ): User {
   return {
     id: row.id,
@@ -329,6 +337,7 @@ export function mapProfileRowToUser(
     plan: row.plan,
     credits_free: row.credits_free,
     credits_paid: row.credits_paid,
+    gender: row.gender ?? null,
   };
 }
 
@@ -674,7 +683,7 @@ async function loadVisibleProfiles(
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, full_name, avatar_url, locale, timezone, plan, credits_free, credits_paid")
+    .select(PROFILE_USER_COLUMNS)
     .in("id", uniqueIds);
 
   if (error || !data) return [];
@@ -707,7 +716,7 @@ function createSupabaseWorkspaceSource(
     async getCurrentUser() {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, email, full_name, avatar_url, locale, timezone, plan, credits_free, credits_paid")
+        .select(PROFILE_USER_COLUMNS)
         .eq("id", profileId)
         .maybeSingle();
 
@@ -765,12 +774,13 @@ function createSupabaseWorkspaceSource(
       if (patch.avatarUrl !== undefined) update.avatar_url = patch.avatarUrl;
       if (patch.locale !== undefined) update.locale = patch.locale;
       if (patch.timezone !== undefined) update.timezone = patch.timezone;
+      if (patch.gender !== undefined) update.gender = patch.gender;
 
       const { data, error } = await supabase
         .from("profiles")
         .update(update)
         .eq("id", profileId)
-        .select("id, email, full_name, avatar_url, locale, timezone, plan, credits_free, credits_paid")
+        .select(PROFILE_USER_COLUMNS)
         .single();
 
       if (error || !data) {

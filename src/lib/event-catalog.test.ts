@@ -8,7 +8,7 @@ import {
   getEventCaption,
   getEventIcon,
   getEventLabelKey,
-  isFallbackActor,
+  resolveCaptionEnding,
 } from "@/lib/event-catalog";
 
 const ru = ruLocale as Record<string, string>;
@@ -50,7 +50,7 @@ describe("event catalog", () => {
 
   it("falls back for a type the catalog does not know", () => {
     expect(getEventLabelKey("something.invented")).toBe("activity.event.unknown");
-    expect(getEventCaption(t, "something.invented", false)).toBe(ru["activity.event.unknown"].replace("{{a}}", ""));
+    expect(getEventCaption(t, "something.invented", "")).toBe(ru["activity.event.unknown"].replace("{{a}}", ""));
     expect(getEventIcon("something.invented")).toBeTruthy();
   });
 
@@ -62,11 +62,20 @@ describe("event catalog", () => {
 describe("the shared gender rule", () => {
   // Both feed surfaces call this, so the rule is testable once instead of
   // needing a render test per surface to notice a regression.
-  it("is feminine only for the unresolved non-AI actor", () => {
-    expect(isFallbackActor(false, false)).toBe(true);
-    expect(isFallbackActor(false, true)).toBe(false);
-    expect(isFallbackActor(true, false)).toBe(false);
-    expect(isFallbackActor(true, true)).toBe(false);
+  it("follows the gender of the person who acted", () => {
+    expect(resolveCaptionEnding(false, { gender: "male" })).toBe("");
+    expect(resolveCaptionEnding(false, { gender: "female" })).toBe("а");
+  });
+
+  it("keeps both forms for a person who has not stated a gender", () => {
+    expect(resolveCaptionEnding(false, { gender: null })).toBe("(а)");
+    expect(resolveCaptionEnding(false, {})).toBe("(а)");
+  });
+
+  it("is feminine for the unresolved non-AI actor and masculine for the AI", () => {
+    expect(resolveCaptionEnding(false, undefined)).toBe("а");
+    expect(resolveCaptionEnding(true, undefined)).toBe("");
+    expect(resolveCaptionEnding(true, { gender: "female" })).toBe("");
   });
 });
 
@@ -75,7 +84,7 @@ describe("event captions as the user sees them", () => {
     await i18n.changeLanguage(lng);
 
     const broken = EVENT_TYPES.filter((type) => {
-      const caption = getEventCaption(t, type, false);
+      const caption = getEventCaption(t, type, "");
       return (
         !caption
         // the resolver failed and handed the key back
@@ -94,12 +103,15 @@ describe("event captions as the user sees them", () => {
     // document.created is asserted here because it collides with the existing
     // document_created spelling; estimate.status_changed covers the longer
     // dotted shape. Both would break first if key separation ever changed.
-    expect(getEventCaption(t, "document.created", false)).toBe("добавил документ");
-    expect(getEventCaption(t, "estimate.status_changed", false)).toBe("изменил статус сметы");
+    expect(getEventCaption(t, "document.created", "")).toBe("добавил документ");
+    expect(getEventCaption(t, "estimate.status_changed", "")).toBe("изменил статус сметы");
   });
 
-  it("agrees with the actor's gender for the non-human actor", () => {
-    expect(getEventCaption(t, "document.created", true)).toBe("добавила документ");
+  it("agrees with the actor's gender", () => {
+    expect(getEventCaption(t, "document.created", "а")).toBe("добавила документ");
+    expect(getEventCaption(t, "document.created", "(а)")).toBe("добавил(а) документ");
+    expect(getEventCaption(t, "task_created", "а")).toBe("создала задачу");
+    expect(getEventCaption(t, "task_created", "(а)")).toBe("создал(а) задачу");
   });
 
   it("keeps a gender slot in every Russian template", () => {
@@ -112,8 +124,9 @@ describe("event captions as the user sees them", () => {
 
   it("leaves English untouched by the gender slot", async () => {
     await i18n.changeLanguage("en");
-    expect(getEventCaption(t, "document.created", true)).toBe("added a document");
-    expect(getEventCaption(t, "document.created", false)).toBe("added a document");
+    expect(getEventCaption(t, "document.created", "а")).toBe("added a document");
+    expect(getEventCaption(t, "document.created", "(а)")).toBe("added a document");
+    expect(getEventCaption(t, "document.created", "")).toBe("added a document");
   });
 
   it("keeps the fallback caption translated in both bundles", () => {

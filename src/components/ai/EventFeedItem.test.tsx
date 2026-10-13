@@ -52,13 +52,26 @@ function event(overrides: Partial<Event> = {}): Event {
 }
 
 describe("EventFeedItem", () => {
-  it("renders a resolved person with the masculine caption", () => {
+  it("renders a person who stated no gender with both forms", () => {
     isAIEvent.mockReturnValue(false);
     getUserById.mockReturnValue({ id: "profile-1", name: "Анна Петрова" });
 
     render(<EventFeedItem event={event()} />);
 
     expect(screen.getByText("Анна Петрова")).toBeTruthy();
+    expect(screen.getByText("добавил(а) документ")).toBeTruthy();
+  });
+
+  it("renders a woman with the feminine caption and a man with the masculine one", () => {
+    isAIEvent.mockReturnValue(false);
+
+    getUserById.mockReturnValue({ id: "profile-1", name: "Анна Петрова", gender: "female" });
+    const woman = render(<EventFeedItem event={event()} />);
+    expect(screen.getByText("добавила документ")).toBeTruthy();
+    woman.unmount();
+
+    getUserById.mockReturnValue({ id: "profile-1", name: "Иван Петров", gender: "male" });
+    render(<EventFeedItem event={event()} />);
     expect(screen.getByText("добавил документ")).toBeTruthy();
   });
 

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OnboardingStepper } from "@/components/onboarding/OnboardingStepper";
 import type { Stage } from "@/types/entities";
+import { __unsafeResetStoreForTests, getCurrentUserForMode } from "@/data/store";
 
 const { getPlanningSourceMock, toastMock, captureExceptionMock } = vi.hoisted(() => ({
   getPlanningSourceMock: vi.fn(),
@@ -75,6 +76,70 @@ describe("OnboardingStepper units persistence", () => {
       const saved = JSON.parse(localStorage.getItem("profile-preferences") ?? "{}") as Record<string, unknown>;
       expect(saved.units).toBe("imperial");
     });
+  });
+});
+
+describe("OnboardingStepper gender field", () => {
+  beforeEach(() => {
+    polyfillPointerEvents();
+    __unsafeResetStoreForTests();
+  });
+  afterEach(() => {
+    localStorage.clear();
+    __unsafeResetStoreForTests();
+  });
+
+  const option = (name: RegExp) => screen.getByRole("button", { name });
+  const advance = () => fireEvent.click(screen.getByRole("button", { name: /continue|далее|продолжить/i }));
+
+  it("starts on «not stated» and lets the step continue with no choice", async () => {
+    renderStepper();
+
+    expect(option(/prefer not to say|не указывать/i)).toHaveAttribute("aria-pressed", "true");
+    expect(option(/^(male|мужской)$/i)).toHaveAttribute("aria-pressed", "false");
+    expect(option(/^(female|женский)$/i)).toHaveAttribute("aria-pressed", "false");
+
+    advance();
+
+    await screen.findByPlaceholderText(/project name|название проекта/i);
+    expect(getCurrentUserForMode("local").gender ?? null).toBeNull();
+  });
+
+  it("saves the chosen gender on Continue", async () => {
+    renderStepper();
+
+    fireEvent.click(option(/^(female|женский)$/i));
+    expect(option(/^(female|женский)$/i)).toHaveAttribute("aria-pressed", "true");
+    advance();
+
+    await screen.findByPlaceholderText(/project name|название проекта/i);
+    expect(getCurrentUserForMode("local").gender).toBe("female");
+  });
+});
+
+describe("OnboardingStepper gender write when the units write fails", () => {
+  beforeEach(() => {
+    polyfillPointerEvents();
+    __unsafeResetStoreForTests();
+  });
+  afterEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+    __unsafeResetStoreForTests();
+  });
+
+  it("still saves the gender, reports the failure and advances", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    renderStepper();
+
+    fireEvent.click(screen.getByRole("button", { name: /^(female|женский)$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /continue|далее|продолжить/i }));
+
+    await screen.findByPlaceholderText(/project name|название проекта/i);
+    expect(getCurrentUserForMode("local").gender).toBe("female");
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
   });
 });
 

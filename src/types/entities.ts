@@ -70,6 +70,9 @@ export const EVENT_TYPES = [
 
 export type EventType = (typeof EVENT_TYPES)[number];
 
+/** What a person stated in the profile; absent or null means not stated. */
+export type UserGender = "male" | "female";
+
 export interface User {
   id: string;
   email: string;
@@ -80,6 +83,7 @@ export interface User {
   plan: UserPlan;
   credits_free: number;
   credits_paid: number;
+  gender?: UserGender | null;
 }
 
 export interface Project {

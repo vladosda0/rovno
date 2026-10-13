@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsSection } from "@/components/settings/SettingsSection";
+import { GenderChoice, type GenderChoiceValue } from "@/components/settings/GenderChoice";
 import { Camera, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -47,8 +48,8 @@ const TIMEZONES = [
 //
 // This panel no longer sends `locale` at all. That is safe because
 // updateProfileIdentity is a genuine partial update (`if (patch.locale !==
-// undefined)` in the Supabase source; the browser source ignores the patch
-// entirely), so omitting the field leaves the column untouched rather than
+// undefined)` in the Supabase source; the browser source applies only `gender`
+// and ignores the rest), so omitting the field leaves the column untouched rather than
 // nulling it. workspace-source.identity.test.ts pins that invariant, because it
 // is now the only thing standing between a Профиль save and a reset locale.
 //
@@ -100,6 +101,11 @@ export function ProfilePanel() {
     setTimezone(value);
     setTimezoneTouched(true);
   };
+  const storedGender: GenderChoiceValue = user.gender ?? null;
+  // Undefined until the person picks: the field then shows what the profile carries, so a
+  // value that arrives after the form opened is neither hidden nor overwritten by a save.
+  const [genderPick, setGenderPick] = useState<GenderChoiceValue | undefined>(undefined);
+  const gender = genderPick === undefined ? storedGender : genderPick;
   const [signature, setSignature] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState(user.avatar ?? "");
@@ -114,6 +120,7 @@ export function ProfilePanel() {
     setTimezone(timezoneSelectValue(user.timezone, fromBrowser));
     setTimezoneTouched(false);
     setAvatarUrl(user.avatar ?? "");
+    setGenderPick(undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
 
@@ -162,6 +169,7 @@ export function ProfilePanel() {
     name !== user.name ||
     (avatarUrl ?? "") !== (user.avatar ?? "") ||
     timezoneDirty ||
+    gender !== storedGender ||
     roleTitle !== (contactInfo?.roleTitle ?? "") ||
     (phoneValueForSave(phone) ?? "") !== (contactInfo?.phone ?? "") ||
     bio !== (contactInfo?.bio ?? "") ||
@@ -194,6 +202,8 @@ export function ProfilePanel() {
           avatarUrl: avatarUrl || null,
           // Left out unless the person picked a zone: the column then keeps its value.
           ...(timezoneDirty && timezoneToSave ? { timezone: timezoneToSave } : {}),
+          // Left out unless it changed, like the zone.
+          ...(gender !== storedGender ? { gender } : {}),
         }),
         updateContactInfo.mutateAsync({
           roleTitle: roleTitle.trim() || null,
@@ -207,6 +217,7 @@ export function ProfilePanel() {
         setTimezoneFromBrowser(followsBrowser);
       }
       setTimezoneTouched(false);
+      setGenderPick(undefined);
       toast({ title: t("profile.savedToast"), description: t("profile.savedToastDescription") });
     } catch (error) {
       toast({
@@ -222,6 +233,7 @@ export function ProfilePanel() {
     setTimezone(storedTimezone);
     setTimezoneTouched(false);
     setAvatarUrl(user.avatar ?? "");
+    setGenderPick(undefined);
     setRoleTitle(contactInfo?.roleTitle ?? "");
     setPhone(contactInfo?.phone ?? PHONE_PREFILL);
     setBio(contactInfo?.bio ?? "");
@@ -298,7 +310,12 @@ export function ProfilePanel() {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1.5">
+            <Label>{t("profile.gender.label")}</Label>
+            <GenderChoice value={gender} onChange={setGenderPick} disabled={saving} />
+          </div>
         </div>
+        <p className="text-caption text-muted-foreground">{t("profile.gender.hint")}</p>
 
         <div className="space-y-1.5">
           <Label>{t("profile.bio")}</Label>

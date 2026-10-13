@@ -18,6 +18,7 @@ const PROFILE_ROW = {
   plan: "free",
   credits_free: 0,
   credits_paid: 0,
+  gender: null as "male" | "female" | null,
 };
 
 /** Captures the object handed to .update() on the profiles table. */
@@ -89,5 +90,33 @@ describe("updateProfileIdentity builds a partial update", () => {
     await source.updateProfileIdentity({ fullName: null });
 
     expect(capturedUpdate).toEqual({ full_name: null });
+  });
+
+  it("leaves gender alone when the patch does not carry it", async () => {
+    const source = await identitySource();
+
+    await source.updateProfileIdentity({ fullName: "Alex B" });
+
+    expect(capturedUpdate!).not.toHaveProperty("gender");
+  });
+
+  it("writes gender when it is supplied, null included", async () => {
+    const source = await identitySource();
+
+    await source.updateProfileIdentity({ gender: "female" });
+    expect(capturedUpdate).toEqual({ gender: "female" });
+
+    await source.updateProfileIdentity({ gender: null });
+    expect(capturedUpdate).toEqual({ gender: null });
+  });
+
+  it("returns the gender the row carries", async () => {
+    const source = await identitySource();
+    PROFILE_ROW.gender = "female";
+
+    const user = await source.updateProfileIdentity({ gender: "female" });
+
+    expect(user.gender).toBe("female");
+    PROFILE_ROW.gender = null;
   });
 });
