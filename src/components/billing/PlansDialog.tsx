@@ -70,6 +70,10 @@ export function PlansDialog({ open, onOpenChange, currentPlan }: PlansDialogProp
   // offers a switch the backend would reject (they normally match).
   const effectiveCurrentPlan = subscription?.plan_code ?? currentPlan;
 
+  // The confirm belongs to the open plans dialog: a parent that closes the
+  // dialog must not leave a pressable confirm for a target picked earlier.
+  if (!open && downgradeTo !== null) setDowngradeTo(null);
+
   const handleSelect = (code: TierCode) => {
     trackEvent("plans_dialog_plan_selected", { from: effectiveCurrentPlan, to: code });
     if (planRank(code) > planRank(effectiveCurrentPlan)) {

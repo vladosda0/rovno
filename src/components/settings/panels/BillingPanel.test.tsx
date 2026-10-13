@@ -4,10 +4,11 @@ import { BillingPanel } from "@/components/settings/panels/BillingPanel";
 
 // vi.mock factories are hoisted above the imports, so the handles they reference
 // must be created with vi.hoisted (also hoisted) rather than module-scope consts.
-const { mockUseWorkspaceMode, mockNavigate, mockUseTierQuota } = vi.hoisted(() => ({
+const { mockUseWorkspaceMode, mockNavigate, mockUseTierQuota, plansOpenRenders } = vi.hoisted(() => ({
   mockUseWorkspaceMode: vi.fn(),
   mockNavigate: vi.fn(),
   mockUseTierQuota: vi.fn(),
+  plansOpenRenders: [] as boolean[],
 }));
 
 vi.mock("@/hooks/use-workspace-source", () => ({
@@ -16,7 +17,10 @@ vi.mock("@/hooks/use-workspace-source", () => ({
 vi.mock("@/hooks/useTierQuota", () => ({ useTierQuota: () => mockUseTierQuota() }));
 // Stub the heavier billing children so the real Supabase client never loads.
 vi.mock("@/components/billing/PlansDialog", () => ({
-  PlansDialog: ({ open }: { open: boolean }) => (open ? <div data-testid="plans-dialog" /> : null),
+  PlansDialog: ({ open }: { open: boolean }) => {
+    plansOpenRenders.push(open);
+    return open ? <div data-testid="plans-dialog" /> : null;
+  },
 }));
 vi.mock("@/components/billing/SubscriptionSection", () => ({ SubscriptionSection: () => null }));
 vi.mock("@/lib/analytics", () => ({ trackEvent: vi.fn() }));
@@ -152,10 +156,14 @@ describe("BillingPanel while the plan is unknown", () => {
     fireEvent.click(screen.getByRole("button", { name: COMPARE_BUTTON }));
     expect(screen.getByTestId("plans-dialog")).toBeInTheDocument();
 
+    plansOpenRenders.length = 0;
     mockUseTierQuota.mockReturnValue({ ...QUOTA_DISABLED, isLoading: true });
     rerender(<BillingPanel />);
 
     expect(screen.queryByTestId("plans-dialog")).not.toBeInTheDocument();
+    // Not even the render before the closing effect may hand the dialog open=true.
+    expect(plansOpenRenders.length).toBeGreaterThan(0);
+    expect(plansOpenRenders).not.toContain(true);
 
     mockUseTierQuota.mockReturnValue({ ...QUOTA_DISABLED, data: FREE_QUOTA });
     rerender(<BillingPanel />);

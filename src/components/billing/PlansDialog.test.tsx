@@ -111,4 +111,38 @@ describe("PlansDialog downgrade guard", () => {
     // ...but never toggles auto-renew as a side effect (the removed P1-3 hole).
     expect(rpc).not.toHaveBeenCalledWith("tbank_set_auto_renew", expect.anything());
   });
+
+  it("drops the downgrade confirm when the parent closes the plans dialog", async () => {
+    activeSubReturn = {
+      status: "active",
+      subscription: brigadeSub(true),
+      readOnly: false,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    const tree = (open: boolean) => (
+      <MemoryRouter>
+        <PlansDialog open={open} onOpenChange={() => {}} currentPlan="brigade" />
+      </MemoryRouter>
+    );
+
+    const { rerender } = render(tree(true));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Switch" }));
+    });
+    expect(screen.getByRole("button", { name: /schedule switch/i })).toBeTruthy();
+
+    await act(async () => {
+      rerender(tree(false));
+    });
+    expect(screen.queryByRole("button", { name: /schedule switch/i })).toBeNull();
+
+    // Reopening must not bring back a confirm for the target picked before the close.
+    await act(async () => {
+      rerender(tree(true));
+    });
+    expect(screen.queryByRole("button", { name: /schedule switch/i })).toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });
