@@ -444,8 +444,22 @@ export async function addOrgMembersByEmail(
   );
   const notFound = cleaned.filter((email) => !foundByEmail.has(email));
 
-  if (foundByEmail.size > 0) {
-    const inserts = Array.from(foundByEmail.values()).map((profileId) => ({
+  if (foundByEmail.size === 0) return { added: [], notFound };
+
+  // The owner already holds the role='owner' row, and a role='member' row for
+  // the same profile is refused by enforce_org_member_owner_role, which would
+  // abort the whole statement.
+  const { data: org, error: orgError } = await rawSupabase
+    .from("organizations")
+    .select("owner_profile_id")
+    .eq("id", orgId)
+    .maybeSingle();
+  if (orgError) throw orgError;
+  const ownerProfileId = (org as { owner_profile_id: string } | null)?.owner_profile_id ?? null;
+  const toAdd = Array.from(foundByEmail).filter(([, profileId]) => profileId !== ownerProfileId);
+
+  if (toAdd.length > 0) {
+    const inserts = toAdd.map(([, profileId]) => ({
       org_id: orgId,
       profile_id: profileId,
       role: "member" as const,
@@ -457,7 +471,7 @@ export async function addOrgMembersByEmail(
   }
 
   return {
-    added: Array.from(foundByEmail.keys()),
+    added: toAdd.map(([email]) => email),
     notFound,
   };
 }
