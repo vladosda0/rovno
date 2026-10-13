@@ -603,6 +603,10 @@
     {
       "path": "supabase/migrations/20261013020000_notification_people_enabled.sql",
       "sha256": "c70305db44081f53b48cc9b141c6cc5b842b3a9150f055257f64e076ad595ea3"
+    },
+    {
+      "path": "supabase/migrations/20261014010000_profiles_gender.sql",
+      "sha256": "30b339486903ccf277b45a60d55635eac99104413df26c659d884eab94378ff2"
     }
   ],
   "generated_artifacts": [

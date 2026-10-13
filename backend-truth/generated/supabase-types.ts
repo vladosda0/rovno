@@ -30,6 +30,7 @@ export type Database = {
           "updated_at": string
           "onboarding_completed_at": string | null
           "tutorials_completed": unknown
+          "gender": "male" | "female" | null
           }
           Insert: {
           "id"?: string
@@ -45,6 +46,7 @@ export type Database = {
           "updated_at"?: string
           "onboarding_completed_at"?: string | null
           "tutorials_completed"?: unknown
+          "gender"?: "male" | "female" | null
           }
           Update: {
           "id"?: string
@@ -60,6 +62,7 @@ export type Database = {
           "updated_at"?: string
           "onboarding_completed_at"?: string | null
           "tutorials_completed"?: unknown
+          "gender"?: "male" | "female" | null
           }
           Relationships: []
         }
