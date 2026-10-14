@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { AddCardResponse } from "@/lib/billing";
-import { messageFromInvokeFailure } from "@/hooks/useInitPayment";
+import { initPaymentErrorFromInvokeFailure } from "@/hooks/useInitPayment";
 
 // Wraps the tbank-add-card Edge Function: starts a T-Bank card-binding session (no
 // real charge) and returns { request_key, customer_key, payment_url }. The UI mounts
@@ -15,7 +15,7 @@ export function useAddCard() {
         body: {},
       });
       if (error) {
-        throw new Error(await messageFromInvokeFailure(error, data));
+        throw await initPaymentErrorFromInvokeFailure(error, data);
       }
       return data as AddCardResponse;
     },

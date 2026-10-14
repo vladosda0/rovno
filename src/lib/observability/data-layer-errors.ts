@@ -61,8 +61,21 @@ function isAbortError(error: unknown): boolean {
 }
 
 /**
+ * Refusals a backend function issues by design and names in `code`. The screen
+ * that started the call shows the user the reason.
+ */
+const EXPECTED_REFUSAL_CODES = new Set(["attempt_limit"]);
+
+function isExpectedRefusal(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const { code } = error as { code?: unknown };
+  return typeof code === "string" && EXPECTED_REFUSAL_CODES.has(code);
+}
+
+/**
  * Report policy:
  *  - aborts are never defects (navigation / unmount cancellations);
+ *  - a refusal in EXPECTED_REFUSAL_CODES is a limit doing its job;
  *  - backend tier-limit errors (P0001) are expected business outcomes with
  *    their own paywall UX, not bugs;
  *  - for background QUERIES, plain network failures are skipped (offline
@@ -76,6 +89,7 @@ export function shouldReportDataLayerError(
 ): boolean {
   if (isAbortError(error)) return false;
   if (parseTierLimitError(error) !== null) return false;
+  if (isExpectedRefusal(error)) return false;
   if (kind === "query" && isNetworkFetchFailure(error)) return false;
   return true;
 }

@@ -202,14 +202,16 @@ export function SubscriptionSection() {
                 {t("settings.billing.autoRenewOffNote", { date: endsAt })}
               </p>
             ) : null}
-            <button
-              type="button"
-              onClick={reactivate}
-              disabled={reactivating}
-              className="text-caption font-medium text-accent underline underline-offset-2 hover:text-accent/80 disabled:opacity-50"
-            >
-              {t("settings.billing.reactivate")}
-            </button>
+            {subscription.provider === "tbank" ? (
+              <button
+                type="button"
+                onClick={reactivate}
+                disabled={reactivating}
+                className="text-caption font-medium text-accent underline underline-offset-2 hover:text-accent/80 disabled:opacity-50"
+              >
+                {t("settings.billing.reactivate")}
+              </button>
+            ) : null}
           </>
         )}
       </div>

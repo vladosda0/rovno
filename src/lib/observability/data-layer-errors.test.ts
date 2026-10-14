@@ -109,4 +109,13 @@ describe("shouldReportDataLayerError", () => {
     const postgrest = { message: 'permission denied for table "estimates"', code: "42501" };
     expect(shouldReportDataLayerError(postgrest, "query")).toBe(true);
   });
+
+  it("skips a coded refusal only when it is a thrown Error", () => {
+    const refusal = Object.assign(new Error("Too many card binding attempts"), { code: "attempt_limit" });
+    expect(shouldReportDataLayerError(refusal, "mutation")).toBe(false);
+    expect(shouldReportDataLayerError(refusal, "query")).toBe(false);
+
+    expect(shouldReportDataLayerError({ message: "boom", code: "attempt_limit" }, "mutation")).toBe(true);
+    expect(shouldReportDataLayerError(Object.assign(new Error("boom"), { code: "42501" }), "mutation")).toBe(true);
+  });
 });
