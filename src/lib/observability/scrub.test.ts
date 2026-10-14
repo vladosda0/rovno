@@ -7,6 +7,9 @@ describe("scrubText", () => {
     expect(scrubText(`https://rovno.ai/share/document/${token}`)).toBe(
       "https://rovno.ai/share/document/[FILTERED]",
     );
+    expect(scrubText("https://rovno.ai/share/report/QA-REPORT-TOKEN?report=1")).toBe(
+      "https://rovno.ai/share/report/[FILTERED]?report=1",
+    );
     expect(scrubText("https://rovno.ai/share/estimate/QA-SHARE-TOKEN")).toBe(
       "https://rovno.ai/share/estimate/[FILTERED]",
     );

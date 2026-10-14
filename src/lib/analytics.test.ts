@@ -561,12 +561,13 @@ describe("ANALYTICS_ROUTES stays in step with App.tsx", () => {
     expect(stale).toEqual([]);
   });
 
-  it("marks the three token-bearing routes, and only those, as secret", () => {
+  it("marks the four token-bearing routes, and only those, as secret", () => {
     const secret = ANALYTICS_ROUTES.filter((route) => route.secret).map((route) => route.pattern);
 
     expect(secret).toEqual([
       "/share/estimate/:shareId",
       "/share/document/:token",
+      "/share/report/:token",
       "/invite/accept/:inviteToken",
     ]);
   });

@@ -64,6 +64,7 @@ import {
   X,
 } from "lucide-react";
 import { ReceiveOrderPickerModal } from "@/components/procurement/ReceiveOrderPickerModal";
+import { openClientReportDialog } from "@/lib/client-report-dialog";
 import type { AIAccess, DocMediaVisibilityClass, Member, MemberRole, Stage, Task, TaskStatus } from "@/types/entities";
 
 type ModalKey = "task" | "document" | "photo" | "credits";
@@ -79,6 +80,8 @@ interface Props {
   canCreatePhoto: boolean;
   canManageProcurement: boolean;
   canManageParticipants: boolean;
+  /** Owner / co_owner: may build and publish the client report. */
+  canShareClientReport?: boolean;
   actorRole?: MemberRole;
   actorAiAccess?: AIAccess;
 }
@@ -112,6 +115,7 @@ export function QuickActions({
   canCreatePhoto,
   canManageProcurement,
   canManageParticipants,
+  canShareClientReport = false,
 }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -513,6 +517,11 @@ export function QuickActions({
         {canManageProcurement && (
           <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => setReceiveOrderOpen(true)}>
             {t("quickActions.receiveOrder")}
+          </Button>
+        )}
+        {canShareClientReport && isSupabaseMode && (
+          <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => openClientReportDialog(projectId)}>
+            {t("clientReport.action")}
           </Button>
         )}
 

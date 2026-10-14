@@ -151,6 +151,11 @@ import {
 import { format, isToday, isYesterday } from "date-fns";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 import {
+  CLIENT_REPORT_CHIP_KEY,
+  canOpenClientReport,
+  openClientReportDialog,
+} from "@/lib/client-report-dialog";
+import {
   type AiLlmProvider,
   readStoredAiLlmProvider,
   writeStoredAiLlmProvider,
@@ -2454,6 +2459,8 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     [seamForProjectCommit],
   );
 
+  const clientReportFromChat = canOpenClientReport(seamForProjectCommit, workspaceMode.kind);
+
   const opener = useMemo(() => {
     if (!openerShow) return null;
     return buildSidebarOpener({
@@ -2462,9 +2469,10 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       level: openerShow.level,
       compact: isMobile,
       quotaExhausted: openerQuotaExhausted,
+      clientReport: clientReportFromChat,
       t,
     });
-  }, [openerShow, openerContext, openerRole, isMobile, openerQuotaExhausted, t]);
+  }, [openerShow, openerContext, openerRole, isMobile, openerQuotaExhausted, clientReportFromChat, t]);
 
   const openerReportedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -4005,6 +4013,10 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                           opener={opener}
                           chipsDisabled={openerQuotaExhausted}
                           onSelect={(text, chipKey) => {
+                            if (chipKey === CLIENT_REPORT_CHIP_KEY && clientReportFromChat) {
+                              openClientReportDialog(resolvedPermissionProjectId);
+                              return;
+                            }
                             chipSeedRef.current = { chipKey, text };
                             setInputValue(text);
                           }}

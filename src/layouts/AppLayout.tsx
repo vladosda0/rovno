@@ -6,6 +6,7 @@ import { ShurikFloat } from "@/components/ai/ShurikFloat";
 import { ShurikNotificationsPanel } from "@/components/ai/ShurikNotificationsPanel";
 import type { ShurikPanelTab } from "@/components/ai/ShurikPanelTabs";
 import { DemoSignupCta } from "@/components/system/DemoSignupCta";
+import { ClientReportDialogHost } from "@/components/client-report/ClientReportDialogHost";
 import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import { subscribePhotoConsult } from "@/lib/photo-consult-store";
@@ -172,6 +173,7 @@ export default function AppLayout() {
           {isDemo && <DemoSignupCta />}
         </main>
       </div>
+      <ClientReportDialogHost />
       {/* Observability v1 (R-8): fixed feedback entry point on every
           authenticated page; renders nothing for guests. */}
       <FeedbackWidget />

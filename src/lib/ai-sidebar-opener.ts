@@ -36,6 +36,11 @@ export interface SidebarOpenerInput {
   compact: boolean;
   /** Chips render disabled and a credits line is added (section 5.7). */
   quotaExhausted: boolean;
+  /**
+   * The "report for the client" chip opens the client report dialog, which only
+   * an owner or co-owner on the real backend has. Without it the chip is left out.
+   */
+  clientReport?: boolean;
   /** Defaults to the v1 subset; widened by tests that exercise the whole catalogue. */
   enabledDomains?: ReadonlySet<OpenerDomain>;
   t: Translate;
@@ -61,6 +66,7 @@ export interface SidebarOpenerResult {
 
 const SUGGESTION = "ai.sidebar.suggestion.";
 const OPENER = "ai.sidebar.opener.";
+const CLIENT_REPORT_CHIP = `${SUGGESTION}clientStatus`;
 
 /**
  * Explicit opt-out via `VITE_AI_SIDEBAR_OPENER` (requirement 6.11). When on, the
@@ -316,9 +322,11 @@ function chipsFor(
   ctx: AIContextPack | null,
   wanted: number,
   t: Translate,
+  clientReport: boolean,
 ): OpenerChip[] {
   const allowed = ctx ? visibleDomains(ctx) : null;
   const passes = (key: string) => {
+    if (key === CLIENT_REPORT_CHIP && !clientReport) return false;
     const domain = CHIP_DOMAIN[key];
     if (domain === null || domain === undefined) return true;
     // Before the pack exists nothing is known to be visible, so only ungated
@@ -349,6 +357,7 @@ function chipsFor(
  */
 export function buildSidebarOpener(input: SidebarOpenerInput): SidebarOpenerResult {
   const { ctx, role, level, compact, quotaExhausted, enabledDomains, t } = input;
+  const clientReport = input.clientReport === true;
   const chipCount = compact ? 2 : 3;
   const quotaNote = quotaExhausted ? t(`${OPENER}quotaExhausted`) : undefined;
   const l0 =
@@ -361,7 +370,7 @@ export function buildSidebarOpener(input: SidebarOpenerInput): SidebarOpenerResu
     return {
       ...l0,
       lines: [t(`${OPENER}signal.fallbackNoContext`)],
-      chips: chipsFor([], null, chipCount, t),
+      chips: chipsFor([], null, chipCount, t, clientReport),
       signals: ["S00n"],
       quotaNote,
     };
@@ -377,7 +386,7 @@ export function buildSidebarOpener(input: SidebarOpenerInput): SidebarOpenerResu
         domains: domains.map((d) => t(`${OPENER}domain.${d}`)).join(", "),
       }),
     ],
-    chips: chipsFor([], ctx, chipCount, t),
+    chips: chipsFor([], ctx, chipCount, t, clientReport),
     signals: ["S00"],
     quotaNote,
   });
@@ -393,7 +402,7 @@ export function buildSidebarOpener(input: SidebarOpenerInput): SidebarOpenerResu
   return {
     ...l0,
     lines: shown.map((s) => t(s.textKey, s.test(ctx) ?? {})),
-    chips: chipsFor(shown, ctx, chipCount, t),
+    chips: chipsFor(shown, ctx, chipCount, t, clientReport),
     signals: shown.map((s) => s.id),
     quotaNote,
   };

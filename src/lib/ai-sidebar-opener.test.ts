@@ -401,3 +401,21 @@ describe("chips", () => {
     expect(keys).toHaveLength(3);
   });
 });
+
+describe("client report chip", () => {
+  const CHIP = "ai.sidebar.suggestion.clientStatus";
+  // Every task done fires S11, whose second chip is the client report.
+  const allDone = () => pack({ tasks: { total: 6, done: 6, blocked: 0 } });
+
+  it("is offered when the client report dialog is available", () => {
+    const keys = build({ ctx: allDone(), clientReport: true }).chips.map((c) => c.key);
+    expect(keys).toContain(CHIP);
+  });
+
+  it("is left out for a member who cannot open the dialog, and the row stays full", () => {
+    const keys = build({ ctx: allDone(), role: "contractor", clientReport: false }).chips.map((c) => c.key);
+    expect(keys).not.toContain(CHIP);
+    expect(keys).toHaveLength(3);
+    expect(build({ ctx: allDone() }).chips.map((c) => c.key)).not.toContain(CHIP);
+  });
+});
