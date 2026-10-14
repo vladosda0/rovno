@@ -2564,6 +2564,8 @@
   "ai.notifications.unreadCount_other": "{{count}} unread notifications",
   "ai.notifications.briefingBatch_one": "Briefing · {{count}} project",
   "ai.notifications.briefingBatch_other": "Briefing · {{count}} projects",
+  "ai.notifications.clientReportBatch_one": "Client report · {{count}} project",
+  "ai.notifications.clientReportBatch_other": "Client report · {{count}} projects",
   "ai.panel.tabs.label": "Sections of Shurik's panel",
   "ai.panel.tab.chat": "Chat",
   "ai.preview.changes_one": "{{count}} change",

@@ -1,10 +1,18 @@
-// One "Отчёт клиенту" dialog for the whole app shell. The dashboard button and
-// the chat suggestion both ask for it here; ClientReportDialogHost in AppLayout
-// renders it.
+// One "Отчёт клиенту" dialog for the whole app shell. The dashboard button, the
+// chat suggestion and the address `?report=client` all ask for it here;
+// ClientReportDialogHost in AppLayout renders it.
 
 import { getProjectRole, type ProjectAuthoritySeam } from "@/lib/permissions";
 
 export const CLIENT_REPORT_CHIP_KEY = "ai.sidebar.suggestion.clientStatus";
+
+/** `?report=client` on a project page asks for the dialog: the address Shurik's messages and Telegram use. */
+export const CLIENT_REPORT_QUERY_PARAM = "report";
+export const CLIENT_REPORT_QUERY_VALUE = "client";
+
+export function clientReportHref(projectId: string): string {
+  return `/project/${projectId}/dashboard?${CLIENT_REPORT_QUERY_PARAM}=${CLIENT_REPORT_QUERY_VALUE}`;
+}
 
 type Listener = () => void;
 

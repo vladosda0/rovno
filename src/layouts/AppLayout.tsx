@@ -154,6 +154,7 @@ export default function AppLayout() {
             unreadCount={shurikUnreadCount}
             onMarkRead={markShurikMessagesRead}
             onClose={() => setNotificationsPanelOpen(false)}
+            clientReportAvailable={workspaceMode.kind === "supabase"}
             onAction={() => {
               // On a phone the panel covers the page the button has just opened.
               if (window.innerWidth < MOBILE_BREAKPOINT_PX) setNotificationsPanelOpen(false);

@@ -65,7 +65,24 @@ function briefing(partial: Partial<ShurikMessage> = {}): ShurikMessage {
   });
 }
 
-function renderList(messages: ShurikMessage[], onMarkRead = vi.fn(), onAction = vi.fn()) {
+function reminder(partial: Partial<ShurikMessage> = {}): ShurikMessage {
+  return message({
+    id: "reminder-1",
+    project_id: "p1",
+    type: "client_report_reminder",
+    title: "Отчёт клиенту · Ленина 42",
+    body: "За неделю закрыто 4 задачи и загружено 6 фото. Собрал из этого отчёт для клиента.",
+    payload: { action_label: "Посмотреть отчёт", action_href: "/project/p1/dashboard?report=client", done: 4, photos: 6 },
+    ...partial,
+  });
+}
+
+function renderList(
+  messages: ShurikMessage[],
+  onMarkRead = vi.fn(),
+  onAction = vi.fn(),
+  clientReportAvailable = false,
+) {
   const view = render(
     <MemoryRouter initialEntries={["/home"]}>
       <Routes>
@@ -73,7 +90,12 @@ function renderList(messages: ShurikMessage[], onMarkRead = vi.fn(), onAction = 
           path="*"
           element={(
             <>
-              <ShurikMessageList messages={messages} onMarkRead={onMarkRead} onAction={onAction} />
+              <ShurikMessageList
+                messages={messages}
+                onMarkRead={onMarkRead}
+                onAction={onAction}
+                clientReportAvailable={clientReportAvailable}
+              />
               <Where />
             </>
           )}
@@ -101,6 +123,34 @@ describe("ShurikMessageList", () => {
     expect(row).toHaveTextContent("Не прошло списание 2 990 ₽ за подписку. Автопродление выключено.");
     expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Обновить карту" })).toBeInTheDocument();
+  });
+
+  it("shows a report reminder with its project line, its text and the button to the report window", () => {
+    const { onAction } = renderList([reminder()]);
+
+    expect(screen.getByTestId("shurik-message-title")).toHaveTextContent("Отчёт клиенту · Ленина 42");
+    const row = screen.getByTestId("shurik-bubble");
+    expect(row).toHaveTextContent("За неделю закрыто 4 задачи и загружено 6 фото. Собрал из этого отчёт для клиента.");
+    expect(row.querySelector("img")!.getAttribute("src")).toBe("/shurik/avatar.png");
+
+    fireEvent.click(screen.getByRole("button", { name: "Посмотреть отчёт" }));
+
+    expect(screen.getByTestId("where")).toHaveTextContent("/project/p1/dashboard?report=client");
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts «Client report» under a briefing where the report can be opened, and nowhere else", () => {
+    const first = renderList([briefing()], vi.fn(), vi.fn(), false);
+    expect(screen.queryByRole("button", { name: "Client report" })).not.toBeInTheDocument();
+    first.unmount();
+
+    const { onAction } = renderList([briefing(), message(), briefing({ id: "briefing-2", project_id: null })], vi.fn(), vi.fn(), true);
+    expect(screen.getAllByRole("button", { name: "Client report" })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Client report" }));
+
+    expect(screen.getByTestId("where")).toHaveTextContent("/project/p1/dashboard?report=client");
+    expect(onAction).toHaveBeenCalledTimes(1);
   });
 
   it("stands Shurik in the money pose for a money message: no wink, no sway, ever", () => {

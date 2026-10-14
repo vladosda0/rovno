@@ -13,6 +13,7 @@ const MESSAGES_LIMIT = 100;
 const MONEY_TYPE_PREFIX = "billing_";
 const BRIEFING_TYPE = "briefing";
 const PEOPLE_TYPE_PREFIX = "people_";
+const CLIENT_REPORT_REMINDER_TYPE = "client_report_reminder";
 
 export interface ShurikMessageAction {
   label: string;
@@ -75,6 +76,11 @@ export function isBriefingShurikMessage(message: Pick<ShurikMessage, "type">): b
 /** A comment or an assignment: what another person did in a project. */
 export function isPeopleShurikMessage(message: Pick<ShurikMessage, "type">): boolean {
   return message.type.startsWith(PEOPLE_TYPE_PREFIX);
+}
+
+/** Shurik's reminder that a report for the client is ready to be looked at. */
+export function isClientReportReminderShurikMessage(message: Pick<ShurikMessage, "type">): boolean {
+  return message.type === CLIENT_REPORT_REMINDER_TYPE;
 }
 
 let subscriptionSeq = 0;

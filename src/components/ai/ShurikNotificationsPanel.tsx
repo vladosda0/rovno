@@ -14,6 +14,8 @@ interface ShurikNotificationsPanelProps {
   onClose: () => void;
   /** After a message's button has sent the person to its page. */
   onAction?: () => void;
+  /** Passed on to the list: whether a briefing carries the "Отчёт клиенту" button. */
+  clientReportAvailable?: boolean;
 }
 
 /**
@@ -26,6 +28,7 @@ export function ShurikNotificationsPanel({
   onMarkRead,
   onClose,
   onAction,
+  clientReportAvailable = false,
 }: ShurikNotificationsPanelProps) {
   const { t } = useTranslation();
 
@@ -51,7 +54,13 @@ export function ShurikNotificationsPanel({
         </Button>
       </div>
       <ScrollArea className="min-h-0 flex-1">
-        <ShurikMessageList messages={messages} onMarkRead={onMarkRead} onAction={onAction} className="px-3 py-2" />
+        <ShurikMessageList
+          messages={messages}
+          onMarkRead={onMarkRead}
+          onAction={onAction}
+          clientReportAvailable={clientReportAvailable}
+          className="px-3 py-2"
+        />
       </ScrollArea>
     </aside>
   );

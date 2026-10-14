@@ -5,6 +5,7 @@ import { ShurikBubble } from "@/components/ai/ShurikBubble";
 import { Button } from "@/components/ui/button";
 import {
   isBriefingShurikMessage,
+  isClientReportReminderShurikMessage,
   isMoneyShurikMessage,
   isPeopleShurikMessage,
   readShurikBriefingLines,
@@ -13,6 +14,7 @@ import {
 } from "@/data/shurik-messages-source";
 import type { ShurikPose } from "@/components/ai/Shurik";
 import { useDocumentVisible } from "@/hooks/use-document-visible";
+import { clientReportHref } from "@/lib/client-report-dialog";
 import { formatShurikMessageTime } from "@/lib/shurik-message-time";
 import { cn } from "@/lib/utils";
 import type { ShurikMessage } from "@/types/entities";
@@ -23,6 +25,8 @@ interface ShurikMessageListProps {
   onMarkRead: (ids: string[]) => void;
   /** After the message's button has sent the person to its page. */
   onAction?: () => void;
+  /** Whether "Отчёт клиенту" can be opened at all here: a briefing then carries its button. */
+  clientReportAvailable?: boolean;
   className?: string;
 }
 
@@ -82,7 +86,13 @@ function BriefingText({
  * What Shurik wrote on his own. Opening the list reads every unread message loaded into it,
  * whether or not it has been scrolled into view; there is no per-message "mark read" control.
  */
-export function ShurikMessageList({ messages, onMarkRead, onAction, className }: ShurikMessageListProps) {
+export function ShurikMessageList({
+  messages,
+  onMarkRead,
+  onAction,
+  clientReportAvailable = false,
+  className,
+}: ShurikMessageListProps) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const visible = useDocumentVisible();
@@ -126,6 +136,10 @@ export function ShurikMessageList({ messages, onMarkRead, onAction, className }:
       {messages.map((message) => {
         const action = readShurikMessageAction(message);
         const unread = !message.is_read || seenUnreadIds.has(message.id);
+        const reportHref = clientReportAvailable && isBriefingShurikMessage(message) && message.project_id
+          ? clientReportHref(message.project_id)
+          : null;
+        const titled = isPeopleShurikMessage(message) || isClientReportReminderShurikMessage(message);
         return (
           <div key={message.id} data-testid={`shurik-message-${message.id}`} data-unread={unread}>
             <ShurikBubble pose={messagePose(message)} unread={unread}>
@@ -137,7 +151,7 @@ export function ShurikMessageList({ messages, onMarkRead, onAction, className }:
               </div>
               {isBriefingShurikMessage(message) ? (
                 <BriefingText message={message} lines={readShurikBriefingLines(message)} onAction={onAction} />
-              ) : isPeopleShurikMessage(message) && message.body?.trim() ? (
+              ) : titled && message.body?.trim() ? (
                 <div className="mt-0.5">
                   <p
                     data-testid="shurik-message-title"
@@ -163,6 +177,20 @@ export function ShurikMessageList({ messages, onMarkRead, onAction, className }:
                   }}
                 >
                   {action.label}
+                </Button>
+              )}
+              {reportHref && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-1.5 h-7 rounded-lg px-2.5 text-[11px] font-medium"
+                  onClick={() => {
+                    navigate(reportHref);
+                    onAction?.();
+                  }}
+                >
+                  {t("clientReport.action")}
                 </Button>
               )}
             </ShurikBubble>

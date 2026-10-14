@@ -235,6 +235,44 @@ describe("ShurikFloat", () => {
     expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Назначение · Ленина 42");
   });
 
+  describe("report reminders", () => {
+    const reminder = (id: string, projectId: string, title: string) =>
+      message({ id, project_id: projectId, type: "client_report_reminder", title, body: "За неделю закрыто 4 задачи." });
+
+    it("shows a single reminder by its own first line", () => {
+      render(<ShurikFloat messages={[reminder("r-1", "p1", "Отчёт клиенту · Ленина 42")]} onOpen={vi.fn()} />);
+
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Отчёт клиенту · Ленина 42");
+      expect(figure().getAttribute("src")).toBe("/shurik/avatar.png");
+    });
+
+    it("shows one line for several projects, counting projects and reminders only", () => {
+      render(
+        <ShurikFloat
+          messages={[
+            reminder("r-3", "p3", "Отчёт клиенту · Офис на Мира"),
+            reminder("r-2", "p2", "Отчёт клиенту · Дача, баня"),
+            reminder("r-1", "p1", "Отчёт клиенту · Ленина 42"),
+            briefing("b-1", "p4", "Планёрка · Склад"),
+          ]}
+          onOpen={vi.fn()}
+        />,
+      );
+
+      expect(screen.getAllByTestId("shurik-peek")).toHaveLength(1);
+      expect(screen.getByTestId("shurik-peek")).toHaveTextContent("Client report · 3 projects");
+      expect(screen.getByTestId("shurik-unread-badge")).toHaveTextContent("4");
+    });
+
+    it("says the number of projects in Russian the way it is spoken", () => {
+      const line = (count: number) => i18n.t("ai.notifications.clientReportBatch", { count, lng: "ru" });
+      expect(line(2)).toBe("Отчёт клиенту · 2 проекта");
+      expect(line(3)).toBe("Отчёт клиенту · 3 проекта");
+      expect(line(5)).toBe("Отчёт клиенту · 5 проектов");
+      expect(line(21)).toBe("Отчёт клиенту · 21 проект");
+    });
+  });
+
   describe("briefings", () => {
     const lenina = briefing("b-1", "p1", "Планёрка · Ленина 42");
     const dacha = briefing("b-2", "p2", "Планёрка · Дача, баня");

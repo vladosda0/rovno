@@ -6,6 +6,7 @@ import { ShurikUnreadBadge } from "@/components/ai/ShurikUnreadBadge";
 import {
   countUnreadShurikMessages,
   isBriefingShurikMessage,
+  isClientReportReminderShurikMessage,
   isMoneyShurikMessage,
   isPeopleShurikMessage,
 } from "@/data/shurik-messages-source";
@@ -25,6 +26,13 @@ interface ShurikPeek {
   message: ShurikMessage;
   /** Above one when the line stands for a batch of briefings: the number of projects in it. */
   briefingProjects: number;
+  /** The same for a batch of report reminders. */
+  reportProjects: number;
+}
+
+function projectsOf(messages: ShurikMessage[], isKind: (message: ShurikMessage) => boolean): number {
+  if (messages.length === 0 || !isKind(messages[0])) return 0;
+  return new Set(messages.filter(isKind).map((message) => message.project_id)).size;
 }
 
 /**
@@ -32,7 +40,7 @@ interface ShurikPeek {
  * Showing it is remembered per person on this device, so a later visit does not repeat it.
  */
 function useShurikPeek(messages: ShurikMessage[], enabled: boolean): ShurikPeek | null {
-  const [peek, setPeek] = useState<{ id: string; briefingProjects: number } | null>(null);
+  const [peek, setPeek] = useState<{ id: string; briefingProjects: number; reportProjects: number } | null>(null);
 
   useEffect(() => {
     // Read at this moment, not from `useIsMobile`, which only knows the width after the first paint.
@@ -48,10 +56,11 @@ function useShurikPeek(messages: ShurikMessage[], enabled: boolean): ShurikPeek 
     // Several at once get one line, the newest; the number on Shurik speaks for the rest.
     // Briefings come one per project at the same minute, so their one line names how many.
     rememberPeekedShurikMessageIds(userId, fresh.map((message) => message.id));
-    const briefingProjects = isBriefingShurikMessage(fresh[0])
-      ? new Set(fresh.filter(isBriefingShurikMessage).map((message) => message.project_id)).size
-      : 0;
-    setPeek({ id: fresh[0].id, briefingProjects });
+    setPeek({
+      id: fresh[0].id,
+      briefingProjects: projectsOf(fresh, isBriefingShurikMessage),
+      reportProjects: projectsOf(fresh, isClientReportReminderShurikMessage),
+    });
   }, [enabled, messages]);
 
   const peekId = peek?.id ?? null;
@@ -63,7 +72,9 @@ function useShurikPeek(messages: ShurikMessage[], enabled: boolean): ShurikPeek 
 
   if (!peek) return null;
   const message = messages.find((candidate) => candidate.id === peek.id && !candidate.is_read);
-  return message ? { message, briefingProjects: peek.briefingProjects } : null;
+  return message
+    ? { message, briefingProjects: peek.briefingProjects, reportProjects: peek.reportProjects }
+    : null;
 }
 
 interface ShurikFloatProps {
@@ -118,7 +129,9 @@ export function ShurikFloat({ messages, onOpen }: ShurikFloatProps) {
               <span className="line-clamp-2 [overflow-wrap:anywhere]">
                 {peek.briefingProjects > 1
                   ? t("ai.notifications.briefingBatch", { count: peek.briefingProjects })
-                  : peek.message.title}
+                  : peek.reportProjects > 1
+                    ? t("ai.notifications.clientReportBatch", { count: peek.reportProjects })
+                    : peek.message.title}
               </span>
             </>
           )}

@@ -3555,6 +3555,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                         // On a phone the panel covers the page the button has just opened.
                         if (isMobile) onCollapsedChange(true);
                       }}
+                      clientReportAvailable={workspaceMode.kind === "supabase"}
                       className="px-3 py-2"
                     />
                   </ScrollArea>
