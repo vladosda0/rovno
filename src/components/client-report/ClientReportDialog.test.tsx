@@ -700,6 +700,36 @@ describe("ClientReportDialog", () => {
     expect(screen.getByRole("button", { name: "Скачать PDF" })).toBeEnabled();
   });
 
+  it("releases publishing when the plan stops allowing a custom period under a bad draft", async () => {
+    const period = { period_start: daysAgo(40).toISOString(), period_end: daysAgo(30).toISOString() };
+    answerRpc({
+      preview_client_report: (_args: unknown, call: number) =>
+        call === 1
+          ? brigadePreview({ ...period, link: { share_token: TOKEN, created_at: local(10, 1) } })
+          : preview(period),
+      revoke_client_report_link: true,
+      publish_client_report: afterPublish(),
+    });
+
+    renderDialog();
+    const from = await screen.findByLabelText("Начало периода");
+    fireEvent.change(from, { target: { value: inputValue(daysAgo(10)) } });
+    fireEvent.blur(from);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Опубликовать" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Отозвать ссылку" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Отозвать ссылку" }));
+
+    await waitFor(() => expect(screen.queryByLabelText("Начало периода")).not.toBeInTheDocument());
+    expect(screen.queryByText("Начало периода должно быть раньше конца, а конец не позже сегодня.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Скачать PDF" })).toBeEnabled();
+    const publish = screen.getByRole("button", { name: "Опубликовать" });
+    expect(publish).toBeEnabled();
+    fireEvent.click(publish);
+    await waitFor(() => expect(rpcCalls("publish_client_report")).toHaveLength(1));
+  });
+
   async function publishThenRevoke() {
     fireEvent.click(screen.getByRole("button", { name: "Опубликовать" }));
     await screen.findByText(/Клиент видит этот отчёт по ссылке\./);

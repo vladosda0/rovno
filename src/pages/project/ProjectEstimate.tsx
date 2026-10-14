@@ -209,7 +209,10 @@ import type {
   EstimateExecutionStatus,
   ResourceLineType,
 } from "@/types/estimate-v2";
-import type { Task, UserPlan } from "@/types/entities";
+import type { Task } from "@/types/entities";
+import { useActiveSubscription } from "@/hooks/useActiveSubscription";
+import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
+import { resolveOwnerPlanCode, resolveShareApprovalPolicy } from "@/lib/estimate-share-approval";
 
 type ChecklistFallbackEstimateRow = {
   id: string;
@@ -460,12 +463,6 @@ const RESOURCE_CREATE_OPTIONS: Array<{ labelKey: string; value: ResourceLineType
   { labelKey: "estimate.resource.createOption.subcontractor", value: "subcontractor" },
   { labelKey: "estimate.resource.createOption.other", value: "other" },
 ];
-
-const PLAN_PARTICIPANT_CAP: Record<UserPlan, number> = {
-  free: 1,
-  pro: 5,
-  business: 15,
-};
 
 interface PendingDeleteState {
   assessment: DeleteAssessment;
@@ -961,6 +958,8 @@ export default function ProjectEstimate() {
   const { toast } = useToast();
   const workspaceMode = useWorkspaceMode();
   const perm = usePermission(pid);
+  const subscription = useActiveSubscription();
+  const runtimeAuth = useRuntimeAuth();
   const hrAccess = getProjectDomainAccess(perm.seam, "hr");
   const hrReadsEnabled = projectDomainAllowsView(hrAccess);
   const { user: currentUser, isLoading: isCurrentUserLoading } = useWorkspaceCurrentUserState();
@@ -1392,13 +1391,30 @@ export default function ProjectEstimate() {
     }
   }, [canEditEstimate, currentUser.id, memberEmailSet, pendingInviteEmailSet, pid, projectMode, t, toast, workspaceMode]);
 
-  const ownerPlan = useMemo<UserPlan>(() => {
-    if (!project?.owner_id) return currentUser.plan;
-    const owner = getUserById(project.owner_id);
-    return owner?.plan ?? currentUser.plan;
-  }, [currentUser.plan, project?.owner_id]);
-  const participantLimit = PLAN_PARTICIPANT_CAP[ownerPlan];
-  const availableParticipantSlots = Math.max(participantLimit - members.length, 0);
+  const ownerPlanCode = useMemo(() => resolveOwnerPlanCode({
+    workspaceKind: workspaceMode.kind,
+    viewerIsOwner: perm.role === "owner",
+    authenticated: runtimeAuth.status === "authenticated",
+    subscription: {
+      isLoading: subscription.isLoading,
+      isError: subscription.isError,
+      planCode: subscription.subscription?.plan_code,
+    },
+    demoOwnerPlan: (project?.owner_id ? getUserById(project.owner_id)?.plan : null) ?? currentUser.plan,
+    membersLoading: isMembersLoading,
+    ownerRowLoaded: members.some((member) => member.role === "owner"),
+  }), [
+    workspaceMode.kind,
+    perm.role,
+    runtimeAuth.status,
+    subscription.isLoading,
+    subscription.isError,
+    subscription.subscription?.plan_code,
+    project?.owner_id,
+    currentUser.plan,
+    isMembersLoading,
+    members,
+  ]);
 
   const workById = useMemo(() => new Map(works.map((work) => [work.id, work])), [works]);
   const deleteGuardSource = useMemo(() => ({
@@ -2039,20 +2055,7 @@ export default function ProjectEstimate() {
   }, [t, toast]);
 
   const ensureShareLinkForExport = useCallback(async (): Promise<{ url: string } | { error: string }> => {
-    const submitOptionsFor = (): {
-      shareApprovalPolicy: "disabled" | "registered";
-      shareApprovalDisabledReason?: "no_participant_slot";
-    } => {
-      const previewOnly = availableParticipantSlots === 0;
-      return previewOnly
-        ? {
-          shareApprovalPolicy: "disabled" as const,
-          shareApprovalDisabledReason: "no_participant_slot" as const,
-        }
-        : {
-          shareApprovalPolicy: "registered" as const,
-        };
-    };
+    const submitOptionsFor = () => resolveShareApprovalPolicy({ ownerPlanCode, members });
 
     // A co_owner below detail IS the co-owner the generic string tells them to
     // go and find, so that wording sends them after a person who does not exist.
@@ -2170,7 +2173,6 @@ export default function ProjectEstimate() {
       };
     }
   }, [
-    availableParticipantSlots,
     buildShareLink,
     canManageEstimate,
     canSubmitByMembership,
@@ -2182,6 +2184,8 @@ export default function ProjectEstimate() {
     latestApproved,
     latestProposed,
     latestVersionNumber,
+    members,
+    ownerPlanCode,
     pid,
     t,
   ]);

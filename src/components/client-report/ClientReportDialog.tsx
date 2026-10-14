@@ -254,8 +254,10 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
     || (previewQuery.data != null && previewQuery.data.preview !== preview)
     || !sameRange(range, good!.range)
   );
-  const periodBlocked = periodInvalid && (draft.from !== null || draft.to !== null);
   const quota = quotaOverride ?? preview?.quota ?? null;
+  // The date inputs exist only while the plan allows a custom period.
+  const periodShown = Boolean(quota?.custom_period_allowed) && periodInvalid;
+  const periodBlocked = periodShown && (draft.from !== null || draft.to !== null);
   const shareToken = linkToken === undefined ? preview?.link?.share_token ?? null : linkToken;
   const shareLink = shareToken ? buildClientReportShareLink(shareToken) : null;
   const mediaById = useMemo(() => new Map(media.map((item) => [item.id, item])), [media]);
@@ -598,7 +600,7 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
                   </span>
                 )}
               </div>
-              {periodInvalid && <p className={HINT_CLASS} role="alert">{t("clientReport.period.invalid")}</p>}
+              {periodShown && <p className={HINT_CLASS} role="alert">{t("clientReport.period.invalid")}</p>}
 
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span id="client-report-rhythm-label">{t("clientReport.rhythm.label")}</span>
