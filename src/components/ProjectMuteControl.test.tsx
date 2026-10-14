@@ -16,7 +16,7 @@ vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
 
 const LABEL = "Do not disturb for this project";
 const HINT =
-  "The briefing and messages from people on “Ленина 42” will stop coming to you. Other members keep getting them as before.";
+  "The briefing, tips and messages from people on “Ленина 42” will stop coming to you. Other members keep getting them as before.";
 
 /** An in-memory stand-in for `notification_project_mutes`: a reload reads what the writes left. */
 function createFakeBackend(initial: { mutedProjectIds?: string[]; projects?: briefingSettingsSource.BriefingProject[] } = {}) {
@@ -30,9 +30,11 @@ function createFakeBackend(initial: { mutedProjectIds?: string[]; projects?: bri
       inAnyProject: true,
       mutedProjectIds: [...muted],
       peopleEnabled: true,
+      hintsChatEnabled: true,
     })),
     saveSettings: vi.fn(async () => {}),
     setPeopleEnabled: vi.fn(async () => {}),
+    setHintsChatEnabled: vi.fn(async () => {}),
     setProjectMuted: vi.fn(async (projectId: string, isMuted: boolean) => {
       muted = isMuted ? [...muted.filter((id) => id !== projectId), projectId] : muted.filter((id) => id !== projectId);
     }),
@@ -216,7 +218,7 @@ describe("ProjectMuteBell", () => {
 
     expect(ru("notifications.projectMute.label")).toBe("Не беспокоить по этому проекту");
     expect(ru("notifications.projectMute.hint", { project: "Ленина 42" })).toBe(
-      "Планёрка и сообщения от людей по «Ленина 42» перестанут приходить тебе. Остальные участники получают их как раньше.",
+      "Планёрка, подсказки и сообщения от людей по «Ленина 42» перестанут приходить тебе. Остальные участники получают их как раньше.",
     );
     expect(ru("notifications.projectMute.bell")).toBe("Уведомления проекта");
     expect(ru("notifications.projectMute.bellMuted")).toBe("Не беспокоить включено");

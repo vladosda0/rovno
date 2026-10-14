@@ -607,6 +607,10 @@
     {
       "path": "supabase/migrations/20261014010000_profiles_gender.sql",
       "sha256": "30b339486903ccf277b45a60d55635eac99104413df26c659d884eab94378ff2"
+    },
+    {
+      "path": "supabase/migrations/20261015020000_shurik_hint_settings.sql",
+      "sha256": "0b9dadd835fff32c4172abceba79d11f4bcef64e9c1f74396000f1d0b5a0d792"
     }
   ],
   "generated_artifacts": [

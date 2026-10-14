@@ -24,6 +24,7 @@ const UNIQUE_VIOLATION = "23505";
 const LOCAL_SETTINGS_KEY = "briefing-settings";
 const LOCAL_MUTES_KEY = "briefing-muted-projects";
 const LOCAL_PEOPLE_KEY = "people-messages-enabled";
+const LOCAL_HINTS_CHAT_KEY = "shurik-hints-chat-enabled";
 
 export interface BriefingProject {
   id: string;
@@ -40,6 +41,8 @@ export interface BriefingSettingsSnapshot {
   mutedProjectIds: string[];
   /** Whether comments and assignments from other people are sent at all; on for a person with no row. */
   peopleEnabled: boolean;
+  /** Shurik's hint of the day over the project chat; on for a person with no row. */
+  hintsChatEnabled: boolean;
 }
 
 export interface BriefingSettingsSource {
@@ -50,6 +53,8 @@ export interface BriefingSettingsSource {
   setProjectMuted: (projectId: string, muted: boolean) => Promise<void>;
   /** Writes this one value; the first write creates the person's row. */
   setPeopleEnabled: (enabled: boolean) => Promise<void>;
+  /** The same for the hints toggle. */
+  setHintsChatEnabled: (enabled: boolean) => Promise<void>;
 }
 
 export function isBriefingMinute(minute: number): boolean {
@@ -103,6 +108,7 @@ export function createBrowserBriefingSettingsSource(mode: "demo" | "local"): Bri
         inAnyProject: visible.length > 0,
         mutedProjectIds: readLocalMutes(),
         peopleEnabled: readLocalJson(LOCAL_PEOPLE_KEY) !== false,
+        hintsChatEnabled: readLocalJson(LOCAL_HINTS_CHAT_KEY) !== false,
       };
     },
     async saveSettings(patch) {
@@ -116,6 +122,9 @@ export function createBrowserBriefingSettingsSource(mode: "demo" | "local"): Bri
     async setPeopleEnabled(enabled) {
       localStorage.setItem(LOCAL_PEOPLE_KEY, JSON.stringify(enabled));
     },
+    async setHintsChatEnabled(enabled) {
+      localStorage.setItem(LOCAL_HINTS_CHAT_KEY, JSON.stringify(enabled));
+    },
   };
 }
 
@@ -123,10 +132,23 @@ export function createSupabaseBriefingSettingsSource(
   supabase: TypedSupabaseClient,
   profileId: string,
 ): BriefingSettingsSource {
+  // `hints_chat_enabled` is read on its own through the untyped client, so a database without
+  // the column does not take the rest of the settings down with it.
+  const raw = supabase as unknown as SupabaseClient;
+  const loadHintsChatEnabled = async (): Promise<boolean> => {
+    const { data, error } = await raw
+      .from("notification_preferences")
+      .select("hints_chat_enabled")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    if (error || !data) return true;
+    return (data as { hints_chat_enabled?: unknown }).hints_chat_enabled !== false;
+  };
+
   return {
     mode: "supabase",
     async load() {
-      const [preferences, projects, memberships, mutes] = await Promise.all([
+      const [preferences, projects, memberships, mutes, hintsChatEnabled] = await Promise.all([
         supabase
           .from("notification_preferences")
           .select("briefing_enabled, briefing_minute, briefing_weekends, people_enabled")
@@ -139,6 +161,7 @@ export function createSupabaseBriefingSettingsSource(
           .order("updated_at", { ascending: false }),
         supabase.from("project_members").select("project_id, role").eq("profile_id", profileId),
         supabase.from("notification_project_mutes").select("project_id").eq("profile_id", profileId),
+        loadHintsChatEnabled(),
       ]);
       const error = preferences.error ?? projects.error ?? memberships.error ?? mutes.error;
       if (error) {
@@ -163,6 +186,7 @@ export function createSupabaseBriefingSettingsSource(
         inAnyProject: (projects.data ?? []).length > 0,
         mutedProjectIds: (mutes.data ?? []).map((mute) => mute.project_id),
         peopleEnabled: preferences.data ? preferences.data.people_enabled : true,
+        hintsChatEnabled,
       };
     },
     async saveSettings(patch) {
@@ -180,6 +204,14 @@ export function createSupabaseBriefingSettingsSource(
     async setPeopleEnabled(enabled) {
       const row: PreferencesInsert = { profile_id: profileId, people_enabled: enabled };
       const { error } = await supabase.from("notification_preferences").upsert(row, { onConflict: "profile_id" });
+      if (error) {
+        throw error;
+      }
+    },
+    async setHintsChatEnabled(enabled) {
+      const { error } = await raw
+        .from("notification_preferences")
+        .upsert({ profile_id: profileId, hints_chat_enabled: enabled }, { onConflict: "profile_id" });
       if (error) {
         throw error;
       }

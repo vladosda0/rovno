@@ -120,7 +120,7 @@ describe("AppLayout", () => {
 
   it("starts with AI sidebar open when no session preference is set", async () => {
     renderLayout();
-    expect(await screen.findByPlaceholderText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open Shurik" })).not.toBeInTheDocument();
   });
 
@@ -147,7 +147,7 @@ describe("AppLayout", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    expect(screen.queryByPlaceholderText("Ask Shurik...")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Ask Shurik...")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /toggle shurik's panel/i })).not.toBeInTheDocument();
   });
 
@@ -159,7 +159,7 @@ describe("AppLayout", () => {
 
     clearAiSidebarSessionPreference();
     const reopenedRender = renderLayout();
-    expect(await screen.findByPlaceholderText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
     reopenedRender.unmount();
   });
 
@@ -175,7 +175,7 @@ describe("AppLayout", () => {
     expect(container.querySelector(".w-12.border-r")).toBeNull();
 
     fireEvent.click(opener);
-    expect(await screen.findByPlaceholderText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open Shurik" })).not.toBeInTheDocument();
   });
 
@@ -185,7 +185,7 @@ describe("AppLayout", () => {
     expect(screen.getByRole("main")).toHaveClass("md:pb-24");
 
     fireEvent.click(screen.getByRole("button", { name: "Open Shurik" }));
-    await screen.findByPlaceholderText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS });
+    await screen.findByLabelText("Ask Shurik...", undefined, { timeout: SIDEBAR_FIND_TIMEOUT_MS });
     expect(screen.getByRole("main")).not.toHaveClass("md:pb-24");
   });
 
@@ -233,7 +233,7 @@ describe("AppLayout", () => {
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("Ask Shurik...")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Ask Shurik...")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Open Shurik/ })).not.toBeInTheDocument();
     expect(screen.getByRole("main")).not.toHaveClass("md:pb-24");
 
@@ -480,7 +480,7 @@ describe("AppLayout", () => {
     const notificationsTab = await screen.findByRole("tab", { name: /Notifications/ }, { timeout: SIDEBAR_FIND_TIMEOUT_MS });
     expect(notificationsTab).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText(/Не прошло списание 2 990 ₽/)).toBeVisible();
-    expect(screen.getByPlaceholderText("Ask Shurik...")).not.toBeVisible();
+    expect(screen.getByLabelText("Ask Shurik...")).not.toBeVisible();
     expect(screen.queryByTestId("shurik-peek")).not.toBeInTheDocument();
   });
 

@@ -14,6 +14,9 @@ import { useBrowserTimezoneSync } from "@/hooks/use-browser-timezone-sync";
 import { useProfileGenderHint } from "@/hooks/use-profile-gender-hint";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useShurikMessages, useShurikMessagesLiveUpdates } from "@/hooks/use-shurik-messages";
+import { useShurikHintOfDay, useShurikHintRenderable } from "@/hooks/use-shurik-hint";
+import { shurikHintTextKey, shurikHintTextValues } from "@/lib/shurik-hints";
+import { useTranslation } from "react-i18next";
 import { setAnalyticsUserId } from "@/lib/analytics";
 import { setSentryUser } from "@/lib/observability/sentry";
 import { getAuthStateSnapshot, isAuthenticated, subscribeAuthState } from "@/lib/auth-state";
@@ -62,6 +65,14 @@ export default function AppLayout() {
   useSyncExternalStore(subscribeAuthState, getAuthStateSnapshot);
 
   const hideAi = !location.pathname.startsWith(AI_SIDEBAR_ROUTE_PREFIX);
+  // The hint of the day belongs to the project on screen; the collapsed panel shows its first words.
+  const { t, i18n } = useTranslation();
+  const hintProjectId = hideAi ? null : location.pathname.slice(AI_SIDEBAR_ROUTE_PREFIX.length).split("/")[0] || null;
+  const { hint } = useShurikHintOfDay(hintProjectId);
+  const hintRenderable = useShurikHintRenderable(hint, hintProjectId);
+  const hintText = hint && hintRenderable && hint.status === "active"
+    ? t(shurikHintTextKey(hint.hint_key), shurikHintTextValues(hint.params, i18n.language))
+    : null;
   const runtimeAuth = useRuntimeAuth();
   const workspaceMode = useWorkspaceMode();
   const isDemo = workspaceMode.kind === "demo";
@@ -130,6 +141,7 @@ export default function AppLayout() {
         {floatShown && (
           <ShurikFloat
             messages={shurikMessages}
+            hintText={hintText}
             onOpen={(tab) => {
               if (hideAi) {
                 setNotificationsPanelOpen(true);

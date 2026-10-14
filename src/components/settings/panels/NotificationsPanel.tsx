@@ -36,7 +36,16 @@ export function NotificationsPanel() {
   const { t } = useTranslation();
   const [projectsOpen, setProjectsOpen] = useState(false);
   const workspaceMode = useWorkspaceMode();
-  const { snapshot, isLoading, isError, isSaving, saveSettings, setProjectMuted, setPeopleEnabled } = useBriefingSettings(() => {
+  const {
+    snapshot,
+    isLoading,
+    isError,
+    isSaving,
+    saveSettings,
+    setProjectMuted,
+    setPeopleEnabled,
+    setHintsChatEnabled,
+  } = useBriefingSettings(() => {
     toast({
       title: t("notifications.saveFailedToast"),
       description: t("notifications.saveFailedDescription"),
@@ -54,6 +63,23 @@ export function NotificationsPanel() {
   }
 
   const { settings, projects } = snapshot;
+  // Every role gets hints, so their section stands on its own, between the briefing and the instant messages.
+  const hintsSection = (
+    <SettingsSection title={t("notifications.hints.title")}>
+      <div className={ROW_CLASS}>
+        <span className="min-w-0 flex-1">
+          <span className="block text-body-sm text-foreground">{t("notifications.hints.chat")}</span>
+          <span className="block text-caption text-muted-foreground">{t("notifications.hints.chatHint")}</span>
+        </span>
+        <Switch
+          checked={snapshot.hintsChatEnabled}
+          onCheckedChange={setHintsChatEnabled}
+          disabled={isSaving}
+          aria-label={t("notifications.hints.chat")}
+        />
+      </div>
+    </SettingsSection>
+  );
   const instantSection = (
     <SettingsSection title={t("notifications.instant.title")}>
       <div className={ROW_CLASS}>
@@ -75,6 +101,7 @@ export function NotificationsPanel() {
   if (projects.length === 0) {
     return (
       <div className="space-y-sp-3">
+        {hintsSection}
         {instantSection}
         <TelegramDeliverySection />
       </div>
@@ -170,6 +197,7 @@ export function NotificationsPanel() {
           )}
         </div>
       </SettingsSection>
+      {hintsSection}
       {instantSection}
       <TelegramDeliverySection />
     </div>

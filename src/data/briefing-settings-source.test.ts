@@ -9,7 +9,9 @@ import * as store from "@/data/store";
 type Result = { data: unknown; error: unknown };
 
 /** One table = one canned answer per verb; every call is recorded per query. */
-function createFakeSupabase(answers: Record<string, Partial<Record<"select" | "upsert" | "insert" | "delete", Result>>>) {
+function createFakeSupabase(
+  answers: Record<string, Partial<Record<"select" | "upsert" | "insert" | "delete", Result>> & { selectOf?: (columns: string) => Result | undefined }>,
+) {
   const queries: { table: string; calls: { method: string; args: unknown[] }[] }[] = [];
 
   const client = {
@@ -17,9 +19,14 @@ function createFakeSupabase(answers: Record<string, Partial<Record<"select" | "u
       const calls: { method: string; args: unknown[] }[] = [];
       queries.push({ table, calls });
       let verb: "select" | "upsert" | "insert" | "delete" = "select";
-      const answer = () => answers[table]?.[verb] ?? { data: verb === "select" ? [] : null, error: null };
+      let columns = "";
+      const answer = () =>
+        (verb === "select" ? answers[table]?.selectOf?.(columns) : undefined)
+        ?? answers[table]?.[verb]
+        ?? { data: verb === "select" ? [] : null, error: null };
       const record = (method: string) => (...args: unknown[]) => {
         calls.push({ method, args });
+        if (method === "select") columns = String(args[0] ?? "");
         if (method === "upsert" || method === "insert" || method === "delete") verb = method;
         return query;
       };
@@ -46,6 +53,50 @@ function createFakeSupabase(answers: Record<string, Partial<Record<"select" | "u
 function source(fake: ReturnType<typeof createFakeSupabase>, profileId = "me") {
   return createSupabaseBriefingSettingsSource(fake.client as never, profileId);
 }
+
+describe("hints in the project chat, the database", () => {
+  it("reads the switch on its own and writes that one value", async () => {
+    const fake = createFakeSupabase({
+      notification_preferences: {
+        selectOf: (columns) => (columns === "hints_chat_enabled" ? { data: { hints_chat_enabled: false }, error: null } : undefined),
+        select: { data: null, error: null },
+      },
+    });
+
+    expect((await source(fake).load()).hintsChatEnabled).toBe(false);
+
+    await source(fake).setHintsChatEnabled(true);
+    const write = fake.queriesOf("notification_preferences").at(-1)!;
+    expect(write.calls[0]).toEqual({
+      method: "upsert",
+      args: [{ profile_id: "me", hints_chat_enabled: true }, { onConflict: "profile_id" }],
+    });
+  });
+
+  it("keeps the rest of the settings, and the hints on, when the database has no such column yet", async () => {
+    const fake = createFakeSupabase({
+      notification_preferences: {
+        selectOf: (columns) =>
+          columns === "hints_chat_enabled" ? { data: null, error: { code: "42703", message: "column does not exist" } } : undefined,
+        select: {
+          data: { briefing_enabled: false, briefing_minute: 540, briefing_weekends: false, people_enabled: true },
+          error: null,
+        },
+      },
+    });
+
+    const snapshot = await source(fake).load();
+    expect(snapshot.settings.enabled).toBe(false);
+    expect(snapshot.hintsChatEnabled).toBe(true);
+  });
+
+  it("keeps the choice on this device without a backend", async () => {
+    localStorage.clear();
+    const local = createBrowserBriefingSettingsSource("local");
+    await local.setHintsChatEnabled(false);
+    expect((await createBrowserBriefingSettingsSource("local").load()).hintsChatEnabled).toBe(false);
+  });
+});
 
 describe("briefing settings, the database", () => {
   it("gives the defaults to a person with no preferences row: on, 09:00, no weekends", async () => {

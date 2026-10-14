@@ -95,7 +95,7 @@ describe("AISidebar", () => {
       </QueryClientProvider>,
     );
 
-    const composer = screen.getByPlaceholderText("Ask Shurik...");
+    const composer = screen.getByLabelText("Ask Shurik...");
 
     fireEvent.change(composer, { target: { value: "alpha history" } });
     fireEvent.keyDown(composer, { key: "Enter" });
@@ -109,7 +109,7 @@ describe("AISidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Project B" }));
     expect(screen.queryByText("alpha history")).not.toBeInTheDocument();
 
-    const projectBComposer = screen.getByPlaceholderText("Ask Shurik...");
+    const projectBComposer = screen.getByLabelText("Ask Shurik...");
     fireEvent.change(projectBComposer, { target: { value: "beta history" } });
     fireEvent.keyDown(projectBComposer, { key: "Enter" });
 

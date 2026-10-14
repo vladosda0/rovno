@@ -382,3 +382,49 @@ describe("ShurikFloat", () => {
     });
   });
 });
+
+describe("ShurikFloat hint of the day", () => {
+  const HINT = "The project is set up, but there is no estimate yet. Tasks, purchases and the schedule all grow out of it.";
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows «A tip from Shurik» and the start of the hint for 8 seconds, without a number on Shurik", () => {
+    const onOpen = vi.fn();
+    render(<ShurikFloat messages={[]} hintText={HINT} onOpen={onOpen} />);
+
+    const peek = screen.getByTestId("shurik-hint-peek");
+    expect(peek).toHaveTextContent("A tip from Shurik");
+    expect(peek).toHaveTextContent("there is no estimate yet");
+    expect(screen.queryByTestId("shurik-unread-badge")).toBeNull();
+
+    fireEvent.click(peek);
+    expect(onOpen).toHaveBeenCalledWith("chat");
+
+    act(() => {
+      vi.advanceTimersByTime(SHURIK_PEEK_MS);
+    });
+    expect(screen.queryByTestId("shurik-hint-peek")).toBeNull();
+  });
+
+  it("shows it once a day on this device", () => {
+    const first = render(<ShurikFloat messages={[]} hintText={HINT} onOpen={vi.fn()} />);
+    expect(screen.getByTestId("shurik-hint-peek")).toBeInTheDocument();
+    first.unmount();
+
+    render(<ShurikFloat messages={[]} hintText={HINT} onOpen={vi.fn()} />);
+    expect(screen.queryByTestId("shurik-hint-peek")).toBeNull();
+  });
+
+  it("gives way to a new message", () => {
+    render(<ShurikFloat messages={[message()]} hintText={HINT} onOpen={vi.fn()} />);
+    expect(screen.getByTestId("shurik-peek")).toBeInTheDocument();
+    expect(screen.queryByTestId("shurik-hint-peek")).toBeNull();
+  });
+});

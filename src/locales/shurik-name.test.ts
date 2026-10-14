@@ -29,10 +29,10 @@ describe("the assistant is called Shurik", () => {
     expect(en[key]).toBe("Shurik");
   });
 
-  it("introduces himself by name in the empty panel", () => {
-    expect(ru["ai.sidebar.opener.l0.headline"]).toBe("Шурик, твой помощник по стройке");
+  it("introduces himself by name in the fallback answer", () => {
+    // The three-day «Шурик, твой помощник по стройке» over the empty chat went with slice 8.
+    expect(ru["ai.sidebar.opener.l0.headline"]).toBeUndefined();
     expect(ru["ai.sidebar.message.fallbackIntro"]).toMatch(/^Я Шурик, твой помощник по стройке\. /);
-    expect(en["ai.sidebar.opener.l0.headline"]).toBe("Shurik, your construction assistant");
     expect(en["ai.sidebar.message.fallbackIntro"]).toMatch(/^I'm Shurik, your construction assistant\. /);
   });
 
@@ -78,7 +78,7 @@ describe("no stray word names Shurik: «ассистент», assistant, AI", ()
       .filter(([, value]) => /assistant/i.test(value))
       .map(([key]) => key);
     expect(jobTitle.sort()).toEqual(
-      [...JOB_TITLE_KEYS, "ai.sidebar.opener.l0.headline", "ai.sidebar.message.fallbackIntro"].sort(),
+      [...JOB_TITLE_KEYS, "ai.sidebar.message.fallbackIntro"].sort(),
     );
   });
 

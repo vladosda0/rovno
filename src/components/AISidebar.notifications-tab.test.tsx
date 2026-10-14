@@ -84,7 +84,7 @@ describe("AISidebar tabs: Chat and Notifications", () => {
     expect(screen.getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
     const notificationsTab = screen.getByRole("tab", { name: /Notifications/ });
     expect(within(notificationsTab).getByTestId("shurik-unread-badge")).toHaveTextContent("1");
-    expect(screen.getByPlaceholderText("Ask Shurik...")).toBeVisible();
+    expect(screen.getByLabelText("Ask Shurik...")).toBeVisible();
     expect(screen.queryByText(/Не прошло списание 2 990 ₽/)).not.toBeInTheDocument();
   });
 
@@ -96,7 +96,7 @@ describe("AISidebar tabs: Chat and Notifications", () => {
 
     expect(screen.getByRole("tab", { name: /Notifications/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText(/Не прошло списание 2 990 ₽/)).toBeVisible();
-    expect(screen.getByPlaceholderText("Ask Shurik...")).not.toBeVisible();
+    expect(screen.getByLabelText("Ask Shurik...")).not.toBeVisible();
     expect(screen.queryByRole("button", { name: "All" })).not.toBeInTheDocument();
 
     const figure = screen.getByTestId("shurik-message-msg-money").querySelector("img")!;
@@ -108,13 +108,13 @@ describe("AISidebar tabs: Chat and Notifications", () => {
 
   it("brings the composer and what was typed back on Chat", () => {
     renderSidebar();
-    fireEvent.change(screen.getByPlaceholderText("Ask Shurik..."), { target: { value: "half a question" } });
+    fireEvent.change(screen.getByLabelText("Ask Shurik..."), { target: { value: "half a question" } });
 
     fireEvent.click(screen.getByRole("tab", { name: /Notifications/ }));
     expect(screen.getByText("No notifications")).toBeVisible();
     fireEvent.click(screen.getByRole("tab", { name: "Chat" }));
 
-    const composer = screen.getByPlaceholderText("Ask Shurik...");
+    const composer = screen.getByLabelText("Ask Shurik...");
     expect(composer).toBeVisible();
     expect(composer).toHaveValue("half a question");
   });
@@ -124,7 +124,7 @@ describe("AISidebar tabs: Chat and Notifications", () => {
     renderSidebar();
 
     const chatPanel = screen.getByRole("tabpanel", { name: "Chat" });
-    expect(within(chatPanel).getByPlaceholderText("Ask Shurik...")).toBeVisible();
+    expect(within(chatPanel).getByLabelText("Ask Shurik...")).toBeVisible();
     expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
 
     fireEvent.keyDown(screen.getByRole("tab", { name: "Chat" }), { key: "ArrowRight" });
@@ -139,6 +139,6 @@ describe("AISidebar tabs: Chat and Notifications", () => {
     renderSidebar("notifications");
 
     expect(screen.getByText(/Не прошло списание 2 990 ₽/)).toBeVisible();
-    expect(screen.getByPlaceholderText("Ask Shurik...")).not.toBeVisible();
+    expect(screen.getByLabelText("Ask Shurik...")).not.toBeVisible();
   });
 });

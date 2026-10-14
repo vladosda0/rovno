@@ -55,12 +55,13 @@ export function ShurikPanelTabs({ tab, onTabChange, unreadCount }: ShurikPanelTa
             onClick={() => onTabChange(key)}
             onKeyDown={(event) => onKeyDown(event, key)}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-1.5 py-1 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "flex min-w-0 flex-1 flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               selected ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {labels[key]}
-            {key === "notifications" && <ShurikUnreadBadge count={unreadCount} />}
+            {/* The number stays on the label's line at any width, a phone included. */}
+            <span className="truncate">{labels[key]}</span>
+            {key === "notifications" && <ShurikUnreadBadge count={unreadCount} className="shrink-0" />}
           </button>
         );
       })}

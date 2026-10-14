@@ -34,6 +34,7 @@ function createFakeBackend(
   let stored: BriefingSettings | null = initial.storedSettings ?? null;
   // Undefined stands for "no value written yet", which reads as on.
   let peopleEnabled: boolean | undefined = initial.storedPeopleEnabled;
+  let hintsChatEnabled = true;
   let muted = [...(initial.mutedProjectIds ?? [])];
   const projects = initial.projects ?? THREE_PROJECTS;
   const inAnyProject = initial.inAnyProject ?? true;
@@ -45,6 +46,7 @@ function createFakeBackend(
       inAnyProject,
       mutedProjectIds: [...muted],
       peopleEnabled: peopleEnabled ?? true,
+      hintsChatEnabled,
     })),
     saveSettings: vi.fn(async (patch: Partial<BriefingSettings>) => {
       stored = { ...(stored ?? briefingSettingsSource.DEFAULT_BRIEFING_SETTINGS), ...patch };
@@ -52,12 +54,20 @@ function createFakeBackend(
     setPeopleEnabled: vi.fn(async (enabled: boolean) => {
       peopleEnabled = enabled;
     }),
+    setHintsChatEnabled: vi.fn(async (enabled: boolean) => {
+      hintsChatEnabled = enabled;
+    }),
     setProjectMuted: vi.fn(async (projectId: string, isMuted: boolean) => {
       muted = isMuted ? [...muted.filter((id) => id !== projectId), projectId] : muted.filter((id) => id !== projectId);
     }),
   };
   vi.spyOn(briefingSettingsSource, "getBriefingSettingsSource").mockResolvedValue(source);
-  return { source, hasRow: () => stored !== null, peopleEnabled: () => peopleEnabled };
+  return {
+    source,
+    hasRow: () => stored !== null,
+    peopleEnabled: () => peopleEnabled,
+    hintsChatEnabled: () => hintsChatEnabled,
+  };
 }
 
 function renderPanel() {
@@ -133,7 +143,7 @@ describe("NotificationsPanel", () => {
     renderPanel();
     await loaded();
 
-    expect(screen.getAllByRole("switch")).toHaveLength(3);
+    expect(screen.getAllByRole("switch")).toHaveLength(4);
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
     for (const gone of [/in-app/i, /email/i, /telegram/i, /coming soon/i, /digest/i, /assigned to me/i, /billing/i, /subscription/i]) {
@@ -256,7 +266,7 @@ describe("NotificationsPanel", () => {
 
     expect(await screen.findByRole("heading", { name: "Instant" })).toBeInTheDocument();
     expect(peopleSwitch()).toBeChecked();
-    expect(screen.getAllByRole("switch")).toHaveLength(1);
+    expect(screen.getAllByRole("switch")).toHaveLength(2);
     expect(screen.queryByRole("heading", { name: "Shurik's briefing" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByText(/nothing to set up/)).not.toBeInTheDocument();
@@ -300,6 +310,33 @@ describe("NotificationsPanel", () => {
     expect(screen.getByText("Messages from people in a project")).toBeInTheDocument();
     expect(screen.getByText("Someone wrote in a task or assigned a task to you")).toBeInTheDocument();
     expect(peopleSwitch()).toBeChecked();
+  });
+
+  it("has a «Tips from Shurik» section between the briefing and the instant messages, on by default, saved at once", async () => {
+    const { source, hintsChatEnabled } = createFakeBackend();
+    renderPanel();
+    await loaded();
+
+    const briefingHeading = screen.getByRole("heading", { name: "Shurik's briefing" });
+    const hints = screen.getByRole("heading", { name: "Tips from Shurik" });
+    const instant = screen.getByRole("heading", { name: "Instant" });
+    expect(briefingHeading.compareDocumentPosition(hints) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hints.compareDocumentPosition(instant) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const hintsSwitch = screen.getByRole("switch", { name: "Tips in the project chat" });
+    expect(hintsSwitch).toBeChecked();
+
+    fireEvent.click(hintsSwitch);
+    await waitFor(() => expect(source.setHintsChatEnabled).toHaveBeenCalledWith(false));
+    await waitFor(() => expect(screen.getByRole("switch", { name: "Tips in the project chat" })).not.toBeChecked());
+    expect(hintsChatEnabled()).toBe(false);
+    expect(source.setPeopleEnabled).not.toHaveBeenCalled();
+  });
+
+  it("shows the hints switch to a person with no briefing projects too", async () => {
+    createFakeBackend({ projects: [] });
+    renderPanel();
+    await screen.findByRole("heading", { name: "Tips from Shurik" });
+    expect(screen.getByRole("switch", { name: "Tips in the project chat" })).toBeChecked();
   });
 
   it("shows messages from people as off when that is what is stored", async () => {
@@ -383,6 +420,7 @@ describe("NotificationsPanel", () => {
       inAnyProject: true,
       mutedProjectIds: [],
       peopleEnabled: true,
+      hintsChatEnabled: true,
     });
     await loaded();
     expect(screen.queryByTestId("notifications-loading")).not.toBeInTheDocument();
@@ -463,6 +501,7 @@ describe("NotificationsPanel", () => {
       inAnyProject: true,
       mutedProjectIds: [],
       peopleEnabled: true,
+      hintsChatEnabled: true,
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(briefingSwitch()).not.toBeChecked();

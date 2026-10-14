@@ -4,20 +4,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
 import { resolveFirstMoveEntry, type ChipSeed } from "@/lib/ai-chip-attribution";
-import {
-  buildSidebarOpener,
-  isSidebarOpenerKillSwitchEnabled,
-  type OpenerLevel,
-} from "@/lib/ai-sidebar-opener";
-import {
-  localDayKey,
-  readOpenerState,
-  resolveOpenerLevel,
-  withFirstMove,
-  withShown,
-  writeOpenerState,
-} from "@/lib/ai-sidebar-opener-state";
+import { buildSidebarOpener, isSidebarOpenerKillSwitchEnabled } from "@/lib/ai-sidebar-opener";
 import { SidebarOpener, SidebarOpenerSkeleton } from "@/components/ai/SidebarOpener";
+import { ShurikHintCard } from "@/components/ai/ShurikHintCard";
+import { useShurikHintOfDay, useShurikHintRenderable } from "@/hooks/use-shurik-hint";
+import { profileFullName, shurikGreeting } from "@/lib/shurik-hints";
 import { getEventGroupTimestampMs } from "@/lib/event-activity-timestamp";
 import {
   Bot,
@@ -1960,14 +1951,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
         // Null before the opener shipped and whenever it was not on screen, which
         // is what keeps this one series comparable across the release boundary.
         opener_shown_id: openerShow?.id ?? null,
-        opener_level: openerShow?.level ?? null,
       });
-      if (openerShow) {
-        // Any first move counts, typed or clicked: the fade measures whether the
-        // block is useless, not whether its chips are (PRD section 5.2).
-        const userId = workspaceProfileId ?? "anonymous";
-        writeOpenerState(userId, withFirstMove(readOpenerState(userId)));
-      }
     }
 
     runAssistantForContent(content, userMsg.id, targetProjectId || undefined, userMsg.mode);
@@ -2393,12 +2377,11 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     messages.length === 0;
 
   /**
-   * One entry per appearance, carrying the project it belongs to: the level cannot
-   * change under the user mid-read, `ai_opener_shown` cannot fire twice for one
-   * appearance, and switching to another empty project mints a new one instead of
-   * reusing the previous project's id (audit finding 6).
+   * One entry per appearance, carrying the project it belongs to: `ai_opener_shown`
+   * cannot fire twice for one appearance, and switching to another empty project
+   * mints a new one instead of reusing the previous project's id (audit finding 6).
    */
-  const [openerShow, setOpenerShow] = useState<{ id: string; level: OpenerLevel; projectId: string } | null>(null);
+  const [openerShow, setOpenerShow] = useState<{ id: string; projectId: string } | null>(null);
 
   /**
    * True only while something is genuinely in flight. The skeleton is tied to THIS,
@@ -2415,10 +2398,8 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       ctxTasksState.isLoading);
 
   /**
-   * Nothing is asserted, recorded or reported until the data behind the signals has
-   * loaded. Only the task counts are gated because only task signals ship in v1
-   * (`V1_ENABLED_DOMAINS`); the estimate and procurement sources cannot yet say
-   * whether they have loaded, which is why their signals are out.
+   * Nothing is recorded or reported until the task counts the chip row is ordered by
+   * have loaded.
    */
   const openerReady = openerEligible && !openerDataLoading && openerContext !== null;
 
@@ -2437,23 +2418,13 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       return;
     }
     if (openerShow?.projectId === resolvedPermissionProjectId) return;
-    const userId = workspaceProfileId ?? "anonymous";
-    const stored = readOpenerState(userId);
-    // Level is read BEFORE this show is recorded, so the very first appearance is
-    // still L0 rather than being aged by itself.
     setOpenerShow({
       id: `opener-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      level: resolveOpenerLevel(stored),
       projectId: resolvedPermissionProjectId,
     });
-    writeOpenerState(userId, withShown(stored, localDayKey(new Date())));
-  }, [openerReady, openerShow, resolvedPermissionProjectId, workspaceProfileId]);
+  }, [openerReady, openerShow, resolvedPermissionProjectId]);
 
-  /**
-   * From the seam rather than from `ctx.user.role`, which is typed as a plain
-   * string: the role decides which signals may exist at all, so it should not
-   * reach the catalogue through a cast.
-   */
+  /** From the seam rather than from `ctx.user.role`, which is typed as a plain string. */
   const openerRole = useMemo(
     () => (seamForProjectCommit ? getProjectRole(seamForProjectCommit) : "viewer"),
     [seamForProjectCommit],
@@ -2465,14 +2436,17 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     if (!openerShow) return null;
     return buildSidebarOpener({
       ctx: openerContext,
-      role: openerRole,
-      level: openerShow.level,
       compact: isMobile,
       quotaExhausted: openerQuotaExhausted,
       clientReport: clientReportFromChat,
       t,
     });
-  }, [openerShow, openerContext, openerRole, isMobile, openerQuotaExhausted, clientReportFromChat, t]);
+  }, [openerShow, openerContext, isMobile, openerQuotaExhausted, clientReportFromChat, t]);
+
+  // ── Hint of the day (slice 8): one card over the project chat, picked by the server ──
+  const hintProjectId = isProjectContext && resolvedPermissionProjectId ? resolvedPermissionProjectId : null;
+  const { hint: hintOfDay, dismiss: dismissHintOfDay } = useShurikHintOfDay(hintProjectId);
+  const hintCardShown = useShurikHintRenderable(hintOfDay, hintProjectId);
 
   const openerReportedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -2483,7 +2457,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       project_id: resolvedPermissionProjectId,
       surface: "ai",
       opener_shown_id: openerShow.id,
-      opener_level: openerShow.level,
       signals: opener.signals.join(","),
       role: openerRole,
     });
@@ -3250,16 +3223,20 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     "bg-success/10", "bg-destructive/10",
   ];
 
+  // In a project chat the empty composer greets the person by the time of day and by name.
   const composerPlaceholder = learnMode
     ? t("ai.sidebar.composer.placeholderLearn")
     : photoConsult
       ? t("ai.sidebar.composer.placeholderConsult")
-      : t("ai.sidebar.composer.placeholderDefault");
+      : isProjectContext
+        ? shurikGreeting(t, new Date(), profileFullName(user))
+        : t("ai.sidebar.composer.placeholderDefault");
 
   const composerTextarea = (
     <Textarea
       ref={composerTextareaRef}
       placeholder={composerPlaceholder}
+      aria-label={t("ai.sidebar.composer.placeholderDefault")}
       className={cn(
         /* block + min-h-0: default Textarea uses flex; avoids flex row preventing autosized height growth */
         "block min-h-[38px] max-h-[220px] w-full resize-none border-0 bg-transparent px-1 py-2 text-body-sm shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-50",
@@ -3570,6 +3547,26 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                   hidden={showNotifications}
                   className={cn("flex-1 min-h-0 min-w-0 flex flex-col", showNotifications && "hidden")}
                 >
+                {/* The hint of the day stands under the tabs and does not scroll with the conversation. */}
+                {hintCardShown && hintOfDay && hintProjectId && (
+                  <div className="px-3 pt-2 shrink-0">
+                    <ShurikHintCard
+                      hint={hintOfDay}
+                      projectId={hintProjectId}
+                      onDismiss={dismissHintOfDay}
+                      onNavigate={(href) => {
+                        navigate(href);
+                        // On a phone the panel covers the page the button has just opened.
+                        if (isMobile) onCollapsedChange(true);
+                      }}
+                      onAsk={(question) => {
+                        chipSeedRef.current = null;
+                        setInputValue(question);
+                        composerTextareaRef.current?.focus();
+                      }}
+                    />
+                  </div>
+                )}
                 {/* === MAIN BODY === */}
                 <div className="flex-1 min-h-0 flex flex-col" style={{ width: "100%" }}>
                   {/* Inline filters */}
@@ -4013,6 +4010,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                         <SidebarOpener
                           opener={opener}
                           chipsDisabled={openerQuotaExhausted}
+                          hideLines={hintCardShown}
                           onSelect={(text, chipKey) => {
                             if (chipKey === CLIENT_REPORT_CHIP_KEY && clientReportFromChat) {
                               openClientReportDialog(resolvedPermissionProjectId);

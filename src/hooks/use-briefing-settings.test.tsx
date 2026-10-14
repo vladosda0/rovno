@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as briefingSettingsSource from "@/data/briefing-settings-source";
 import { briefingSettingsQueryKeys, useBriefingSettings } from "@/hooks/use-briefing-settings";
+import { shurikHintQueryKeys } from "@/hooks/use-shurik-hint";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 
 const SAVED: briefingSettingsSource.BriefingSettingsSnapshot = {
@@ -12,6 +13,7 @@ const SAVED: briefingSettingsSource.BriefingSettingsSnapshot = {
   inAnyProject: true,
   mutedProjectIds: [],
   peopleEnabled: true,
+  hintsChatEnabled: true,
 };
 
 function setup() {
@@ -26,6 +28,7 @@ function setup() {
     })),
     setProjectMuted: vi.fn(async () => {}),
     setPeopleEnabled: vi.fn(async () => {}),
+    setHintsChatEnabled: vi.fn(async () => {}),
   };
   vi.spyOn(briefingSettingsSource, "getBriefingSettingsSource").mockResolvedValue(source);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -36,7 +39,7 @@ function setup() {
   const view = mount();
   const cached = (profileId: string) =>
     queryClient.getQueryData<briefingSettingsSource.BriefingSettingsSnapshot>(briefingSettingsQueryKeys.snapshot(profileId));
-  return { source, view, mount, cached, finish: () => finish(), refuse: () => refuse(new Error("refused")) };
+  return { source, view, mount, cached, queryClient, finish: () => finish(), refuse: () => refuse(new Error("refused")) };
 }
 
 describe("useBriefingSettings", () => {
@@ -123,5 +126,36 @@ describe("useBriefingSettings", () => {
 
     await waitFor(() => expect(cached("profile-1")).toEqual(SAVED));
     expect(cached("profile-2")).toEqual(other);
+  });
+
+  describe("the hint card goes with the switch that silences it", () => {
+    const HINT = { day: "2026-10-15", hint_key: "T01", level: 1, params: {}, status: "active" };
+
+    it("drops the project's hint at once when the project is muted", async () => {
+      const { view, queryClient, source } = setup();
+      await waitFor(() => expect(view.result.current.snapshot).toBeDefined());
+      const muted = shurikHintQueryKeys.ofDay("profile-1", "p1", "2026-10-15");
+      const other = shurikHintQueryKeys.ofDay("profile-1", "p2", "2026-10-15");
+      queryClient.setQueryData(muted, HINT);
+      queryClient.setQueryData(other, HINT);
+
+      act(() => view.result.current.setProjectMuted("p1", true));
+
+      await waitFor(() => expect(queryClient.getQueryData(muted)).toBeNull());
+      expect(queryClient.getQueryData(other)).toEqual(HINT);
+      await waitFor(() => expect(source.setProjectMuted).toHaveBeenCalledWith("p1", true));
+      await waitFor(() => expect(queryClient.getQueryState(other)?.isInvalidated).toBe(true));
+    });
+
+    it("drops every hint at once when hints in the chat are switched off", async () => {
+      const { view, queryClient } = setup();
+      await waitFor(() => expect(view.result.current.snapshot).toBeDefined());
+      const key = shurikHintQueryKeys.ofDay("profile-1", "p2", "2026-10-15");
+      queryClient.setQueryData(key, HINT);
+
+      act(() => view.result.current.setHintsChatEnabled(false));
+
+      await waitFor(() => expect(queryClient.getQueryData(key)).toBeNull());
+    });
   });
 });

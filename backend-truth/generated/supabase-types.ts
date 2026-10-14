@@ -135,6 +135,8 @@ export type Database = {
           "telegram_enabled": boolean
           "telegram_quiet_night": boolean
           "people_enabled": boolean
+          "hints_chat_enabled": boolean
+          "hints_telegram_enabled": boolean
           }
           Insert: {
           "profile_id"?: string
@@ -150,6 +152,8 @@ export type Database = {
           "telegram_enabled"?: boolean
           "telegram_quiet_night"?: boolean
           "people_enabled"?: boolean
+          "hints_chat_enabled"?: boolean
+          "hints_telegram_enabled"?: boolean
           }
           Update: {
           "profile_id"?: string
@@ -165,6 +169,8 @@ export type Database = {
           "telegram_enabled"?: boolean
           "telegram_quiet_night"?: boolean
           "people_enabled"?: boolean
+          "hints_chat_enabled"?: boolean
+          "hints_telegram_enabled"?: boolean
           }
           Relationships: []
         }

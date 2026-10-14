@@ -53,7 +53,7 @@ function renderSidebar() {
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return screen.getByPlaceholderText("Ask Shurik...") as HTMLTextAreaElement;
+  return screen.getByLabelText("Ask Shurik...") as HTMLTextAreaElement;
 }
 
 describe("AISidebar client report chip", () => {

@@ -19,6 +19,15 @@ import type { ShurikMessage } from "@/types/entities";
 /** How long the first line of a new message stays next to Shurik. */
 export const SHURIK_PEEK_MS = 8000;
 
+const HINT_PEEK_DAY_KEY = "shurik-hint-peeked-day";
+
+/** `YYYY-MM-DD` on this device's clock. */
+function deviceDay(now: Date): string {
+  const m = `${now.getMonth() + 1}`.padStart(2, "0");
+  const d = `${now.getDate()}`.padStart(2, "0");
+  return `${now.getFullYear()}-${m}-${d}`;
+}
+
 /** Below this width (`md`) the hanging Shurik is not drawn, so nothing next to him would be seen. */
 const HANGING_SHURIK_MIN_WIDTH_PX = 768;
 
@@ -77,20 +86,52 @@ function useShurikPeek(messages: ShurikMessage[], enabled: boolean): ShurikPeek 
     : null;
 }
 
+/**
+ * The hint of the day next to Shurik for SHURIK_PEEK_MS: «Подсказка от Шурика» and the start of
+ * the text. Once a day on this device, whichever project it came from; never over a message line.
+ */
+function useShurikHintPeek(hintText: string | null, enabled: boolean): string | null {
+  const [shown, setShown] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !hintText || window.innerWidth < HANGING_SHURIK_MIN_WIDTH_PX) return;
+    const today = deviceDay(new Date());
+    try {
+      if (localStorage.getItem(HINT_PEEK_DAY_KEY) === today) return;
+      localStorage.setItem(HINT_PEEK_DAY_KEY, today);
+    } catch {
+      // Storage is unavailable: the line may show again on the next visit, which is the lesser harm.
+    }
+    setShown(hintText);
+  }, [enabled, hintText]);
+
+  useEffect(() => {
+    if (!shown) return;
+    const timer = setTimeout(() => setShown(null), SHURIK_PEEK_MS);
+    return () => clearTimeout(timer);
+  }, [shown]);
+
+  return shown;
+}
+
 interface ShurikFloatProps {
   /** Newest first. */
   messages: ShurikMessage[];
+  /** Today's hint in the project on screen, as text; null when there is none to show. */
+  hintText?: string | null;
   /** With a tab when the click is about messages; without one the panel opens where it was left. */
   onOpen: (tab?: ShurikPanelTab) => void;
 }
 
 /** Shurik hanging in the bottom-left corner while his panel is closed. Tablet width and up. */
-export function ShurikFloat({ messages, onOpen }: ShurikFloatProps) {
+export function ShurikFloat({ messages, hintText = null, onOpen }: ShurikFloatProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const documentVisible = useDocumentVisible();
   const unreadCount = countUnreadShurikMessages(messages);
   const peek = useShurikPeek(messages, documentVisible && !isMobile);
+  // A message line goes first; the hint waits for a moment when nothing else is said.
+  const hintPeek = useShurikHintPeek(hintText, documentVisible && !isMobile && peek === null);
   const moneyPeek = peek !== null && isMoneyShurikMessage(peek.message);
   // A message about a person names its project in the first line; what was done is in the text.
   const peopleText = peek !== null && isPeopleShurikMessage(peek.message)
@@ -135,6 +176,17 @@ export function ShurikFloat({ messages, onOpen }: ShurikFloatProps) {
               </span>
             </>
           )}
+        </button>
+      )}
+      {!peek && hintPeek && (
+        <button
+          type="button"
+          data-testid="shurik-hint-peek"
+          onClick={() => onOpen("chat")}
+          className="fixed bottom-9 left-[84px] z-30 hidden max-w-[200px] rounded-xl rounded-bl-[4px] border border-border bg-card px-2.5 py-1.5 text-left text-[11px] leading-snug text-foreground shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:block"
+        >
+          <span className="block font-semibold">{t("shurikHints.peekTitle")}</span>
+          <span className="line-clamp-2 [overflow-wrap:anywhere]">{hintPeek}</span>
         </button>
       )}
     </>

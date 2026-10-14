@@ -4,6 +4,7 @@ import {
   type BriefingSettings,
   type BriefingSettingsSnapshot,
 } from "@/data/briefing-settings-source";
+import { shurikHintQueryKeys } from "@/hooks/use-shurik-hint";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 
 const BRIEFING_SETTINGS_STALE_TIME_MS = 60_000;
@@ -14,6 +15,8 @@ export const briefingSettingsQueryKeys = {
 
 type BriefingSettingsChange = {
   apply: (snapshot: BriefingSettingsSnapshot) => BriefingSettingsSnapshot;
+  /** Hint cards this change switches off at once: one project's, or all of them. */
+  hidesHints?: { projectId: string } | "all";
   send: (source: Awaited<ReturnType<typeof getBriefingSettingsSource>>) => Promise<void>;
 };
 
@@ -30,6 +33,7 @@ export function useBriefingSettings(onSaveError: () => void): {
   saveSettings: (patch: Partial<BriefingSettings>) => void;
   setProjectMuted: (projectId: string, muted: boolean) => void;
   setPeopleEnabled: (enabled: boolean) => void;
+  setHintsChatEnabled: (enabled: boolean) => void;
 } {
   const mode = useWorkspaceMode();
   const queryClient = useQueryClient();
@@ -57,6 +61,13 @@ export function useBriefingSettings(onSaveError: () => void): {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<BriefingSettingsSnapshot>(queryKey);
       if (previous) queryClient.setQueryData(queryKey, change.apply(previous));
+      if (change.hidesHints) {
+        const hintKey = change.hidesHints === "all"
+          ? shurikHintQueryKeys.all
+          : shurikHintQueryKeys.project(queryKey[1], change.hidesHints.projectId);
+        await queryClient.cancelQueries({ queryKey: hintKey });
+        queryClient.setQueriesData({ queryKey: hintKey }, null);
+      }
       // The key travels with the write: by the time it is answered another person may be signed in.
       return { previous, queryKey };
     },
@@ -66,6 +77,7 @@ export function useBriefingSettings(onSaveError: () => void): {
     },
     onSettled: (_data, _error, _change, context) => {
       void queryClient.invalidateQueries({ queryKey: context?.queryKey ?? queryKey });
+      void queryClient.invalidateQueries({ queryKey: shurikHintQueryKeys.all });
     },
   });
 
@@ -91,12 +103,19 @@ export function useBriefingSettings(onSaveError: () => void): {
           const others = snapshot.mutedProjectIds.filter((id) => id !== projectId);
           return { ...snapshot, mutedProjectIds: muted ? [...others, projectId] : others };
         },
+        hidesHints: muted ? { projectId } : undefined,
         send: (source) => source.setProjectMuted(projectId, muted),
       }),
     setPeopleEnabled: (enabled) =>
       run({
         apply: (snapshot) => ({ ...snapshot, peopleEnabled: enabled }),
         send: (source) => source.setPeopleEnabled(enabled),
+      }),
+    setHintsChatEnabled: (enabled) =>
+      run({
+        apply: (snapshot) => ({ ...snapshot, hintsChatEnabled: enabled }),
+        hidesHints: enabled ? undefined : "all",
+        send: (source) => source.setHintsChatEnabled(enabled),
       }),
   };
 }

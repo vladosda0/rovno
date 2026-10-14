@@ -7,6 +7,8 @@ interface SidebarOpenerProps {
   onSelect: (text: string, chipKey: string) => void;
   /** Quota exhausted: the text stays, the chips stop being offers. */
   chipsDisabled?: boolean;
+  /** The hint card of the day is on screen and speaks for Shurik; the neutral line steps aside. */
+  hideLines?: boolean;
 }
 
 /**
@@ -29,18 +31,12 @@ export function SidebarOpenerSkeleton() {
 /**
  * Presentational only. What to say is decided by `buildSidebarOpener`; this renders it.
  *
- * Deliberately borderless (PRD section 8): a card would give visual weight to a block
- * whose whole design is to fade and get out of the way.
+ * Deliberately borderless (PRD section 8): the card with weight is the hint of the day above it.
  */
-export function SidebarOpener({ opener, onSelect, chipsDisabled = false }: SidebarOpenerProps) {
+export function SidebarOpener({ opener, onSelect, chipsDisabled = false, hideLines = false }: SidebarOpenerProps) {
   return (
     <div className="w-full min-w-0 space-y-2 px-1 pb-1 animate-in fade-in duration-200 motion-reduce:animate-none">
-      {opener.headline && (
-        <p className="text-caption font-medium text-foreground">{opener.headline}</p>
-      )}
-      {opener.intro && <p className="text-caption text-muted-foreground">{opener.intro}</p>}
-
-      {opener.lines.map((line) => (
+      {!hideLines && opener.lines.map((line) => (
         <p key={line} className="text-caption text-muted-foreground">
           {line}
         </p>
