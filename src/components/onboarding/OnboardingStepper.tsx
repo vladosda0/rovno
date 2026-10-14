@@ -18,6 +18,7 @@ import { trackEvent } from "@/lib/analytics";
 import { captureException } from "@/lib/observability/sentry";
 import { type AppLanguage, getActiveLanguage, setAppLanguage } from "@/i18n";
 import { GenderChoice, type GenderChoiceValue } from "@/components/settings/GenderChoice";
+import { requestProfileGenderHint } from "@/data/profile-gender-hint-source";
 
 const MAX_ONBOARDING_STAGES = 5;
 
@@ -178,6 +179,12 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
           resolvedMode.kind === "supabase" ? resolvedMode.profileId : resolvedMode.kind,
         ),
       });
+    }
+
+    // This step showed the field, so Shurik's hint about it must not follow. Best effort: a new
+    // profile is already recorded as asked on the server; this covers an older one.
+    if (resolvedMode.kind === "supabase") {
+      void requestProfileGenderHint(resolvedMode.profileId, { onboarding: true }).catch(() => {});
     }
 
     // Two tables, two writes: one failing must not skip the other.

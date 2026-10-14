@@ -11,6 +11,7 @@ import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import { subscribePhotoConsult } from "@/lib/photo-consult-store";
 import { useBrowserTimezoneSync } from "@/hooks/use-browser-timezone-sync";
+import { useProfileGenderHint } from "@/hooks/use-profile-gender-hint";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useShurikMessages, useShurikMessagesLiveUpdates } from "@/hooks/use-shurik-messages";
 import { setAnalyticsUserId } from "@/lib/analytics";
@@ -47,6 +48,7 @@ export default function AppLayout() {
   const location = useLocation();
   useShurikMessagesLiveUpdates();
   useBrowserTimezoneSync();
+  useProfileGenderHint();
   const { messages: shurikMessages, unreadCount: shurikUnreadCount, markRead: markShurikMessagesRead } = useShurikMessages();
   // The page the notifications panel was opened over. It is open only while that is still the
   // page: any navigation, a query string or a trip into a project included, closes it.
