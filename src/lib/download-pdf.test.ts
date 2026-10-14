@@ -16,7 +16,14 @@ const { html2canvasMock, addImage, addPage, save, jsPDFMock } = vi.hoisted(() =>
 vi.mock("html2canvas", () => ({ default: html2canvasMock }));
 vi.mock("jspdf", () => ({ jsPDF: jsPDFMock }));
 
-import { chooseCanvasScale, downloadNodeAsPdf, planPageBreaks, toPdfFileName } from "@/lib/download-pdf";
+import {
+  chooseCanvasScale,
+  downloadNodeAsPdf,
+  downloadSheetsAsPdf,
+  planPageBreaks,
+  planSheetSlices,
+  toPdfFileName,
+} from "@/lib/download-pdf";
 
 function fakeCanvas(width: number, height: number) {
   return { width, height, toDataURL: vi.fn(() => "data:image/jpeg;base64,AAAA") };
@@ -266,5 +273,106 @@ describe("toPdfFileName", () => {
     expect(toPdfFileName("Ленина 42 · отчёт 9–13 октября")).toBe("Ленина 42 · отчёт 9–13 октября.pdf");
     expect(toPdfFileName("a/b: c?.pdf")).toBe("a b c .pdf");
     expect(toPdfFileName("  ")).toBe("document.pdf");
+  });
+});
+
+describe("downloadSheetsAsPdf", () => {
+  let printSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    html2canvasMock.mockReset();
+    jsPDFMock.mockClear();
+    addImage.mockReset();
+    addPage.mockReset();
+    save.mockReset();
+    printSpy = vi.fn();
+    vi.stubGlobal("print", printSpy);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("puts each sheet on a page of its own, edge to edge, in the given orientation", async () => {
+    const first = document.createElement("div");
+    const second = document.createElement("div");
+    html2canvasMock.mockResolvedValue(fakeCanvas(2245, 1587));
+
+    await downloadSheetsAsPdf([first, second], { fileName: "Смета · Ленина 42", orientation: "landscape" });
+
+    expect(jsPDFMock).toHaveBeenCalledWith({ unit: "mm", format: "a4", orientation: "landscape" });
+    expect(html2canvasMock).toHaveBeenCalledTimes(2);
+    expect(html2canvasMock).toHaveBeenNthCalledWith(1, first, expect.objectContaining({ useCORS: true }));
+    expect(html2canvasMock).toHaveBeenNthCalledWith(2, second, expect.objectContaining({ useCORS: true }));
+    expect(addImage).toHaveBeenCalledTimes(2);
+    expect(addImage).toHaveBeenNthCalledWith(1, "data:image/jpeg;base64,AAAA", "JPEG", 0, 0, 297, 210);
+    expect(addPage).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith("Смета · Ленина 42.pdf");
+    expect(printSpy).not.toHaveBeenCalled();
+  });
+
+  it("uses portrait A4 for portrait sheets", async () => {
+    html2canvasMock.mockResolvedValue(fakeCanvas(1587, 2245));
+
+    await downloadSheetsAsPdf([document.createElement("div")], { fileName: "x", orientation: "portrait" });
+
+    expect(jsPDFMock).toHaveBeenCalledWith({ unit: "mm", format: "a4", orientation: "portrait" });
+    expect(addImage).toHaveBeenCalledWith("data:image/jpeg;base64,AAAA", "JPEG", 0, 0, 210, 297);
+    expect(addPage).not.toHaveBeenCalled();
+  });
+
+  it("continues a sheet taller than A4 on the next page instead of squeezing it", async () => {
+    // 210 mm across 2100 px: 10 px per mm, a page is 2970 px, the sheet two pages.
+    html2canvasMock.mockResolvedValue(fakeCanvas(2100, 5940));
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage,
+      fillRect: vi.fn(),
+      fillStyle: "",
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/jpeg;base64,PAGE");
+
+    await downloadSheetsAsPdf([document.createElement("div")], {
+      fileName: "x",
+      orientation: "portrait",
+      marginYMm: 10,
+    });
+
+    // 100 px of margin: page 1 holds rows 0-2870, page 2 rows 2870-5640 under
+    // a 10 mm top margin, page 3 the rest with the sheet's own bottom margin.
+    expect(drawImage.mock.calls.map((call) => [call[2], call[4]])).toEqual([[0, 2870], [2870, 2770], [5640, 300]]);
+    expect(addImage).toHaveBeenCalledTimes(3);
+    expect(addImage).toHaveBeenNthCalledWith(1, expect.any(String), "JPEG", 0, 0, 210, 287);
+    expect(addImage).toHaveBeenNthCalledWith(2, expect.any(String), "JPEG", 0, 10, 210, 277);
+    expect(addImage).toHaveBeenNthCalledWith(3, expect.any(String), "JPEG", 0, 10, 210, 30);
+    expect(addPage).toHaveBeenCalledTimes(2);
+  });
+
+  it("lowers the drawing scale for a sheet too large for one canvas", async () => {
+    html2canvasMock.mockResolvedValue(fakeCanvas(1588, 2246));
+    const sheet = document.createElement("div");
+    vi.spyOn(sheet, "getBoundingClientRect").mockReturnValue({ width: 794, height: 20_000 } as DOMRect);
+
+    await downloadSheetsAsPdf([sheet], { fileName: "x", orientation: "portrait" });
+
+    expect(html2canvasMock.mock.calls[0][1].scale).toBeLessThan(2);
+  });
+
+  it("refuses an empty list instead of saving a blank file", async () => {
+    await expect(downloadSheetsAsPdf([], { fileName: "x", orientation: "portrait" })).rejects.toThrow();
+    expect(save).not.toHaveBeenCalled();
+  });
+});
+
+describe("planSheetSlices", () => {
+  it("does not cut through a row: the cut moves up to the row's top", () => {
+    const slices = planSheetSlices(5000, 3000, 100, [{ top: 2850, bottom: 2950 }]);
+    expect(slices[0]).toEqual({ top: 0, bottom: 2850 });
+    expect(slices[1].top).toBe(2850);
+  });
+
+  it("keeps a sheet that fits as one piece", () => {
+    expect(planSheetSlices(3000, 3000, 100, [])).toEqual([{ top: 0, bottom: 3000 }]);
   });
 });

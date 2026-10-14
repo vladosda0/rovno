@@ -213,3 +213,96 @@ export async function downloadNodeAsPdf(node: HTMLElement, options: DownloadPdfO
 
   pdf.save(toPdfFileName(options.fileName));
 }
+
+export interface DownloadSheetsOptions {
+  /** File name; ".pdf" is added when missing. */
+  fileName: string;
+  orientation: "portrait" | "landscape";
+  /** Canvas pixels per CSS pixel. */
+  scale?: number;
+  /** Top and bottom margin the sheets carry, kept on continuation pages. */
+  marginYMm?: number;
+}
+
+/**
+ * Where a sheet taller than a page is cut, in canvas rows. The first page
+ * keeps the sheet's own top margin, every next one gets `marginPx` at the top
+ * and the bottom; a cut through a keep-together span moves up to its top.
+ */
+export function planSheetSlices(totalHeight: number, pageHeightPx: number, marginPx: number, spans: Span[]): Span[] {
+  const slices: Span[] = [];
+  let start = 0;
+  while (start < totalHeight) {
+    const first = slices.length === 0;
+    // The last piece still carries the sheet's own bottom margin.
+    const room = first ? pageHeightPx : pageHeightPx - marginPx;
+    if (totalHeight - start <= room) {
+      slices.push({ top: start, bottom: totalHeight });
+      break;
+    }
+    const capacity = Math.max(1, first ? pageHeightPx - marginPx : pageHeightPx - marginPx * 2);
+    let end = start + capacity;
+    const cut = spans
+      .filter((span) => span.top < end && span.bottom > end && span.top > start)
+      .reduce((lowest, span) => Math.min(lowest, span.top), end);
+    end = Math.floor(cut);
+    if (end <= start) end = start + capacity;
+    slices.push({ top: start, bottom: end });
+    start = end;
+  }
+  return slices;
+}
+
+/**
+ * Save already paginated A4 sheets as a PDF, one sheet per page, edge to edge:
+ * each sheet carries its own margins. Used where the page layout is computed
+ * on screen (the estimate export), so the file matches the preview.
+ */
+export async function downloadSheetsAsPdf(sheets: HTMLElement[], options: DownloadSheetsOptions): Promise<void> {
+  if (sheets.length === 0) throw new Error("downloadSheetsAsPdf: no sheets");
+  const landscape = options.orientation === "landscape";
+  const pageWidthMm = landscape ? A4_HEIGHT_MM : A4_WIDTH_MM;
+  const pageHeightMm = landscape ? A4_WIDTH_MM : A4_HEIGHT_MM;
+
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: options.orientation });
+  let pages = 0;
+  for (const sheet of sheets) {
+    await waitForImages(sheet, DEFAULT_IMAGE_TIMEOUT_MS);
+    const box = sheet.getBoundingClientRect();
+    const canvas = await html2canvas(sheet, {
+      scale: chooseCanvasScale(box.width, box.height, options.scale ?? DEFAULT_SCALE),
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+    });
+    if (canvas.width === 0 || canvas.height === 0) {
+      throw new Error("downloadSheetsAsPdf: a sheet has no size");
+    }
+    const pxPerMm = canvas.width / pageWidthMm;
+    const pageHeightPx = Math.floor(pageHeightMm * pxPerMm);
+    if (canvas.height <= pageHeightPx + 1) {
+      if (pages > 0) pdf.addPage();
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageWidthMm, pageHeightMm);
+      pages += 1;
+      continue;
+    }
+    // A sheet taller than A4 (one block bigger than a page) continues on the
+    // next pages at the same scale instead of being squeezed onto one.
+    const marginMm = options.marginYMm ?? DEFAULT_MARGIN_MM;
+    const pxPerCssPx = box.width > 0 ? canvas.width / box.width : 1;
+    const spans = measureLayout(sheet, DEFAULT_KEEP_SELECTOR).spans.map((span) => ({
+      top: span.top * pxPerCssPx,
+      bottom: span.bottom * pxPerCssPx,
+    }));
+    const pieces = planSheetSlices(canvas.height, pageHeightPx, Math.round(marginMm * pxPerMm), spans);
+    pieces.forEach((piece, index) => {
+      if (pages > 0) pdf.addPage();
+      const page = slice(canvas, piece.top, piece.bottom - piece.top);
+      const y = index === 0 ? 0 : marginMm;
+      pdf.addImage(page.toDataURL("image/jpeg", 0.92), "JPEG", 0, y, pageWidthMm, (piece.bottom - piece.top) / pxPerMm);
+      pages += 1;
+    });
+  }
+  pdf.save(toPdfFileName(options.fileName));
+}
