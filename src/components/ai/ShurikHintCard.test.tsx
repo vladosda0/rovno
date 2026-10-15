@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import i18n from "@/i18n";
 import { ShurikHintCard } from "@/components/ai/ShurikHintCard";
 import type { ShurikHintOfDay } from "@/lib/shurik-hints";
 
@@ -21,6 +22,8 @@ function renderCard(value: ShurikHintOfDay) {
 }
 
 describe("ShurikHintCard", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("draws the server's hint with the names from params and one button to the place", () => {
     const { onNavigate } = renderCard(hint());
     const card = screen.getByTestId("shurik-hint-card");
@@ -54,5 +57,17 @@ describe("ShurikHintCard", () => {
   it("draws nothing for a hint this app has no address for", () => {
     renderCard(hint({ hint_key: "T05" }));
     expect(screen.queryByTestId("shurik-hint-card")).not.toBeInTheDocument();
+  });
+
+  it("draws nothing, never a raw key, when the app has an address but no words for the hint", () => {
+    for (const missing of ["shurikHints.T20.text", "shurikHints.T20.button"]) {
+      const exists = i18n.exists.bind(i18n);
+      vi.spyOn(i18n, "exists").mockImplementation((key, options) => key !== missing && exists(key, options));
+      const view = render(<ShurikHintCard hint={hint()} projectId="p1" onNavigate={vi.fn()} onAsk={vi.fn()} onDismiss={vi.fn()} />);
+      expect(screen.queryByTestId("shurik-hint-card"), missing).not.toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent("shurikHints.");
+      view.unmount();
+      vi.restoreAllMocks();
+    }
   });
 });

@@ -7,6 +7,8 @@
  * never send a person somewhere the code does not know.
  */
 
+import { CLIENT_REPORT_QUERY_PARAM, CLIENT_REPORT_QUERY_VALUE } from "@/lib/client-report-dialog";
+
 export type ShurikHintStatus = "active" | "done" | "dismissed";
 
 export type ShurikHintParams = Record<string, string | number | null | undefined>;
@@ -33,11 +35,23 @@ type HintTarget =
   | { kind: "procurementOrder" }
   | { kind: "procurement" }
   | { kind: "home"; query: string }
+  | { kind: "page"; path: string }
+  | { kind: "app"; href: string }
   | { kind: "ask"; questionKey: string };
 
+const CONTRACTS: HintTarget = { kind: "page", path: "hr" };
+const PARTICIPANTS: HintTarget = { kind: "page", path: "participants" };
+const CLIENT_REPORT: HintTarget = { kind: "page", path: `dashboard?${CLIENT_REPORT_QUERY_PARAM}=${CLIENT_REPORT_QUERY_VALUE}` };
+const DASHBOARD: HintTarget = { kind: "page", path: "dashboard" };
+const DOCUMENTS: HintTarget = { kind: "page", path: "documents" };
+const GALLERY: HintTarget = { kind: "page", path: "gallery" };
+const NOTIFICATION_SETTINGS: HintTarget = { kind: "app", href: "/settings?tab=notifications" };
+const PROFILE_SETTINGS: HintTarget = { kind: "app", href: "/settings?tab=profile" };
+
 /**
- * One line per hint of the first release (T01-T40 without T05 and T21, which wait for their own
- * tasks). A hint key the server sends but this table does not know draws no card: a newer
+ * One line per hint the server can pick: T01-T40 without T05 and T21, the built part of T41-T84,
+ * «Знаешь ли ты» (K) and «Для наблюдателя» (N). A page without a deep link to the exact place
+ * opens at its root. A hint key the server sends but this table does not know draws no card: a newer
  * database must not put a card with a dead button in front of an older app.
  */
 const HINT_TARGETS: Record<string, HintTarget> = {
@@ -79,10 +93,46 @@ const HINT_TARGETS: Record<string, HintTarget> = {
   T38: { kind: "procurement" },
   T39: { kind: "procurement" },
   T40: { kind: "procurementOrder" },
-  // "Ask Shurik" hints of part 2 that reuse an existing chat question. Their texts arrive with
-  // part 2; until then `hasShurikHintText` keeps their card off the screen.
+  T41: CONTRACTS,
+  T42: CONTRACTS,
+  T43: CONTRACTS,
+  T44: CONTRACTS,
+  T47: PARTICIPANTS,
+  T48: PARTICIPANTS,
+  T50: PARTICIPANTS,
+  T51: PARTICIPANTS,
+  T52: CLIENT_REPORT,
+  T53: CLIENT_REPORT,
+  T55: CLIENT_REPORT,
+  T56: DOCUMENTS,
+  T60: DOCUMENTS,
+  T61: DOCUMENTS,
+  T62: GALLERY,
+  T63: GALLERY,
+  T64: GALLERY,
+  T67: NOTIFICATION_SETTINGS,
+  T69: NOTIFICATION_SETTINGS,
+  T71: PROFILE_SETTINGS,
+  T72: PROFILE_SETTINGS,
+  T73: PROFILE_SETTINGS,
   T82: { kind: "ask", questionKey: "ai.sidebar.suggestion.whatBlocksTasks" },
   T83: { kind: "ask", questionKey: "ai.sidebar.suggestion.whatIsLeft" },
+  T84: CLIENT_REPORT,
+  K01: { kind: "estimate" },
+  K02: { kind: "estimate" },
+  K03: { kind: "estimate" },
+  K04: { kind: "estimate" },
+  K05: { kind: "tasks" },
+  K06: { kind: "tasks" },
+  K09: DASHBOARD,
+  K10: PARTICIPANTS,
+  K11: { kind: "app", href: "/home" },
+  N01: DASHBOARD,
+  N02: GALLERY,
+  N03: { kind: "estimate" },
+  N04: { kind: "tasks" },
+  N05: { kind: "procurement" },
+  N06: DOCUMENTS,
 };
 
 function paramString(params: ShurikHintParams, key: string): string | null {
@@ -126,9 +176,24 @@ export function resolveShurikHintAction(
       return { kind: "navigate", href: `${project}/procurement` };
     case "home":
       return { kind: "navigate", href: `/home?${target.query}` };
+    case "page":
+      return { kind: "navigate", href: `${project}/${target.path}` };
+    case "app":
+      return { kind: "navigate", href: target.href };
     case "ask":
       return { kind: "ask", questionKey: target.questionKey };
   }
+}
+
+/** Every hint key this app can draw: the server may pick only from these and still get a card. */
+export const SHURIK_HINT_KEYS: readonly string[] = Object.keys(HINT_TARGETS);
+
+/**
+ * Whether the locales have both the text and the button of a hint. Without them the card would
+ * show the bare key, so it is not drawn at all.
+ */
+export function hasShurikHintWords(exists: (key: string) => boolean, hintKey: string): boolean {
+  return exists(shurikHintTextKey(hintKey)) && exists(shurikHintButtonKey(hintKey));
 }
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -150,8 +215,14 @@ export function shurikHintTextValues(params: ShurikHintParams, language: string)
     }
     values[key] = value;
   }
-  // `days` drives the plural form of a text that names it («3 дня назад»).
+  // `days` and `tasks_left` drive the plural form of a text that names them («3 дня назад»).
   if (values.count === undefined && typeof values.days === "number") values.count = values.days;
+  if (values.count === undefined && typeof values.tasks_left === "number") values.count = values.tasks_left;
+  // A photo may have no caption: the text then speaks of "a photo" instead of quoting an empty name.
+  if ("caption" in (params ?? {}) && paramString(params, "caption") === null) {
+    delete values.caption;
+    values.context = "noCaption";
+  }
   return values;
 }
 

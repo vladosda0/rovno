@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import i18n from "@/i18n";
 import {
+  SHURIK_HINT_KEYS,
   resolveShurikHintAction,
   shurikGreeting,
   shurikGreetingName,
@@ -16,6 +18,15 @@ const en = enLocale as Record<string, string>;
 const FIRST_RELEASE = Array.from({ length: 40 }, (_, i) => `T${String(i + 1).padStart(2, "0")}`).filter(
   (key) => key !== "T05" && key !== "T21",
 );
+
+// What shurik_hint_candidates_t41_t84() and shurik_hint_candidates_k_n() of rovno-db emit (8.4, 8.5).
+const SECOND_PART = [
+  "T41", "T42", "T43", "T44", "T47", "T48", "T50", "T51", "T52", "T53", "T55", "T56",
+  "T60", "T61", "T62", "T63", "T64", "T67", "T69", "T71", "T72", "T73", "T82", "T83", "T84",
+  "K01", "K02", "K03", "K04", "K05", "K06", "K09", "K10", "K11",
+  "N01", "N02", "N03", "N04", "N05", "N06",
+];
+const ALL_HINTS = [...FIRST_RELEASE, ...SECOND_PART];
 
 describe("button address by hint key", () => {
   it("opens the task named in params", () => {
@@ -74,8 +85,40 @@ describe("button address by hint key", () => {
     expect(ru["shurikHints.T21.text"]).toBeUndefined();
   });
 
+  it("knows exactly the hints the database can pick, each with words in both languages", () => {
+    expect([...SHURIK_HINT_KEYS].sort()).toEqual([...ALL_HINTS].sort());
+    for (const key of SECOND_PART) {
+      expect(resolveShurikHintAction({ hint_key: key, params: {} }, "p1"), key).not.toBeNull();
+      for (const locale of [ru, en]) {
+        expect(locale[`shurikHints.${key}.text`], `${key}.text`).toBeTruthy();
+        expect(locale[`shurikHints.${key}.button`], `${key}.button`).toBeTruthy();
+      }
+    }
+  });
+
+  it("leads the second part's buttons to their pages", () => {
+    const href = (key: string) => {
+      const action = resolveShurikHintAction({ hint_key: key, params: {} }, "p1");
+      return action?.kind === "navigate" ? action.href : action?.kind;
+    };
+    expect(href("T41")).toBe("/project/p1/hr");
+    expect(href("T47")).toBe("/project/p1/participants");
+    expect(href("T52")).toBe("/project/p1/dashboard?report=client");
+    expect(href("T84")).toBe("/project/p1/dashboard?report=client");
+    expect(href("T56")).toBe("/project/p1/documents");
+    expect(href("T63")).toBe("/project/p1/gallery");
+    expect(href("T67")).toBe("/settings?tab=notifications");
+    expect(href("T71")).toBe("/settings?tab=profile");
+    expect(href("K01")).toBe("/project/p1/estimate");
+    expect(href("K05")).toBe("/project/p1/tasks");
+    expect(href("K09")).toBe("/project/p1/dashboard");
+    expect(href("K11")).toBe("/home");
+    expect(href("N05")).toBe("/project/p1/procurement");
+    expect(href("T83")).toBe("ask");
+  });
+
   it("says «Установи», never «Поставь»", () => {
-    for (const key of FIRST_RELEASE) {
+    for (const key of ALL_HINTS) {
       expect(ru[`shurikHints.${key}.text`]).not.toMatch(/Поставь/);
       expect(ru[`shurikHints.${key}.button`]).not.toMatch(/Поставить/);
     }
@@ -92,6 +135,36 @@ describe("text values", () => {
 
   it("lets the number of days choose the plural form", () => {
     expect(shurikHintTextValues({ days: 3 }, "ru")).toMatchObject({ days: 3, count: 3 });
+  });
+});
+
+describe("second part texts", () => {
+  const ruT = i18n.getFixedT("ru");
+
+  it("names the one item from params", () => {
+    expect(ruT("shurikHints.T42.text", shurikHintTextValues({ hr_item_id: "h1", hr_item_title: "Электрика, кухня" }, "ru"))).toBe(
+      "По подряду «Электрика, кухня» записана только часть суммы. Когда рассчитаешься полностью, добавь остаток, и статус станет «Оплачено».",
+    );
+    expect(ruT("shurikHints.T47.text", shurikHintTextValues({ invite_id: "i1", email: "ivan@example.ru" }, "ru"))).toContain(
+      "Приглашение для ivan@example.ru ждёт ответа",
+    );
+  });
+
+  it("counts the tasks left in the right form", () => {
+    const text = (left: number) => ruT("shurikHints.T83.text", shurikHintTextValues({ tasks_left: left, tasks_total: 12 }, "ru"));
+    expect(text(3)).toContain("осталось 3 задачи из 12");
+    expect(text(5)).toContain("осталось 5 задач из 12");
+    expect(text(21)).toContain("осталась 21 задача из 12");
+  });
+
+  it("speaks of a photo without quoting an empty caption", () => {
+    for (const caption of [null, ""]) {
+      const text = ruT("shurikHints.T63.text", shurikHintTextValues({ media_id: "m1", caption }, "ru"));
+      expect(text).toBe("Одно из фото не привязано к задаче. Привяжи его, и в задаче будет видно, как продвигалась работа.");
+    }
+    expect(ruT("shurikHints.T64.text", shurikHintTextValues({ media_id: "m1", caption: "Кухня, северная стена" }, "ru"))).toBe(
+      "Фото «Кухня, северная стена» внутреннее, клиент его не увидит. Если хочешь показать ход работ, открой его.",
+    );
   });
 });
 

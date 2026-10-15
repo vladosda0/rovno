@@ -21,6 +21,8 @@ const JOB_TITLE_KEYS = [
   "participants.preview.ai",
   "participants.axisHelp.ai.none",
   "pricing.allIncluded.f2",
+  // The hint quotes the permission label «Шурик (ИИ-помощник)» the person has to find.
+  "shurikHints.T51.text",
 ];
 
 describe("the assistant is called Shurik", () => {
@@ -198,6 +200,7 @@ const TECHNOLOGY_KEYS = [
   "participants.axisHelp.ai.none",
   "participants.axisHelp.ai.consult_only",
   "participants.axisHelp.ai.project_pool",
+  "shurikHints.T51.text",
 ];
 
 /** English labels of the assisted mode that had no AI in them to begin with. */

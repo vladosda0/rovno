@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { dismissShurikHint, fetchShurikHintOfDay } from "@/data/shurik-hint-source";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
-import { resolveShurikHintAction, shurikHintTextKey, type ShurikHintOfDay } from "@/lib/shurik-hints";
+import { hasShurikHintWords, resolveShurikHintAction, type ShurikHintOfDay } from "@/lib/shurik-hints";
 
 /** Short enough that "Сделано" appears soon after the person did the thing on another screen. */
 const SHURIK_HINT_STALE_TIME_MS = 2 * 60_000;
@@ -72,5 +72,5 @@ export function useShurikHintOfDay(projectId: string | null | undefined): {
 export function useShurikHintRenderable(hint: ShurikHintOfDay | null, projectId: string | null | undefined): boolean {
   const { i18n } = useTranslation();
   if (!hint || !projectId) return false;
-  return i18n.exists(shurikHintTextKey(hint.hint_key)) && resolveShurikHintAction(hint, projectId) !== null;
+  return hasShurikHintWords((key) => i18n.exists(key), hint.hint_key) && resolveShurikHintAction(hint, projectId) !== null;
 }

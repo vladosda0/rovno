@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ShurikBubble } from "@/components/ai/ShurikBubble";
 import { Button } from "@/components/ui/button";
 import {
+  hasShurikHintWords,
   resolveShurikHintAction,
   shurikHintButtonKey,
   shurikHintTextKey,
@@ -29,7 +30,7 @@ interface ShurikHintCardProps {
 export function ShurikHintCard({ hint, projectId, onNavigate, onAsk, onDismiss }: ShurikHintCardProps) {
   const { t, i18n } = useTranslation();
   const action = resolveShurikHintAction(hint, projectId);
-  if (!action) return null;
+  if (!action || !hasShurikHintWords((key) => i18n.exists(key), hint.hint_key)) return null;
   const text = t(shurikHintTextKey(hint.hint_key), shurikHintTextValues(hint.params, i18n.language));
   const done = hint.status === "done";
 
