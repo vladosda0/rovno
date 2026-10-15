@@ -4,6 +4,8 @@ import i18n from "@/i18n";
 import { ShurikHintCard } from "@/components/ai/ShurikHintCard";
 import type { ShurikHintOfDay } from "@/lib/shurik-hints";
 
+vi.mock("@/data/messenger-links", () => ({ TELEGRAM_BOT_USERNAME: "rovno_test_bot" }));
+
 function hint(partial: Partial<ShurikHintOfDay> = {}): ShurikHintOfDay {
   return {
     day: "2026-10-15",
@@ -33,6 +35,15 @@ describe("ShurikHintCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Set deadline" }));
     expect(onNavigate).toHaveBeenCalledWith("/project/p1/tasks?task=t-1");
+  });
+
+  it("opens the bot in Telegram in a new tab instead of moving the app", () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    const { onNavigate } = renderCard(hint({ hint_key: "K07", level: 4, params: {} }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Telegram" }));
+    expect(open).toHaveBeenCalledWith("https://t.me/rovno_test_bot", "_blank", "noopener,noreferrer");
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 
   it("closes until tomorrow with the cross", () => {

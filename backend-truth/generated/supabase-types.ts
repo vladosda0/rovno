@@ -610,6 +610,7 @@ export type Database = {
           "projection_seq": number
           "projection_synced_at": string | null
           "projection_actor": string | null
+          "execution_status_since": string | null
           }
           Insert: {
           "id"?: string
@@ -626,6 +627,7 @@ export type Database = {
           "projection_seq"?: number
           "projection_synced_at"?: string | null
           "projection_actor"?: string | null
+          "execution_status_since"?: string | null
           }
           Update: {
           "id"?: string
@@ -642,6 +644,7 @@ export type Database = {
           "projection_seq"?: number
           "projection_synced_at"?: string | null
           "projection_actor"?: string | null
+          "execution_status_since"?: string | null
           }
           Relationships: []
         }
@@ -3081,6 +3084,18 @@ export type Database = {
         "list_user_organizations": {
           Args: Record<PropertyKey, never>
           Returns: unknown
+        }
+        "mark_client_report_link_copied": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: boolean
+        }
+        "mark_client_report_pdf_downloaded": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: boolean
         }
         "move_org_document_to_folder": {
           Args: {

@@ -44,6 +44,7 @@ import {
   clientReportErrorCode,
   createProjectMediaSignedUrl,
   clientReportLimitNextPublishAt,
+  markClientReport,
   previewClientReport,
   publishClientReport,
   revokeClientReportLink,
@@ -394,6 +395,7 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
       if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
       await navigator.clipboard.writeText(shareLink);
       toast({ title: t("documents.share.copied"), description: t("clientReport.linkHint") });
+      markClientReport(projectId, "link_copied");
     } catch {
       toast({ title: t("documents.share.copyFailed"), description: shareLink, variant: "destructive" });
     }
@@ -464,6 +466,7 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
       renderWidthPx: PDF_RENDER_WIDTH_PX,
     })
       .then(() => {
+        markClientReport(projectId, "pdf_downloaded");
         if (countCanvasReadablePhotos(node) < pdfJob.expectedPhotos) {
           toast({ title: t("clientReport.pdfPhotosSkipped") });
         }
@@ -472,7 +475,7 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
         toast({ title: t("clientReport.pdfFailed"), variant: "destructive" });
       })
       .finally(() => setPdfJob(null));
-  }, [pdfJob, language, t]);
+  }, [pdfJob, language, projectId, t]);
 
   const pdfButton = quota && (
     <Button

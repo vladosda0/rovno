@@ -220,6 +220,30 @@ export async function revokeClientReportLink(projectId: string): Promise<boolean
   return data === true;
 }
 
+export type ClientReportMark = "link_copied" | "pdf_downloaded";
+
+const CLIENT_REPORT_MARK_RPC = {
+  link_copied: "mark_client_report_link_copied",
+  pdf_downloaded: "mark_client_report_pdf_downloaded",
+} as const;
+
+/**
+ * Notes that the person copied the report link or saved the PDF, so Shurik
+ * stops suggesting it. Fire-and-forget: it never throws, and a failure is only
+ * logged, because the copy or the file the person asked for has already happened.
+ */
+export function markClientReport(projectId: string, mark: ClientReportMark): void {
+  const rpc = CLIENT_REPORT_MARK_RPC[mark];
+  void Promise.resolve()
+    .then(() => rawSupabase.rpc(rpc, { p_project_id: projectId }))
+    .then(({ error }) => {
+      if (error) console.warn(`${rpc} failed`, error);
+    })
+    .catch((error: unknown) => {
+      console.warn(`${rpc} failed`, error);
+    });
+}
+
 export function buildClientReportShareLink(shareToken: string): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   return `${origin}/share/report/${shareToken}`;

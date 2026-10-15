@@ -8,6 +8,7 @@
  */
 
 import { CLIENT_REPORT_QUERY_PARAM, CLIENT_REPORT_QUERY_VALUE } from "@/lib/client-report-dialog";
+import { TELEGRAM_BOT_USERNAME } from "@/data/messenger-links";
 
 export type ShurikHintStatus = "active" | "done" | "dismissed";
 
@@ -23,9 +24,13 @@ export interface ShurikHintOfDay {
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string;
 
-/** Where the button of a hint leads: a page, or a question put into the composer (never sent). */
+/**
+ * Where the button of a hint leads: a page of the app, a page outside it (the bot in Telegram,
+ * opened in a new tab), or a question put into the composer (never sent).
+ */
 export type ShurikHintAction =
   | { kind: "navigate"; href: string }
+  | { kind: "external"; href: string }
   | { kind: "ask"; questionKey: string };
 
 type HintTarget =
@@ -37,6 +42,7 @@ type HintTarget =
   | { kind: "home"; query: string }
   | { kind: "page"; path: string }
   | { kind: "app"; href: string }
+  | { kind: "telegram" }
   | { kind: "ask"; questionKey: string };
 
 const CONTRACTS: HintTarget = { kind: "page", path: "hr" };
@@ -47,10 +53,12 @@ const DOCUMENTS: HintTarget = { kind: "page", path: "documents" };
 const GALLERY: HintTarget = { kind: "page", path: "gallery" };
 const NOTIFICATION_SETTINGS: HintTarget = { kind: "app", href: "/settings?tab=notifications" };
 const PROFILE_SETTINGS: HintTarget = { kind: "app", href: "/settings?tab=profile" };
+const TELEGRAM: HintTarget = { kind: "telegram" };
 
 /**
  * One line per hint the server can pick: T01-T40 without T05 and T21, the built part of T41-T84,
- * «Знаешь ли ты» (K) and «Для наблюдателя» (N). A page without a deep link to the exact place
+ * «Знаешь ли ты» (K) and «Для наблюдателя» (N). T81 («добавь коллег в организацию») is not built
+ * on the server either: the app has no place to add people to an existing organization. A page without a deep link to the exact place
  * opens at its root. A hint key the server sends but this table does not know draws no card: a newer
  * database must not put a card with a dead button in front of an older app.
  */
@@ -97,24 +105,35 @@ const HINT_TARGETS: Record<string, HintTarget> = {
   T42: CONTRACTS,
   T43: CONTRACTS,
   T44: CONTRACTS,
+  T45: PARTICIPANTS,
+  T46: PARTICIPANTS,
   T47: PARTICIPANTS,
   T48: PARTICIPANTS,
+  T49: PARTICIPANTS,
   T50: PARTICIPANTS,
   T51: PARTICIPANTS,
   T52: CLIENT_REPORT,
   T53: CLIENT_REPORT,
+  T54: CLIENT_REPORT,
   T55: CLIENT_REPORT,
   T56: DOCUMENTS,
+  T57: CLIENT_REPORT,
+  T58: CLIENT_REPORT,
+  T59: CLIENT_REPORT,
   T60: DOCUMENTS,
   T61: DOCUMENTS,
   T62: GALLERY,
   T63: GALLERY,
   T64: GALLERY,
+  T66: NOTIFICATION_SETTINGS,
   T67: NOTIFICATION_SETTINGS,
   T69: NOTIFICATION_SETTINGS,
   T71: PROFILE_SETTINGS,
   T72: PROFILE_SETTINGS,
   T73: PROFILE_SETTINGS,
+  // The overview of /home is where an organization is created («Создать рабочую организацию»).
+  T79: { kind: "app", href: "/home" },
+  T80: { kind: "home", query: "tab=documents&docTab=document-templates" },
   T82: { kind: "ask", questionKey: "ai.sidebar.suggestion.whatBlocksTasks" },
   T83: { kind: "ask", questionKey: "ai.sidebar.suggestion.whatIsLeft" },
   T84: CLIENT_REPORT,
@@ -124,6 +143,8 @@ const HINT_TARGETS: Record<string, HintTarget> = {
   K04: { kind: "estimate" },
   K05: { kind: "tasks" },
   K06: { kind: "tasks" },
+  K07: TELEGRAM,
+  K08: TELEGRAM,
   K09: DASHBOARD,
   K10: PARTICIPANTS,
   K11: { kind: "app", href: "/home" },
@@ -180,6 +201,9 @@ export function resolveShurikHintAction(
       return { kind: "navigate", href: `${project}/${target.path}` };
     case "app":
       return { kind: "navigate", href: target.href };
+    case "telegram":
+      // A build without its own bot has nowhere to send the person, so it draws no card.
+      return TELEGRAM_BOT_USERNAME ? { kind: "external", href: `https://t.me/${TELEGRAM_BOT_USERNAME}` } : null;
     case "ask":
       return { kind: "ask", questionKey: target.questionKey };
   }
@@ -222,6 +246,11 @@ export function shurikHintTextValues(params: ShurikHintParams, language: string)
   if ("caption" in (params ?? {}) && paramString(params, "caption") === null) {
     delete values.caption;
     values.context = "noCaption";
+  }
+  // An executor's profile may have no name: the text then speaks of "an executor" (T46).
+  if ("member_name" in (params ?? {}) && paramString(params, "member_name") === null) {
+    delete values.member_name;
+    values.context = "noName";
   }
   return values;
 }

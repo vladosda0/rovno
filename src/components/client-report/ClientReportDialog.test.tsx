@@ -275,6 +275,81 @@ describe("ClientReportDialog", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(link));
   });
 
+  it("marks the copied link once with the project id", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    answerRpc({
+      preview_client_report: preview({ link: { share_token: TOKEN, created_at: local(10, 1) } }),
+      mark_client_report_link_copied: true,
+    });
+
+    renderDialog();
+    fireEvent.click(await screen.findByRole("button", { name: "Скопировать ссылку" }));
+
+    await waitFor(() => expect(rpcCalls("mark_client_report_link_copied")).toHaveLength(1));
+    expect(rpcCalls("mark_client_report_link_copied")[0][1]).toEqual({ p_project_id: "project-1" });
+    expect(rpcCalls("mark_client_report_pdf_downloaded")).toHaveLength(0);
+  });
+
+  it("still says the link is copied when the mark fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    answerRpc({
+      preview_client_report: preview({ link: { share_token: TOKEN, created_at: local(10, 1) } }),
+      mark_client_report_link_copied: fail({ code: "42501", message: "forbidden" }),
+    });
+
+    renderDialog();
+    fireEvent.click(await screen.findByRole("button", { name: "Скопировать ссылку" }));
+
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(mockToast).toHaveBeenCalledTimes(1);
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Ссылка скопирована" }));
+    expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
+  });
+
+  it("marks the saved PDF once with the project id", async () => {
+    mockDownloadPdf.mockResolvedValue(undefined);
+    answerRpc({ preview_client_report: preview(), mark_client_report_pdf_downloaded: true });
+
+    renderDialog();
+    fireEvent.click(await screen.findByRole("button", { name: "Скачать PDF" }));
+
+    await waitFor(() => expect(rpcCalls("mark_client_report_pdf_downloaded")).toHaveLength(1));
+    expect(rpcCalls("mark_client_report_pdf_downloaded")[0][1]).toEqual({ p_project_id: "project-1" });
+    expect(rpcCalls("mark_client_report_link_copied")).toHaveLength(0);
+  });
+
+  it("does not mark a PDF that could not be built", async () => {
+    mockDownloadPdf.mockRejectedValue(new Error("canvas failed"));
+    answerRpc({ preview_client_report: preview(), mark_client_report_pdf_downloaded: true });
+
+    renderDialog();
+    fireEvent.click(await screen.findByRole("button", { name: "Скачать PDF" }));
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalled());
+    expect(rpcCalls("mark_client_report_pdf_downloaded")).toHaveLength(0);
+  });
+
+  it("saves the PDF without an error when the mark fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mockDownloadPdf.mockResolvedValue(undefined);
+    mockRpc.mockImplementation(async (name: string) => {
+      if (name === "preview_client_report") return { data: preview(), error: null };
+      if (name === "mark_client_report_pdf_downloaded") throw new Error("network down");
+      return { data: null, error: new Error(`unexpected rpc ${name}`) };
+    });
+
+    renderDialog();
+    fireEvent.click(await screen.findByRole("button", { name: "Скачать PDF" }));
+
+    await waitFor(() => expect(mockDownloadPdf).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Скачать PDF" })).toBeEnabled());
+    expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
+  });
+
   it("re-reads the preview after publishing and draws the PDF from what was published", async () => {
     answerRpc({
       preview_client_report: (_args: unknown, call: number) => (call === 1 ? preview() : afterPublish()),

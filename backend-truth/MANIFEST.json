@@ -611,6 +611,14 @@
     {
       "path": "supabase/migrations/20261015020000_shurik_hint_settings.sql",
       "sha256": "0b9dadd835fff32c4172abceba79d11f4bcef64e9c1f74396000f1d0b5a0d792"
+    },
+    {
+      "path": "supabase/migrations/20261016020000_estimate_execution_status_since.sql",
+      "sha256": "afbed10075768313a41dfcfe22e81e95bc17c08ab5a830f5815ffa3a3c658dc7"
+    },
+    {
+      "path": "supabase/migrations/20261016020200_client_report_mark_rpcs.sql",
+      "sha256": "bd904191383c24ecf95fcf2b191fec2c5e1d45b685e36a28445bee55ce0dcee6"
     }
   ],
   "generated_artifacts": [

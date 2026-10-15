@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import {
   SHURIK_HINT_KEYS,
@@ -11,6 +11,8 @@ import {
 } from "@/lib/shurik-hints";
 import ruLocale from "@/locales/ru.json";
 import enLocale from "@/locales/en.json";
+
+vi.mock("@/data/messenger-links", () => ({ TELEGRAM_BOT_USERNAME: "rovno_test_bot" }));
 
 const ru = ruLocale as Record<string, string>;
 const en = enLocale as Record<string, string>;
@@ -26,7 +28,11 @@ const SECOND_PART = [
   "K01", "K02", "K03", "K04", "K05", "K06", "K09", "K10", "K11",
   "N01", "N02", "N03", "N04", "N05", "N06",
 ];
-const ALL_HINTS = [...FIRST_RELEASE, ...SECOND_PART];
+// What shurik_hint_candidates_s8_more() of rovno-db adds (8.6, 8.11); T12, T14 and T28 are already
+// in the first release. T81 is not built on the server either: the app has no place to add people
+// to an existing organization.
+const THIRD_PART = ["T45", "T46", "T49", "T54", "T57", "T58", "T59", "T66", "K07", "K08", "T79", "T80"];
+const ALL_HINTS = [...FIRST_RELEASE, ...SECOND_PART, ...THIRD_PART];
 
 describe("button address by hint key", () => {
   it("opens the task named in params", () => {
@@ -85,9 +91,10 @@ describe("button address by hint key", () => {
     expect(ru["shurikHints.T21.text"]).toBeUndefined();
   });
 
-  it("knows exactly the hints the database can pick, each with words in both languages", () => {
+  it("knows the hints the database can pick (and T10, not built yet), each with words in both languages", () => {
     expect([...SHURIK_HINT_KEYS].sort()).toEqual([...ALL_HINTS].sort());
-    for (const key of SECOND_PART) {
+    expect(SHURIK_HINT_KEYS).not.toContain("T81");
+    for (const key of [...SECOND_PART, ...THIRD_PART]) {
       expect(resolveShurikHintAction({ hint_key: key, params: {} }, "p1"), key).not.toBeNull();
       for (const locale of [ru, en]) {
         expect(locale[`shurikHints.${key}.text`], `${key}.text`).toBeTruthy();
@@ -115,6 +122,34 @@ describe("button address by hint key", () => {
     expect(href("K11")).toBe("/home");
     expect(href("N05")).toBe("/project/p1/procurement");
     expect(href("T83")).toBe("ask");
+  });
+
+  it("leads the third part's buttons to their pages, and Telegram hints to the bot", () => {
+    const href = (key: string) => {
+      const action = resolveShurikHintAction({ hint_key: key, params: {} }, "p1");
+      return action && action.kind !== "ask" ? `${action.kind} ${action.href}` : action?.kind;
+    };
+    for (const key of ["T45", "T46", "T49"]) expect(href(key), key).toBe("navigate /project/p1/participants");
+    for (const key of ["T54", "T57", "T58", "T59"]) expect(href(key), key).toBe("navigate /project/p1/dashboard?report=client");
+    expect(href("T66")).toBe("navigate /settings?tab=notifications");
+    expect(href("T79")).toBe("navigate /home");
+    expect(href("T80")).toBe("navigate /home?tab=documents&docTab=document-templates");
+    expect(href("K07")).toBe("external https://t.me/rovno_test_bot");
+    expect(href("K08")).toBe("external https://t.me/rovno_test_bot");
+    expect(href("T81")).toBeUndefined();
+  });
+
+  it("quotes the real labels of the screens the third part's texts name", () => {
+    expect(ru["shurikHints.T54.text"]).toContain(`«${ru["clientReport.rhythm.label"]}»`);
+    expect(ru["shurikHints.T54.text"]).toContain(`«${ru["clientReport.rhythm.weekly"]}»`);
+    expect(en["shurikHints.T54.text"]).toContain(`“${en["clientReport.rhythm.label"]}”`);
+    expect(en["shurikHints.T54.text"]).toContain(`“${en["clientReport.rhythm.weekly"]}”`);
+    expect(ru["shurikHints.T57.text"]).toContain(`«${ru["documents.share.copyLink"]}»`);
+    expect(en["shurikHints.T57.text"]).toContain(`“${en["documents.share.copyLink"]}”`);
+    expect(ru["shurikHints.T58.text"]).toContain(`«${ru["clientReport.downloadPdf"]}»`);
+    expect(en["shurikHints.T58.text"]).toContain(`“${en["clientReport.downloadPdf"]}”`);
+    expect(ru["shurikHints.T66.text"]).toContain(`«${ru["notifications.delivery.title"]}»`);
+    expect(en["shurikHints.T66.text"]).toContain(`“${en["notifications.delivery.title"]}”`);
   });
 
   it("says «Установи», never «Поставь»", () => {
@@ -165,6 +200,16 @@ describe("second part texts", () => {
     expect(ruT("shurikHints.T64.text", shurikHintTextValues({ media_id: "m1", caption: "Кухня, северная стена" }, "ru"))).toBe(
       "Фото «Кухня, северная стена» внутреннее, клиент его не увидит. Если хочешь показать ход работ, открой его.",
     );
+  });
+
+  it("names the executor of T46, and speaks of «an executor» when the profile has no name", () => {
+    expect(ruT("shurikHints.T46.text", shurikHintTextValues({ member_profile_id: "u1", member_name: "Иван, электрик" }, "ru"))).toBe(
+      "В смете назван исполнитель «Иван, электрик», но в проекте его ещё нет. Пригласи его, и задачи придут прямо к нему.",
+    );
+    for (const member_name of [null, ""]) {
+      const text = ruT("shurikHints.T46.text", shurikHintTextValues({ member_profile_id: "u1", member_name }, "ru"));
+      expect(text).toBe("В смете назван исполнитель, которого ещё нет в проекте. Пригласи его, и задачи придут прямо к нему.");
+    }
   });
 });
 

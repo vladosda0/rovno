@@ -183,6 +183,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261013020000_notification_people_enabled.sql`
 - `supabase/migrations/20261014010000_profiles_gender.sql`
 - `supabase/migrations/20261015020000_shurik_hint_settings.sql`
+- `supabase/migrations/20261016020000_estimate_execution_status_since.sql`
+- `supabase/migrations/20261016020200_client_report_mark_rpcs.sql`
 
 ## Exclusions
 

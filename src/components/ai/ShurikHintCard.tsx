@@ -62,6 +62,8 @@ export function ShurikHintCard({ hint, projectId, onNavigate, onAsk, onDismiss }
             className="mt-1.5 h-8 rounded-lg bg-accent px-3 text-[11px] font-medium text-accent-foreground hover:bg-accent/90 md:h-7 md:px-2.5"
             onClick={() => {
               if (action.kind === "ask") onAsk(t(action.questionKey));
+              // The bot in Telegram is outside the app: a new tab, so the app stays where it was.
+              else if (action.kind === "external") window.open(action.href, "_blank", "noopener,noreferrer");
               else onNavigate(action.href);
             }}
           >
