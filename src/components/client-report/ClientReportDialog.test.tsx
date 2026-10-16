@@ -484,7 +484,7 @@ describe("ClientReportDialog", () => {
     let drawnPhoto: string | null = null;
     mockDownloadPdf.mockImplementation(async (node: HTMLElement) => {
       drawn = node.textContent ?? "";
-      drawnPhoto = node.querySelector("img")?.getAttribute("src") ?? null;
+      drawnPhoto = node.querySelector("[data-report-photo] img")?.getAttribute("src") ?? null;
     });
     answerRpc({ preview_client_report: preview() });
 

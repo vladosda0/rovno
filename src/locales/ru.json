@@ -3227,7 +3227,6 @@
   "clientReport.pdfFileName": "{{project}} · отчёт {{period}}",
   "clientReport.badPeriod": "Такой период выбрать нельзя. Вернул период по умолчанию.",
   "clientReport.pdfPhotosSkipped": "Часть фото не попала в файл: их не удалось загрузить.",
-  "clientReport.view.brand": "ровно",
   "clientReport.view.meta": "Отчёт за {{period}} · Подготовил: {{name}}",
   "clientReport.view.metaNoAuthor": "Отчёт за {{period}}",
   "clientReport.view.progress": "Прогресс · {{pct}}%",

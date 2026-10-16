@@ -305,7 +305,7 @@ describe("ShareReport", () => {
     let drawnPhoto: Element | null = null;
     mockDownloadPdf.mockImplementation(async (node: HTMLElement) => {
       drawn = node.textContent ?? "";
-      drawnPhoto = node.querySelector("img");
+      drawnPhoto = node.querySelector("[data-report-photo] img");
     });
 
     renderPage();
@@ -336,7 +336,7 @@ describe("ShareReport", () => {
     mockInvoke.mockResolvedValueOnce({ data: stale, error: null }).mockResolvedValue({ data: fresh, error: null });
     let drawnPhotos: Array<string | null> = [];
     mockDownloadPdf.mockImplementation(async (node: HTMLElement) => {
-      drawnPhotos = Array.from(node.querySelectorAll("img")).map((image) => image.getAttribute("src"));
+      drawnPhotos = Array.from(node.querySelectorAll("[data-report-photo] img")).map((image) => image.getAttribute("src"));
     });
 
     renderPage();
@@ -370,7 +370,7 @@ describe("ShareReport", () => {
     mockInvoke.mockResolvedValue({ data: sharedReport(), error: null });
     mockDownloadPdf.mockImplementation(async (node: HTMLElement) => {
       // The CORS request for the photo fails while the file is being drawn.
-      fireEvent.error(node.querySelector("img")!);
+      fireEvent.error(node.querySelector("[data-report-photo] img")!);
     });
 
     renderPage();

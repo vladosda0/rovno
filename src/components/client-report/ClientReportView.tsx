@@ -114,7 +114,7 @@ export const ClientReportView = forwardRef<HTMLDivElement, ClientReportViewProps
           className,
         )}
       >
-        <span className="text-[13px] font-bold tracking-[0.02em] text-accent">{t("clientReport.view.brand")}</span>
+        <img src="/logo.svg" alt={t("nav.appName")} className="h-6 w-auto self-start" />
 
         <div>
           <h1 className="text-xl font-bold leading-tight break-words">{data.projectTitle}</h1>

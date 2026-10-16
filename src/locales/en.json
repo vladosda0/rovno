@@ -3171,7 +3171,6 @@
   "clientReport.pdfFileName": "{{project}} · report {{period}}",
   "clientReport.badPeriod": "This period cannot be chosen. The default period is back.",
   "clientReport.pdfPhotosSkipped": "Some photos are missing from the file: they could not be loaded.",
-  "clientReport.view.brand": "rovno",
   "clientReport.view.meta": "Report for {{period}} · Prepared by: {{name}}",
   "clientReport.view.metaNoAuthor": "Report for {{period}}",
   "clientReport.view.progress": "Progress · {{pct}}%",

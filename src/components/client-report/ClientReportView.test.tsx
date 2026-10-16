@@ -67,3 +67,15 @@ describe("ClientReportView photos", () => {
     expect(countCanvasReadablePhotos(view.container)).toBe(1);
   });
 });
+
+describe("ClientReportView header", () => {
+  it("shows the Rovno logo instead of the word «ровно»", () => {
+    const view = render(<ClientReportView data={data("https://signed.example/photo")} />);
+
+    const logo = view.container.querySelector<HTMLImageElement>('img[src="/logo.svg"]');
+    expect(logo).not.toBeNull();
+    expect(logo?.getAttribute("alt")).toBeTruthy();
+    expect(view.container.textContent).not.toMatch(/^ровно|^rovno/);
+    expect(screen.queryByText("clientReport.view.brand")).toBeNull();
+  });
+});
