@@ -1,7 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as store from "@/data/store";
-import { countUnreadShurikMessages, getShurikMessagesSource } from "@/data/shurik-messages-source";
+import {
+  countUnreadShurikMessages,
+  getShurikMessagesSource,
+  isShownInMessagesPanel,
+} from "@/data/shurik-messages-source";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { ShurikMessage } from "@/types/entities";
 
@@ -16,7 +20,9 @@ export const shurikMessagesQueryKeys = {
 
 function useBrowserShurikMessages(kind: "demo" | "local" | null): ShurikMessage[] {
   const read = useCallback(
-    () => (kind ? store.getShurikMessages(store.getCurrentUserForMode(kind).id) : EMPTY_MESSAGES),
+    () => (kind
+      ? store.getShurikMessages(store.getCurrentUserForMode(kind).id).filter(isShownInMessagesPanel)
+      : EMPTY_MESSAGES),
     [kind],
   );
   const [messages, setMessages] = useState(read);

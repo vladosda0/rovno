@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { Suspense, lazy, useEffect, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
 import { TopBar } from "@/components/TopBar";
@@ -15,7 +15,12 @@ import { useProfileGenderHint } from "@/hooks/use-profile-gender-hint";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useShurikMessages, useShurikMessagesLiveUpdates } from "@/hooks/use-shurik-messages";
 import { useShurikHintOfDay, useShurikHintRenderable } from "@/hooks/use-shurik-hint";
-import { shurikHintTextKey, shurikHintTextValues } from "@/lib/shurik-hints";
+import {
+  SHURIK_HINT_QUERY_PARAM,
+  SHURIK_HINT_QUERY_VALUE,
+  shurikHintTextKey,
+  shurikHintTextValues,
+} from "@/lib/shurik-hints";
 import { useTranslation } from "react-i18next";
 import { setAnalyticsUserId } from "@/lib/analytics";
 import { setSentryUser } from "@/lib/observability/sentry";
@@ -49,6 +54,7 @@ export default function AppLayout() {
   });
   const [panelTab, setPanelTab] = useState<ShurikPanelTab>("chat");
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   useShurikMessagesLiveUpdates();
   useBrowserTimezoneSync();
   useProfileGenderHint();
@@ -93,6 +99,23 @@ export default function AppLayout() {
       }
     });
   }, [hideAi]);
+
+  // The button of the hint sent to Telegram: open the chat, where the card of the day stands, and
+  // take the mark out of the address. Like the photo consult, the person's own choice is not rewritten.
+  const hintRequested = !hideAi && searchParams.get(SHURIK_HINT_QUERY_PARAM) === SHURIK_HINT_QUERY_VALUE;
+  useEffect(() => {
+    if (!hintRequested) return;
+    setPanelTab("chat");
+    setAiSidebarCollapsed(false);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete(SHURIK_HINT_QUERY_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [hintRequested, setSearchParams]);
 
   useEffect(() => {
     if (runtimeAuth.status === "authenticated") {

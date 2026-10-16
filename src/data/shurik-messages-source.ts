@@ -14,6 +14,8 @@ const MONEY_TYPE_PREFIX = "billing_";
 const BRIEFING_TYPE = "briefing";
 const PEOPLE_TYPE_PREFIX = "people_";
 const CLIENT_REPORT_REMINDER_TYPE = "client_report_reminder";
+/** Shurik's most important hint of the day, written only to be sent to Telegram. */
+export const SHURIK_HINT_TYPE = "shurik_hint";
 
 export interface ShurikMessageAction {
   label: string;
@@ -83,6 +85,14 @@ export function isClientReportReminderShurikMessage(message: Pick<ShurikMessage,
   return message.type === CLIENT_REPORT_REMINDER_TYPE;
 }
 
+/**
+ * Whether a message belongs in the «Уведомления» tab and its number. The hint of the day is not:
+ * it stands as a card in the project chat, and its row exists only to reach Telegram.
+ */
+export function isShownInMessagesPanel(message: Pick<ShurikMessage, "type">): boolean {
+  return message.type !== SHURIK_HINT_TYPE;
+}
+
 let subscriptionSeq = 0;
 
 function hasControlSpaceOrBackslash(href: string): boolean {
@@ -150,7 +160,7 @@ export function createBrowserShurikMessagesSource(mode: "demo" | "local"): Shuri
   return {
     mode,
     async listMessages() {
-      return store.getShurikMessages(store.getCurrentUserForMode(mode).id);
+      return store.getShurikMessages(store.getCurrentUserForMode(mode).id).filter(isShownInMessagesPanel);
     },
     async markRead(ids: string[]) {
       store.markShurikMessagesRead(ids);
@@ -172,6 +182,8 @@ export function createSupabaseShurikMessagesSource(
         .from("notifications")
         .select(MESSAGE_COLUMNS)
         .eq("profile_id", profileId)
+        // Left out here, so hints never take a place among the hundred newest.
+        .neq("type", SHURIK_HINT_TYPE)
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
         .limit(MESSAGES_LIMIT);
@@ -180,7 +192,7 @@ export function createSupabaseShurikMessagesSource(
         throw error;
       }
 
-      return (data ?? []).map(mapNotificationRowToShurikMessage);
+      return (data ?? []).map(mapNotificationRowToShurikMessage).filter(isShownInMessagesPanel);
     },
     async markRead(ids: string[]) {
       if (ids.length === 0) return;

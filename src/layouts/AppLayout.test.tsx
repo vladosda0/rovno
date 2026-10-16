@@ -25,7 +25,7 @@ function NavProbe() {
   const navigate = useNavigate();
   return (
     <>
-      {["/home", "/settings", "/settings?tab=billing", "/project/project-1/dashboard"].map((to) => (
+      {["/home", "/settings", "/settings?tab=billing", "/project/project-1/dashboard", "/project/project-1/dashboard?hint=today"].map((to) => (
         <button key={to} type="button" onClick={() => navigate(to)}>{`go ${to}`}</button>
       ))}
     </>
@@ -270,13 +270,45 @@ describe("AppLayout", () => {
             <Route element={<AppLayout />}>
               <Route path="/home" element={<div>Home surface</div>} />
               <Route path="/settings" element={<LocationProbe />} />
-              <Route path="/project/:id/dashboard" element={<div>Dashboard</div>} />
+              <Route path="/project/:id/dashboard" element={<><div>Dashboard</div><LocationProbe /></>} />
             </Route>
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>,
     );
   }
+
+  describe("the Telegram hint's button, ?hint=today", () => {
+    it("opens a collapsed panel on Chat, where the hint card stands, and takes the mark out of the address", async () => {
+      writeAiSidebarSessionPreference(true);
+      addUnreadMessage();
+      renderWholeApp("/project/project-1/dashboard?hint=today");
+
+      expect(await screen.findByRole("tab", { name: "Chat" }, { timeout: SIDEBAR_FIND_TIMEOUT_MS }))
+        .toHaveAttribute("aria-selected", "true");
+      expect(screen.queryByRole("button", { name: /^Open Shurik/ })).not.toBeInTheDocument();
+      expect(screen.getByTestId("location")).toHaveTextContent(/^\/project\/project-1\/dashboard$/);
+      // Like the photo consult, a link opens the panel without rewriting the person's own choice.
+      expect(sessionStorage.getItem("workspace-ai-sidebar-collapsed")).toBe("true");
+    });
+
+    it("switches to Chat when the panel was open on Notifications", async () => {
+      renderWholeApp("/project/project-1/dashboard");
+      fireEvent.click(await screen.findByRole("tab", { name: /Notifications/ }, { timeout: SIDEBAR_FIND_TIMEOUT_MS }));
+      expect(screen.getByRole("tab", { name: /Notifications/ })).toHaveAttribute("aria-selected", "true");
+
+      fireEvent.click(screen.getByRole("button", { name: "go /project/project-1/dashboard?hint=today" }));
+
+      expect(await screen.findByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByTestId("location")).toHaveTextContent(/^\/project\/project-1\/dashboard$/);
+    });
+
+    it("leaves a page outside a project alone", () => {
+      renderWholeApp("/settings?hint=today");
+      expect(screen.getByTestId("location")).toHaveTextContent("/settings?hint=today");
+      expect(screen.queryByRole("complementary", { name: "Notifications" })).not.toBeInTheDocument();
+    });
+  });
 
   it("closes the panel outside a project once the message's button has opened its page", () => {
     addUnreadMessage();

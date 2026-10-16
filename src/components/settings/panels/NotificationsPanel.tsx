@@ -45,6 +45,7 @@ export function NotificationsPanel() {
     setProjectMuted,
     setPeopleEnabled,
     setHintsChatEnabled,
+    setHintsTelegramEnabled,
   } = useBriefingSettings(() => {
     toast({
       title: t("notifications.saveFailedToast"),
@@ -76,6 +77,19 @@ export function NotificationsPanel() {
           onCheckedChange={setHintsChatEnabled}
           disabled={isSaving}
           aria-label={t("notifications.hints.chat")}
+        />
+      </div>
+      {/* Like every other message, it reaches Telegram only when Telegram is linked and on in «Where to send». */}
+      <div className={ROW_CLASS}>
+        <span className="min-w-0 flex-1">
+          <span className="block text-body-sm text-foreground">{t("notifications.hints.telegram")}</span>
+          <span className="block text-caption text-muted-foreground">{t("notifications.hints.telegramHint")}</span>
+        </span>
+        <Switch
+          checked={snapshot.hintsTelegramEnabled}
+          onCheckedChange={setHintsTelegramEnabled}
+          disabled={isSaving}
+          aria-label={t("notifications.hints.telegram")}
         />
       </div>
     </SettingsSection>

@@ -25,6 +25,7 @@ const LOCAL_SETTINGS_KEY = "briefing-settings";
 const LOCAL_MUTES_KEY = "briefing-muted-projects";
 const LOCAL_PEOPLE_KEY = "people-messages-enabled";
 const LOCAL_HINTS_CHAT_KEY = "shurik-hints-chat-enabled";
+const LOCAL_HINTS_TELEGRAM_KEY = "shurik-hints-telegram-enabled";
 
 export interface BriefingProject {
   id: string;
@@ -43,6 +44,8 @@ export interface BriefingSettingsSnapshot {
   peopleEnabled: boolean;
   /** Shurik's hint of the day over the project chat; on for a person with no row. */
   hintsChatEnabled: boolean;
+  /** The one most important hint of the day sent to Telegram; on for a person with no row. */
+  hintsTelegramEnabled: boolean;
 }
 
 export interface BriefingSettingsSource {
@@ -55,6 +58,8 @@ export interface BriefingSettingsSource {
   setPeopleEnabled: (enabled: boolean) => Promise<void>;
   /** The same for the hints toggle. */
   setHintsChatEnabled: (enabled: boolean) => Promise<void>;
+  /** The same for the hint in Telegram. */
+  setHintsTelegramEnabled: (enabled: boolean) => Promise<void>;
 }
 
 export function isBriefingMinute(minute: number): boolean {
@@ -109,6 +114,7 @@ export function createBrowserBriefingSettingsSource(mode: "demo" | "local"): Bri
         mutedProjectIds: readLocalMutes(),
         peopleEnabled: readLocalJson(LOCAL_PEOPLE_KEY) !== false,
         hintsChatEnabled: readLocalJson(LOCAL_HINTS_CHAT_KEY) !== false,
+        hintsTelegramEnabled: readLocalJson(LOCAL_HINTS_TELEGRAM_KEY) !== false,
       };
     },
     async saveSettings(patch) {
@@ -125,6 +131,9 @@ export function createBrowserBriefingSettingsSource(mode: "demo" | "local"): Bri
     async setHintsChatEnabled(enabled) {
       localStorage.setItem(LOCAL_HINTS_CHAT_KEY, JSON.stringify(enabled));
     },
+    async setHintsTelegramEnabled(enabled) {
+      localStorage.setItem(LOCAL_HINTS_TELEGRAM_KEY, JSON.stringify(enabled));
+    },
   };
 }
 
@@ -132,23 +141,32 @@ export function createSupabaseBriefingSettingsSource(
   supabase: TypedSupabaseClient,
   profileId: string,
 ): BriefingSettingsSource {
-  // `hints_chat_enabled` is read on its own through the untyped client, so a database without
+  // Each hints switch is read on its own through the untyped client, so a database without
   // the column does not take the rest of the settings down with it.
   const raw = supabase as unknown as SupabaseClient;
-  const loadHintsChatEnabled = async (): Promise<boolean> => {
+  type HintsColumn = "hints_chat_enabled" | "hints_telegram_enabled";
+  const loadHintsSwitch = async (column: HintsColumn): Promise<boolean> => {
     const { data, error } = await raw
       .from("notification_preferences")
-      .select("hints_chat_enabled")
+      .select(column)
       .eq("profile_id", profileId)
       .maybeSingle();
     if (error || !data) return true;
-    return (data as { hints_chat_enabled?: unknown }).hints_chat_enabled !== false;
+    return (data as Record<string, unknown>)[column] !== false;
+  };
+  const saveHintsSwitch = async (column: HintsColumn, enabled: boolean): Promise<void> => {
+    const { error } = await raw
+      .from("notification_preferences")
+      .upsert({ profile_id: profileId, [column]: enabled }, { onConflict: "profile_id" });
+    if (error) {
+      throw error;
+    }
   };
 
   return {
     mode: "supabase",
     async load() {
-      const [preferences, projects, memberships, mutes, hintsChatEnabled] = await Promise.all([
+      const [preferences, projects, memberships, mutes, hintsChatEnabled, hintsTelegramEnabled] = await Promise.all([
         supabase
           .from("notification_preferences")
           .select("briefing_enabled, briefing_minute, briefing_weekends, people_enabled")
@@ -161,7 +179,8 @@ export function createSupabaseBriefingSettingsSource(
           .order("updated_at", { ascending: false }),
         supabase.from("project_members").select("project_id, role").eq("profile_id", profileId),
         supabase.from("notification_project_mutes").select("project_id").eq("profile_id", profileId),
-        loadHintsChatEnabled(),
+        loadHintsSwitch("hints_chat_enabled"),
+        loadHintsSwitch("hints_telegram_enabled"),
       ]);
       const error = preferences.error ?? projects.error ?? memberships.error ?? mutes.error;
       if (error) {
@@ -187,6 +206,7 @@ export function createSupabaseBriefingSettingsSource(
         mutedProjectIds: (mutes.data ?? []).map((mute) => mute.project_id),
         peopleEnabled: preferences.data ? preferences.data.people_enabled : true,
         hintsChatEnabled,
+        hintsTelegramEnabled,
       };
     },
     async saveSettings(patch) {
@@ -209,12 +229,10 @@ export function createSupabaseBriefingSettingsSource(
       }
     },
     async setHintsChatEnabled(enabled) {
-      const { error } = await raw
-        .from("notification_preferences")
-        .upsert({ profile_id: profileId, hints_chat_enabled: enabled }, { onConflict: "profile_id" });
-      if (error) {
-        throw error;
-      }
+      await saveHintsSwitch("hints_chat_enabled", enabled);
+    },
+    async setHintsTelegramEnabled(enabled) {
+      await saveHintsSwitch("hints_telegram_enabled", enabled);
     },
     async setProjectMuted(projectId, muted) {
       if (muted) {

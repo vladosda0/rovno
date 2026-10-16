@@ -34,6 +34,7 @@ export function useBriefingSettings(onSaveError: () => void): {
   setProjectMuted: (projectId: string, muted: boolean) => void;
   setPeopleEnabled: (enabled: boolean) => void;
   setHintsChatEnabled: (enabled: boolean) => void;
+  setHintsTelegramEnabled: (enabled: boolean) => void;
 } {
   const mode = useWorkspaceMode();
   const queryClient = useQueryClient();
@@ -116,6 +117,12 @@ export function useBriefingSettings(onSaveError: () => void): {
         apply: (snapshot) => ({ ...snapshot, hintsChatEnabled: enabled }),
         hidesHints: enabled ? undefined : "all",
         send: (source) => source.setHintsChatEnabled(enabled),
+      }),
+    // Only what reaches Telegram: the card in the chat stays as it is.
+    setHintsTelegramEnabled: (enabled) =>
+      run({
+        apply: (snapshot) => ({ ...snapshot, hintsTelegramEnabled: enabled }),
+        send: (source) => source.setHintsTelegramEnabled(enabled),
       }),
   };
 }

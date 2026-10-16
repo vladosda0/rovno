@@ -263,6 +263,18 @@ export function shurikHintButtonKey(hintKey: string): string {
   return `shurikHints.${hintKey}.button`;
 }
 
+/**
+ * `?hint=today` on a project page opens the project chat, where the card of the day stands with its
+ * real button. The database writes the same address into the Telegram hint (rovno-db
+ * `write_shurik_hint_telegram`); the two must stay equal.
+ */
+export const SHURIK_HINT_QUERY_PARAM = "hint";
+export const SHURIK_HINT_QUERY_VALUE = "today";
+
+export function shurikHintTodayHref(projectId: string): string {
+  return `/project/${projectId}/dashboard?${SHURIK_HINT_QUERY_PARAM}=${SHURIK_HINT_QUERY_VALUE}`;
+}
+
 /** Greeting buckets of the texts page, «Приветствия». */
 export type ShurikGreetingSlot = "earlyMorning" | "morning" | "day" | "evening" | "night" | "monday" | "weekend";
 

@@ -7,6 +7,7 @@ import {
   shurikGreetingName,
   shurikGreetingSlot,
   shurikHintTextValues,
+  shurikHintTodayHref,
   profileFullName,
 } from "@/lib/shurik-hints";
 import ruLocale from "@/locales/ru.json";
@@ -33,6 +34,12 @@ const SECOND_PART = [
 // to an existing organization.
 const THIRD_PART = ["T45", "T46", "T49", "T54", "T57", "T58", "T59", "T66", "K07", "K08", "T79", "T80"];
 const ALL_HINTS = [...FIRST_RELEASE, ...SECOND_PART, ...THIRD_PART];
+
+describe("the address of the hint sent to Telegram", () => {
+  it("leads to the project chat, where the card of the day stands", () => {
+    expect(shurikHintTodayHref("p1")).toBe("/project/p1/dashboard?hint=today");
+  });
+});
 
 describe("button address by hint key", () => {
   it("opens the task named in params", () => {

@@ -35,6 +35,7 @@ function createFakeBackend(
   // Undefined stands for "no value written yet", which reads as on.
   let peopleEnabled: boolean | undefined = initial.storedPeopleEnabled;
   let hintsChatEnabled = true;
+  let hintsTelegramEnabled = true;
   let muted = [...(initial.mutedProjectIds ?? [])];
   const projects = initial.projects ?? THREE_PROJECTS;
   const inAnyProject = initial.inAnyProject ?? true;
@@ -47,6 +48,7 @@ function createFakeBackend(
       mutedProjectIds: [...muted],
       peopleEnabled: peopleEnabled ?? true,
       hintsChatEnabled,
+      hintsTelegramEnabled,
     })),
     saveSettings: vi.fn(async (patch: Partial<BriefingSettings>) => {
       stored = { ...(stored ?? briefingSettingsSource.DEFAULT_BRIEFING_SETTINGS), ...patch };
@@ -56,6 +58,9 @@ function createFakeBackend(
     }),
     setHintsChatEnabled: vi.fn(async (enabled: boolean) => {
       hintsChatEnabled = enabled;
+    }),
+    setHintsTelegramEnabled: vi.fn(async (enabled: boolean) => {
+      hintsTelegramEnabled = enabled;
     }),
     setProjectMuted: vi.fn(async (projectId: string, isMuted: boolean) => {
       muted = isMuted ? [...muted.filter((id) => id !== projectId), projectId] : muted.filter((id) => id !== projectId);
@@ -67,6 +72,7 @@ function createFakeBackend(
     hasRow: () => stored !== null,
     peopleEnabled: () => peopleEnabled,
     hintsChatEnabled: () => hintsChatEnabled,
+    hintsTelegramEnabled: () => hintsTelegramEnabled,
   };
 }
 
@@ -143,10 +149,11 @@ describe("NotificationsPanel", () => {
     renderPanel();
     await loaded();
 
-    expect(screen.getAllByRole("switch")).toHaveLength(4);
+    expect(screen.getAllByRole("switch")).toHaveLength(5);
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
-    for (const gone of [/in-app/i, /email/i, /telegram/i, /coming soon/i, /digest/i, /assigned to me/i, /billing/i, /subscription/i]) {
+    // The old screen had a bare «Telegram» channel row; the Telegram hint switch is new and stays.
+    for (const gone of [/in-app/i, /email/i, /^telegram$/i, /coming soon/i, /digest/i, /assigned to me/i, /billing/i, /subscription/i]) {
       expect(screen.queryByText(gone)).not.toBeInTheDocument();
     }
   });
@@ -266,7 +273,7 @@ describe("NotificationsPanel", () => {
 
     expect(await screen.findByRole("heading", { name: "Instant" })).toBeInTheDocument();
     expect(peopleSwitch()).toBeChecked();
-    expect(screen.getAllByRole("switch")).toHaveLength(2);
+    expect(screen.getAllByRole("switch")).toHaveLength(3);
     expect(screen.queryByRole("heading", { name: "Shurik's briefing" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByText(/nothing to set up/)).not.toBeInTheDocument();
@@ -332,11 +339,35 @@ describe("NotificationsPanel", () => {
     expect(source.setPeopleEnabled).not.toHaveBeenCalled();
   });
 
+  it("has «The most important tip in Telegram» right after the chat switch, on by default, saved at once", async () => {
+    const { source, hintsTelegramEnabled, hintsChatEnabled } = createFakeBackend();
+    renderPanel();
+    await loaded();
+
+    const chatSwitch = screen.getByRole("switch", { name: "Tips in the project chat" });
+    const telegramSwitch = screen.getByRole("switch", { name: "The most important tip in Telegram" });
+    const instant = screen.getByRole("heading", { name: "Instant" });
+    expect(chatSwitch.compareDocumentPosition(telegramSwitch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(telegramSwitch.compareDocumentPosition(instant) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("One a day, in the afternoon, from any of your projects")).toBeInTheDocument();
+    expect(telegramSwitch).toBeChecked();
+
+    fireEvent.click(telegramSwitch);
+    await waitFor(() => expect(source.setHintsTelegramEnabled).toHaveBeenCalledWith(false));
+    await waitFor(() =>
+      expect(screen.getByRole("switch", { name: "The most important tip in Telegram" })).not.toBeChecked());
+    expect(hintsTelegramEnabled()).toBe(false);
+    expect(hintsChatEnabled()).toBe(true);
+    expect(source.setHintsChatEnabled).not.toHaveBeenCalled();
+    expect(screen.getByRole("switch", { name: "Tips in the project chat" })).toBeChecked();
+  });
+
   it("shows the hints switch to a person with no briefing projects too", async () => {
     createFakeBackend({ projects: [] });
     renderPanel();
     await screen.findByRole("heading", { name: "Tips from Shurik" });
     expect(screen.getByRole("switch", { name: "Tips in the project chat" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "The most important tip in Telegram" })).toBeChecked();
   });
 
   it("shows messages from people as off when that is what is stored", async () => {
@@ -421,6 +452,7 @@ describe("NotificationsPanel", () => {
       mutedProjectIds: [],
       peopleEnabled: true,
       hintsChatEnabled: true,
+      hintsTelegramEnabled: true,
     });
     await loaded();
     expect(screen.queryByTestId("notifications-loading")).not.toBeInTheDocument();
@@ -502,6 +534,7 @@ describe("NotificationsPanel", () => {
       mutedProjectIds: [],
       peopleEnabled: true,
       hintsChatEnabled: true,
+      hintsTelegramEnabled: true,
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(briefingSwitch()).not.toBeChecked();
@@ -582,5 +615,7 @@ describe("NotificationsPanel", () => {
     expect(ru("notifications.instant.title")).toBe("Мгновенные");
     expect(ru("notifications.instant.people")).toBe("Сообщения от людей в проекте");
     expect(ru("notifications.instant.peopleHint")).toBe("Кто-то написал в задаче или назначил тебе задачу");
+    expect(ru("notifications.hints.telegram")).toBe("Самая важная подсказка в Telegram");
+    expect(ru("notifications.hints.telegramHint")).toBe("Одна в день, днём, по любому из твоих проектов");
   });
 });

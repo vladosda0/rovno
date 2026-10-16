@@ -3942,6 +3942,8 @@
   "notifications.hints.title": "Tips from Shurik",
   "notifications.hints.chat": "Tips in the project chat",
   "notifications.hints.chatHint": "One tip a day above the conversation in the project chat",
+  "notifications.hints.telegram": "The most important tip in Telegram",
+  "notifications.hints.telegramHint": "One a day, in the afternoon, from any of your projects",
   "shurikHints.T16.text_one": "The estimate went to the client {{count}} day ago, and there is no approval in Rovno yet. Has the client replied? If not, it is a good time to remind them.",
   "shurikHints.T16.text_other": "The estimate went to the client {{count}} days ago, and there is no approval in Rovno yet. Has the client replied? If not, it is a good time to remind them."
 }

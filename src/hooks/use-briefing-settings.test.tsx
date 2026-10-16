@@ -14,6 +14,7 @@ const SAVED: briefingSettingsSource.BriefingSettingsSnapshot = {
   mutedProjectIds: [],
   peopleEnabled: true,
   hintsChatEnabled: true,
+  hintsTelegramEnabled: true,
 };
 
 function setup() {
@@ -29,6 +30,7 @@ function setup() {
     setProjectMuted: vi.fn(async () => {}),
     setPeopleEnabled: vi.fn(async () => {}),
     setHintsChatEnabled: vi.fn(async () => {}),
+    setHintsTelegramEnabled: vi.fn(async () => {}),
   };
   vi.spyOn(briefingSettingsSource, "getBriefingSettingsSource").mockResolvedValue(source);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -156,6 +158,19 @@ describe("useBriefingSettings", () => {
       act(() => view.result.current.setHintsChatEnabled(false));
 
       await waitFor(() => expect(queryClient.getQueryData(key)).toBeNull());
+    });
+
+    it("leaves the hint card in the chat alone when only the Telegram hint is switched off", async () => {
+      const { source, view, queryClient } = setup();
+      await waitFor(() => expect(view.result.current.snapshot).toBeDefined());
+      const key = shurikHintQueryKeys.ofDay("profile-1", "p2", "2026-10-15");
+      queryClient.setQueryData(key, HINT);
+
+      act(() => view.result.current.setHintsTelegramEnabled(false));
+
+      await waitFor(() => expect(source.setHintsTelegramEnabled).toHaveBeenCalledWith(false));
+      expect(queryClient.getQueryData(key)).toEqual(HINT);
+      expect(source.setHintsChatEnabled).not.toHaveBeenCalled();
     });
   });
 });

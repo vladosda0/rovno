@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createSupabaseShurikMessagesSource,
   isMoneyShurikMessage,
+  isShownInMessagesPanel,
   mapNotificationRowToShurikMessage,
   readShurikMessageAction,
 } from "@/data/shurik-messages-source";
@@ -43,6 +44,7 @@ function createFakeSupabase(rows: ReturnType<typeof row>[] = []) {
       delete: (...args: unknown[]) => (calls.push({ method: "delete", args }), query),
       eq: (...args: unknown[]) => (calls.push({ method: "eq", args }), query),
       in: (...args: unknown[]) => (calls.push({ method: "in", args }), query),
+      neq: (...args: unknown[]) => (calls.push({ method: "neq", args }), query),
       order: (...args: unknown[]) => (calls.push({ method: "order", args }), query),
       limit: (...args: unknown[]) => (calls.push({ method: "limit", args }), query),
       then: (resolve: (value: { data: unknown; error: null }) => void) => resolve({ data: rows, error: null }),
@@ -76,6 +78,23 @@ describe("shurik messages source", () => {
     expect(fake.calls).toContainEqual({ method: "from", args: ["notifications"] });
     expect(fake.calls).toContainEqual({ method: "eq", args: ["profile_id", "profile-1"] });
     expect(fake.calls).toContainEqual({ method: "order", args: ["created_at", { ascending: false }] });
+  });
+
+  it("leaves Shurik's hint of the day out: it lives in the project chat and in Telegram, not in the messages", async () => {
+    const fake = createFakeSupabase([
+      row({ id: "msg-2", created_at: "2026-10-09T07:00:00.000Z" }),
+      // A database that ignored the filter still does not put the hint on screen.
+      row({ id: "hint-1", type: "shurik_hint", title: "Подсказка от Шурика · Дача, баня" }),
+    ]);
+    const source = createSupabaseShurikMessagesSource(fake.client as unknown as SourceClient, "profile-1");
+
+    const messages = await source.listMessages();
+
+    expect(fake.calls).toContainEqual({ method: "neq", args: ["type", "shurik_hint"] });
+    expect(messages.map((message) => message.id)).toEqual(["msg-2"]);
+    expect(isShownInMessagesPanel({ type: "shurik_hint" })).toBe(false);
+    expect(isShownInMessagesPanel({ type: "briefing" })).toBe(true);
+    expect(isShownInMessagesPanel({ type: "billing_payment_failed" })).toBe(true);
   });
 
   it("writes the read mark with only is_read and read_at, and only to the user's own unread rows", async () => {

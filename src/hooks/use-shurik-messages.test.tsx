@@ -383,6 +383,22 @@ describe("useShurikMessages", () => {
     });
   });
 
+  it("never lists or counts Shurik's hint of the day from the demo store either", async () => {
+    enterDemoSession("project-1");
+    store.__unsafeResetStoreForTests();
+    const demoUserId = store.getCurrentUserForMode("demo").id;
+    renderProbe();
+
+    act(() => {
+      store.addShurikMessage(message({ id: "msg-demo", user_id: demoUserId }));
+      store.addShurikMessage(message({ id: "hint-demo", user_id: demoUserId, type: "shurik_hint" }));
+    });
+
+    expect(screen.getByTestId("ids")).toHaveTextContent("msg-demo");
+    expect(screen.getByTestId("ids")).not.toHaveTextContent("hint-demo");
+    expect(screen.getByTestId("unread")).toHaveTextContent("1");
+  });
+
   it("gives a guest nothing and asks the backend for nothing", () => {
     vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
     const getSource = vi.spyOn(shurikMessagesSource, "getShurikMessagesSource");
