@@ -1,3 +1,5 @@
+import { safeNextPath } from "@/lib/safe-next-path";
+
 export type AnalyticsEventName =
   | "estimate_editor_started"
   | "estimate_status_change_requested"
@@ -513,6 +515,10 @@ function carriesSecretRouteValue(params: URLSearchParams): boolean {
     }
     if (!decoded.startsWith("/")) continue;
     if (matchAnalyticsRoute(decoded.split(/[?#]/, 1)[0])?.secret === true) return true;
+    // Also resolved the way the auth pages resolve `next`, so a dot segment
+    // cannot hide a secret route from the textual match.
+    const resolved = safeNextPath(decoded);
+    if (resolved !== null && matchAnalyticsRoute(resolved.split(/[?#]/, 1)[0])?.secret === true) return true;
   }
   return false;
 }

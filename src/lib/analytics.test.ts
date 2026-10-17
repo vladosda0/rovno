@@ -267,6 +267,11 @@ describe("initMetrika and the Supabase auth fragment", () => {
     ["an invite token", `/auth/login?next=%2Finvite%2Faccept%2F${"a".repeat(32)}`],
     ["a share-estimate id", "/auth/signup?next=%2Fshare%2Festimate%2Fsome-share-id"],
     ["a share-document token", `/auth/login?next=%2Fshare%2Fdocument%2F${"b".repeat(48)}`],
+    ["a share link behind a dot segment", "/auth/login?next=%2Fshare%2Festimate%2F%252e%2FQA-SHARE-TOKEN"],
+    ["a share link behind a literal dot segment", "/auth/login?next=%2Fshare%2Festimate%2F.%2FQA-SHARE-TOKEN"],
+    ["a share link behind a dot segment with a fragment", "/auth/login?next=%2Fshare%2Festimate%2F.%2FQA-SHARE-TOKEN%23%2Fitems"],
+    ["a share link behind a protocol-relative prefix", "/auth/login?next=%2F%2Fshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["an invite link behind a parent segment", `/auth/signup?next=%2Fhome%2F..%2Finvite%2Faccept%2F${"c".repeat(32)}`],
   ])("does not start when `next` carries %s", async (_label, url) => {
     vi.useFakeTimers();
     setUrl(url);

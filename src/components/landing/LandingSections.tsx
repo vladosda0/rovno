@@ -15,8 +15,8 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { PLANS, type PlanCode } from "@/data/plans";
-import { trackEventOncePerSession } from "@/lib/analytics";
-import { formatRubFromKopecks } from "@/lib/billing";
+import { trackEvent, trackEventOncePerSession } from "@/lib/analytics";
+import { BILLING_ENABLED, formatRubFromKopecks } from "@/lib/billing";
 import type { RuntimeAuthStatus } from "@/hooks/use-runtime-auth";
 import { getActiveLanguage } from "@/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -526,7 +526,15 @@ const PRICING_ORIGINAL_KOPECKS: Partial<Record<PlanCode, number>> = {
   brigade: 420000, // 4 200 ₽
 };
 
-export function Pricing({ startPath }: { startPath: string }) {
+// Same destinations as PricingBlock's handleSelectPaid, except that a guest is
+// returned to the billing settings rather than to a checkout that redirects
+// away while billing is off.
+function paidPlanPath(code: PlanCode, isAuthed: boolean): string {
+  const destination = BILLING_ENABLED ? `/billing/checkout?plan=${code}` : "/settings?tab=billing";
+  return isAuthed ? destination : `/auth/signup?next=${encodeURIComponent(destination)}`;
+}
+
+export function Pricing({ startPath, isAuthed = false }: { startPath: string; isAuthed?: boolean }) {
   const { t } = useTranslation();
   // The pricing "page" is this landing section, so the funnel's
   // `pricing_page_viewed` fires when it actually reaches the viewport rather
@@ -667,7 +675,8 @@ export function Pricing({ startPath }: { startPath: string }) {
                 </div>
                 <Link
                   className="rv-btn rv-btn--primary"
-                  to={startPath}
+                  to={p.code === "free" ? startPath : paidPlanPath(p.code, isAuthed)}
+                  onClick={p.code === "free" ? undefined : () => trackEvent("billing_plan_selected", { plan: p.code })}
                   style={{ fontSize: 20, padding: "12px 14px", alignSelf: "stretch", ...(p.featured ? { background: "var(--rv-cream)", color: "var(--rv-blue)" } : {}) }}
                 >
                   {p.cta}

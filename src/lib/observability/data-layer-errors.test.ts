@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FunctionsFetchError, FunctionsHttpError } from "@supabase/supabase-js";
-import { shouldReportDataLayerError } from "./data-layer-errors";
+import { SIGN_OUT_RACE_WINDOW_MS, shouldReportDataLayerError } from "./data-layer-errors";
 
 function tierLimitError() {
   return {
@@ -117,5 +117,44 @@ describe("shouldReportDataLayerError", () => {
 
     expect(shouldReportDataLayerError({ message: "boom", code: "attempt_limit" }, "mutation")).toBe(true);
     expect(shouldReportDataLayerError(Object.assign(new Error("boom"), { code: "42501" }), "mutation")).toBe(true);
+  });
+
+  describe("a refusal answered as anon right after a sign-out", () => {
+    const anonDenied = {
+      code: "42501",
+      details: null,
+      hint: "Grant the required privileges to the current role with: GRANT SELECT ON public.profiles TO anon;",
+      message: "permission denied for table profiles",
+    };
+    const signedOutAt = 1_000_000;
+
+    it("skips it for a query inside the window", () => {
+      expect(shouldReportDataLayerError(anonDenied, "query", { signedOutAt, now: signedOutAt + 500 })).toBe(false);
+      for (const code of ["PGRST301", "PGRST303"]) {
+        expect(
+          shouldReportDataLayerError({ code, message: "JWT expired" }, "query", { signedOutAt, now: signedOutAt + 500 }),
+        ).toBe(false);
+      }
+    });
+
+    it("reports it once the window has passed, or with no sign-out at all", () => {
+      expect(
+        shouldReportDataLayerError(anonDenied, "query", { signedOutAt, now: signedOutAt + SIGN_OUT_RACE_WINDOW_MS + 1 }),
+      ).toBe(true);
+      expect(shouldReportDataLayerError(anonDenied, "query", { signedOutAt: null, now: signedOutAt })).toBe(true);
+      expect(shouldReportDataLayerError(anonDenied, "query", { signedOutAt: null, now: 500 })).toBe(true);
+      expect(shouldReportDataLayerError(anonDenied, "query")).toBe(true);
+    });
+
+    it("reports a refusal dated before the sign-out", () => {
+      expect(shouldReportDataLayerError(anonDenied, "query", { signedOutAt, now: signedOutAt - 1 })).toBe(true);
+    });
+
+    it("keeps reporting mutations and other codes inside the window", () => {
+      expect(shouldReportDataLayerError(anonDenied, "mutation", { signedOutAt, now: signedOutAt + 500 })).toBe(true);
+      expect(
+        shouldReportDataLayerError({ code: "23505", message: "duplicate key" }, "query", { signedOutAt, now: signedOutAt + 500 }),
+      ).toBe(true);
+    });
   });
 });

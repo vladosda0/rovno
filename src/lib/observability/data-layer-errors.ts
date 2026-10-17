@@ -73,6 +73,22 @@ function isExpectedRefusal(error: unknown): boolean {
 }
 
 /**
+ * How long after a sign-out a query dispatched under the old session may still
+ * come back refused as anon, its retries included while the tab stays focused
+ * and online (React Query pauses retries otherwise).
+ */
+export const SIGN_OUT_RACE_WINDOW_MS = 60_000;
+
+const ANON_REFUSAL_CODES = new Set(["42501", "PGRST301", "PGRST303"]);
+
+function isSignOutRaceRefusal(error: unknown, signedOutAt: number | null, now: number): boolean {
+  if (signedOutAt === null || now < signedOutAt || now - signedOutAt > SIGN_OUT_RACE_WINDOW_MS) return false;
+  if (typeof error !== "object" || error === null) return false;
+  const { code } = error as { code?: unknown };
+  return typeof code === "string" && ANON_REFUSAL_CODES.has(code);
+}
+
+/**
  * Report policy:
  *  - aborts are never defects (navigation / unmount cancellations);
  *  - a refusal in EXPECTED_REFUSAL_CODES is a limit doing its job;
@@ -80,16 +96,20 @@ function isExpectedRefusal(error: unknown): boolean {
  *    their own paywall UX, not bugs;
  *  - for background QUERIES, plain network failures are skipped (offline
  *    users would flood Sentry with retries);
+ *  - for QUERIES, an anon refusal shortly after a sign-out is the old
+ *    session's request landing late, not a grant regression;
  *  - MUTATIONS report everything else including network failures — a user
  *    action that failed to persist is exactly the signal we want.
  */
 export function shouldReportDataLayerError(
   error: unknown,
   kind: "query" | "mutation",
+  { signedOutAt = null, now = Date.now() }: { signedOutAt?: number | null; now?: number } = {},
 ): boolean {
   if (isAbortError(error)) return false;
   if (parseTierLimitError(error) !== null) return false;
   if (isExpectedRefusal(error)) return false;
   if (kind === "query" && isNetworkFetchFailure(error)) return false;
+  if (kind === "query" && isSignOutRaceRefusal(error, signedOutAt, now)) return false;
   return true;
 }
