@@ -166,12 +166,27 @@ export const ClientReportView = forwardRef<HTMLDivElement, ClientReportViewProps
           <section className="flex flex-col gap-1.5" aria-label={t("clientReport.block.inProgress")}>
             <h2 className={CLIENT_REPORT_SECTION_TITLE_CLASS}>{t("clientReport.block.inProgress")}</h2>
             <ul className="flex flex-col gap-1">
-              {data.inProgress.map((task) => (
-                <li key={task.id} className="flex items-baseline gap-2">
-                  <span className="text-[11px]" aria-hidden="true">⏳</span>
-                  <span className="min-w-0 break-words">{task.title}</span>
-                </li>
-              ))}
+              {data.inProgress.map((task) => {
+                const reason = task.blocked ? task.block_reason?.trim() ?? "" : "";
+                return (
+                  <li key={task.id} className="flex flex-col gap-0.5">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[11px]" aria-hidden="true">⏳</span>
+                      <span className="min-w-0 break-words">{task.title}</span>
+                      {task.blocked && (
+                        <span className="ml-auto whitespace-nowrap rounded-md bg-[hsl(30_80%_92%)] px-1.5 text-[11px] font-medium text-[hsl(25_70%_32%)]">
+                          {t("clientReport.view.blocked")}
+                        </span>
+                      )}
+                    </div>
+                    {reason && (
+                      <p className="pl-5 text-xs text-[hsl(66_8%_40%)] break-words">
+                        {t("clientReport.view.blockReason", { reason })}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}

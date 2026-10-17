@@ -478,4 +478,32 @@ describe("ShareReport", () => {
     expect(screen.getByRole("button", { name: "Повторить" })).toBeInTheDocument();
     expect(screen.queryByText("Отчёт не найден")).toBeNull();
   });
+
+  it("marks blocked tasks and shows only the reason the contractor included, also in the file", async () => {
+    let drawn = "";
+    mockDownloadPdf.mockImplementation(async (node: HTMLElement) => {
+      drawn = node.textContent ?? "";
+    });
+    const shared = sharedReport();
+    const inProgress: Array<{ id: string; title: string; blocked?: boolean; block_reason?: string }> = [
+      { id: "task-tile", title: "Укладка плитки, санузел", blocked: false },
+      { id: "task-wait", title: "Монтаж ванны", blocked: true, block_reason: "Ждём ванну от поставщика" },
+      { id: "task-quiet", title: "Покраска потолка", blocked: true },
+    ];
+    (shared.report.body as { in_progress: unknown }).in_progress = inProgress;
+    mockInvoke.mockResolvedValue({ data: shared, error: null });
+
+    renderPage();
+
+    const block = await screen.findByRole("region", { name: "В процессе" });
+    expect(within(block).getByText("Монтаж ванны")).toBeInTheDocument();
+    expect(within(block).getAllByText("Заблокирована")).toHaveLength(2);
+    expect(within(block).getByText("Причина: Ждём ванну от поставщика")).toBeInTheDocument();
+    expect(within(block).getAllByText(/^Причина:/)).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Скачать PDF" }));
+    await waitFor(() => expect(mockDownloadPdf).toHaveBeenCalledTimes(1));
+    expect(drawn).toContain("Заблокирована");
+    expect(drawn).toContain("Причина: Ждём ванну от поставщика");
+  });
 });

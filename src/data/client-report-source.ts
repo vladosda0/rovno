@@ -32,6 +32,13 @@ export interface ClientReportDoneTask {
 export interface ClientReportTask {
   id: string;
   title: string;
+  /** A blocked task in «В процессе» (step 6.12). Absent in reports published before it. */
+  blocked?: boolean;
+  /**
+   * The reason of a blocked task. The owner's preview carries it on every blocked
+   * row; a published report only on the rows the contractor switched on.
+   */
+  block_reason?: string | null;
 }
 
 export interface ClientReportNextTask {
@@ -89,6 +96,8 @@ export interface ClientReportPublishInput {
   hide: ClientReportHideKey[];
   from: string | null;
   to: string | null;
+  /** Blocked rows whose reason the contractor switched on for the client. */
+  reasonTaskIds: string[];
 }
 
 export interface ClientReportPublishResult {
@@ -186,6 +195,7 @@ export async function publishClientReport(
     p_hide: input.hide,
     p_from: input.from,
     p_to: input.to,
+    p_reason_task_ids: input.reasonTaskIds,
   });
   if (error) throw error;
   if (!data || typeof data !== "object") {

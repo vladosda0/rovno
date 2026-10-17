@@ -242,6 +242,7 @@ describe("ClientReportDialog", () => {
       p_hide: ["stages"],
       p_from: null,
       p_to: null,
+      p_reason_task_ids: [],
     });
   });
 
@@ -509,6 +510,103 @@ describe("ClientReportDialog", () => {
     // The off-screen copy is gone once the file is saved, and the button works again.
     await waitFor(() => expect(screen.getByRole("button", { name: "Скачать PDF" })).toBeEnabled());
     expect(document.body.textContent).not.toContain("Отчёт сделан в Ровно");
+  });
+
+  function blockedPreview() {
+    const base = preview();
+    return {
+      ...base,
+      body: {
+        ...base.body,
+        in_progress: [
+          { id: "task-tile", title: "Укладка плитки, санузел", blocked: false },
+          { id: "task-wait", title: "Монтаж ванны", blocked: true, block_reason: "Ждём ванну от поставщика" },
+          { id: "task-quiet", title: "Покраска потолка", blocked: true, block_reason: null },
+        ],
+      },
+    };
+  }
+
+  const PUBLISHED = {
+    report_id: "report-1",
+    published_at: local(10, 13),
+    share_token: TOKEN,
+    quota: quota({ can_publish: false, next_publish_at: local(10, 20) }),
+  };
+
+  it("marks a blocked row and offers the reason switch, off by default, only where there is a reason", async () => {
+    answerRpc({ preview_client_report: blockedPreview() });
+
+    renderDialog();
+    await screen.findByText("⏳ Монтаж ванны");
+
+    expect(screen.getAllByText("Заблокирована")).toHaveLength(2);
+    // The owner reads the reason in the window to decide.
+    expect(screen.getByText("Причина: Ждём ванну от поставщика")).toBeInTheDocument();
+    const switches = screen.getAllByRole("switch", { name: /Показать причину клиенту/ });
+    expect(switches).toHaveLength(1);
+    expect(switches[0]).toHaveAccessibleName("Показать причину клиенту: Монтаж ванны");
+    expect(switches[0]).not.toBeChecked();
+    // The row can still be removed.
+    expect(screen.getByRole("button", { name: "Убрать из отчёта: Монтаж ванны" })).toBeInTheDocument();
+  });
+
+  it("publishes no reason unless the switch is on, and the reason of a switched row", async () => {
+    answerRpc({
+      preview_client_report: (_args: unknown, call: number) => (call === 1 ? blockedPreview() : afterPublish()),
+      publish_client_report: PUBLISHED,
+    });
+
+    renderDialog();
+    await screen.findByText("⏳ Монтаж ванны");
+    fireEvent.click(screen.getByRole("switch", { name: "Показать причину клиенту: Монтаж ванны" }));
+    expect(screen.getByRole("switch", { name: "Показать причину клиенту: Монтаж ванны" })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Опубликовать" }));
+
+    await waitFor(() => expect(rpcCalls("publish_client_report")).toHaveLength(1));
+    expect(rpcCalls("publish_client_report")[0][1]).toMatchObject({ p_reason_task_ids: ["task-wait"] });
+  });
+
+  it("does not send the reason of a switched row that was removed", async () => {
+    answerRpc({
+      preview_client_report: (_args: unknown, call: number) => (call === 1 ? blockedPreview() : afterPublish()),
+      publish_client_report: PUBLISHED,
+    });
+
+    renderDialog();
+    await screen.findByText("⏳ Монтаж ванны");
+    fireEvent.click(screen.getByRole("switch", { name: "Показать причину клиенту: Монтаж ванны" }));
+    fireEvent.click(screen.getByRole("button", { name: "Убрать из отчёта: Монтаж ванны" }));
+    fireEvent.click(screen.getByRole("button", { name: "Опубликовать" }));
+
+    await waitFor(() => expect(rpcCalls("publish_client_report")).toHaveLength(1));
+    expect(rpcCalls("publish_client_report")[0][1]).toMatchObject({
+      p_excluded_task_ids: ["task-wait"],
+      p_reason_task_ids: [],
+    });
+  });
+
+  it("draws the blocked mark into the PDF, and the reason only once it is switched on", async () => {
+    const drawn: string[] = [];
+    mockDownloadPdf.mockImplementation(async (node: HTMLElement) => {
+      drawn.push(node.textContent ?? "");
+    });
+    answerRpc({ preview_client_report: blockedPreview() });
+
+    renderDialog();
+    await screen.findByText("⏳ Монтаж ванны");
+
+    fireEvent.click(screen.getByRole("button", { name: "Скачать PDF" }));
+    await waitFor(() => expect(drawn).toHaveLength(1));
+    expect(drawn[0]).toContain("Монтаж ванны");
+    expect(drawn[0]).toContain("Заблокирована");
+    expect(drawn[0]).not.toContain("Ждём ванну от поставщика");
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Скачать PDF" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("switch", { name: "Показать причину клиенту: Монтаж ванны" }));
+    fireEvent.click(screen.getByRole("button", { name: "Скачать PDF" }));
+    await waitFor(() => expect(drawn).toHaveLength(2));
+    expect(drawn[1]).toContain("Причина: Ждём ванну от поставщика");
   });
 
   it("says so when the PDF cannot be built", async () => {

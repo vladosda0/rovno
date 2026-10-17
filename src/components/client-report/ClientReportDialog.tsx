@@ -53,6 +53,7 @@ import {
   type ClientReportPreview,
   type ClientReportQuota,
   type ClientReportRhythm,
+  type ClientReportTask,
 } from "@/data/client-report-source";
 import type { Media } from "@/types/entities";
 
@@ -100,16 +101,24 @@ function ReportLine({
   title,
   excluded,
   onToggle,
+  badge,
 }: {
   label: string;
   title: string;
   excluded: boolean;
   onToggle: () => void;
+  /** A mark next to the line, e.g. «Заблокирована». */
+  badge?: string;
 }) {
   const { t } = useTranslation();
   return (
     <div className="flex items-center justify-between gap-2">
       <span className={cn("min-w-0 break-words", excluded && "text-muted-foreground line-through")}>{label}</span>
+      {badge && (
+        <span className="ml-auto whitespace-nowrap rounded-md border border-warning/40 bg-warning/10 px-1.5 text-[11px] font-medium text-foreground">
+          {badge}
+        </span>
+      )}
       <button
         type="button"
         onClick={onToggle}
@@ -187,6 +196,8 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
   const [excludedTasks, setExcludedTasks] = useState<Set<string>>(new Set());
   const [excludedPhotos, setExcludedPhotos] = useState<Set<string>>(new Set());
   const [hidden, setHidden] = useState<Set<ClientReportHideKey>>(new Set());
+  // Blocked rows whose reason the contractor shows to the client; off by default.
+  const [shownReasons, setShownReasons] = useState<Set<string>>(new Set());
   const [quotaOverride, setQuotaOverride] = useState<ClientReportQuota | null>(null);
   const [periodInvalid, setPeriodInvalid] = useState(false);
   // undefined: follow the preview; null: revoked in this window.
@@ -277,6 +288,7 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
   const toggleTask = (id: string) => setExcludedTasks((current) => toggled(current, id));
   const togglePhoto = (id: string) => setExcludedPhotos((current) => toggled(current, id));
   const toggleHidden = (key: ClientReportHideKey) => setHidden((current) => toggled(current, key));
+  const toggleReason = (id: string) => setShownReasons((current) => toggled(current, id));
 
   const refreshPreview = () =>
     queryClient.invalidateQueries({ queryKey: ["client-report-preview", projectId] });
@@ -327,7 +339,7 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
         publishedAt: at,
         note: note.trim(),
         done: body.done.filter((task) => !excludedTasks.has(task.id)),
-        inProgress: body.in_progress.filter((task) => !excludedTasks.has(task.id)),
+        inProgress: clientInProgress(body.in_progress),
         next: body.next.filter((task) => !excludedTasks.has(task.id)),
         progress: hidden.has("progress") ? null : body.progress,
         stages: hidden.has("stages") ? null : body.stages,
@@ -336,6 +348,14 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
         .filter((photo) => !excludedPhotos.has(photo.id))
         .map((photo) => ({ id: photo.id, caption: photo.caption })),
     };
+  }
+
+  /** The rows the client gets: removed ones out, a reason only where it is switched on. */
+  function clientInProgress(rows: ClientReportTask[]): ClientReportTask[] {
+    return rows
+      .filter((task) => !excludedTasks.has(task.id))
+      .map(({ block_reason: reason, ...task }) =>
+        task.blocked && reason && shownReasons.has(task.id) ? { ...task, block_reason: reason } : task);
   }
 
   async function handlePublish() {
@@ -352,6 +372,9 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
         // The range of the lists on screen, not whatever the inputs hold.
         from: good.range.from,
         to: good.range.to,
+        reasonTaskIds: clientInProgress(body.in_progress)
+          .filter((task) => task.block_reason)
+          .map((task) => task.id),
       });
       setPublished(snapshot(result.published_at));
       setDraft(NO_DRAFT);
@@ -362,6 +385,7 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
       setExcludedTasks(new Set());
       setExcludedPhotos(new Set());
       setHidden(new Set());
+      setShownReasons(new Set());
       setRange(DEFAULT_RANGE);
       void refreshPreview();
     } catch (error) {
@@ -697,15 +721,43 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
                 {body.in_progress.length > 0 && (
                   <div className={BLOCK_CLASS}>
                     <span className={BLOCK_TITLE_CLASS}>{t("clientReport.block.inProgress")}</span>
-                    {body.in_progress.map((task) => (
-                      <ReportLine
-                        key={task.id}
-                        label={`⏳ ${task.title}`}
-                        title={task.title}
-                        excluded={excludedTasks.has(task.id)}
-                        onToggle={() => toggleTask(task.id)}
-                      />
-                    ))}
+                    {body.in_progress.map((task) => {
+                      const reason = task.blocked ? task.block_reason?.trim() ?? "" : "";
+                      const excluded = excludedTasks.has(task.id);
+                      return (
+                        <div key={task.id} className="flex flex-col gap-1">
+                          <ReportLine
+                            label={`⏳ ${task.title}`}
+                            title={task.title}
+                            excluded={excluded}
+                            onToggle={() => toggleTask(task.id)}
+                            badge={task.blocked ? t("clientReport.view.blocked") : undefined}
+                          />
+                          {reason && !excluded && (
+                            <div className="flex flex-col gap-1 pl-5">
+                              <p
+                                className={cn(
+                                  "text-caption break-words",
+                                  shownReasons.has(task.id) ? "text-foreground" : "text-muted-foreground",
+                                )}
+                              >
+                                {t("clientReport.view.blockReason", { reason })}
+                              </p>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-caption text-muted-foreground" aria-hidden="true">
+                                  {t("clientReport.showReason")}
+                                </span>
+                                <Switch
+                                  checked={shownReasons.has(task.id)}
+                                  onCheckedChange={() => toggleReason(task.id)}
+                                  aria-label={t("clientReport.showReasonFor", { title: task.title })}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 

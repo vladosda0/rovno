@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import {
   ClientReportView,
   type ClientReportViewData,
@@ -77,5 +77,27 @@ describe("ClientReportView header", () => {
     expect(logo?.getAttribute("alt")).toBeTruthy();
     expect(view.container.textContent).not.toMatch(/^ровно|^rovno/);
     expect(screen.queryByText("clientReport.view.brand")).toBeNull();
+  });
+
+  it("marks a blocked task and shows its reason only when the row carries one", () => {
+    const view = render(
+      <ClientReportView
+        data={{
+          ...data("https://signed.example/x"),
+          photos: [],
+          inProgress: [
+            { id: "t1", title: "Tiling", blocked: false },
+            { id: "t2", title: "Bathtub", blocked: true, block_reason: "Waiting for the supplier" },
+            { id: "t3", title: "Ceiling", blocked: true },
+          ],
+        }}
+      />,
+    );
+
+    const block = screen.getByRole("region", { name: "In progress" });
+    expect(within(block).getAllByText("Blocked")).toHaveLength(2);
+    expect(within(block).getByText("Reason: Waiting for the supplier")).toBeInTheDocument();
+    expect(within(block).getAllByText(/^Reason:/)).toHaveLength(1);
+    expect(view.container.textContent).toContain("Tiling");
   });
 });
