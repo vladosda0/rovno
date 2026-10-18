@@ -10,6 +10,7 @@
 //   dist/blog/<slug>/index.html     — full article HTML + meta + JSON-LD
 //   dist/sitemap.xml                — static routes + articles
 //   dist/blog/feed.xml              — RSS 2.0 with full content
+//   dist/blog/dzen.xml              — RSS for Dzen (its tag set; see dzenFeedConfig.mjs)
 //   dist/llms.txt                   — LLM-crawler orientation file
 //
 // Mechanics: takes dist/index.html as the app shell, swaps the head tags for
@@ -38,6 +39,7 @@ import createDOMPurify from "dompurify";
 import { sanitizeArticleHtmlWith } from "../src/lib/blog/sanitizeConfig.mjs";
 import { annotateArticleHtml } from "../src/lib/blog/anchorsConfig.mjs";
 import { faqJsonLdFromDoc } from "../src/lib/blog/faqConfig.mjs";
+import { dzenArticleHtml, dzenFeedXml } from "../src/lib/blog/dzenFeedConfig.mjs";
 import { collectTagHubs, isIndexableTag, pluralizeRu, postsForTagSlug, tagNamesForSlug, tagSlug } from "../src/lib/blog/tagsConfig.mjs";
 
 // fileURLToPath (not new URL().pathname) so a build path containing a space or
@@ -707,6 +709,28 @@ ${items}
 `;
 }
 
+// Same sanitizer as every other render path, then reduced to Dzen's tag set.
+// Fail-soft like renderArticleBody: a post whose body cannot be converted goes
+// out with escaped text rather than breaking the build.
+function dzenBody(post) {
+  const safe = sanitizeArticleBody(post.content_html);
+  try {
+    return dzenArticleHtml(safe, parseArticleHtml, SITE_ORIGIN);
+  } catch (err) {
+    log(`dzen conversion failed for ${post.slug}, serving text: ${err?.message ?? err}`);
+    return `<p>${escapeHtml(parseArticleHtml(safe).body.textContent ?? "")}</p>`;
+  }
+}
+
+function dzenXml(posts) {
+  return dzenFeedXml(posts, {
+    siteOrigin: SITE_ORIGIN,
+    title: BLOG_TITLE,
+    description: BLOG_DESCRIPTION,
+    renderBody: dzenBody,
+  });
+}
+
 function llmsTxt(posts) {
   const lines = [
     `# ${SITE_NAME} (rovno.ai)`,
@@ -850,6 +874,10 @@ async function main() {
   await writeFile(path.join(DIST, "blog", "feed.xml"), rssXml(posts), "utf8");
   log("wrote blog/feed.xml");
 
+  // Dzen reads its own feed; feed.xml above stays as it is (R-20261016-33).
+  await writeFile(path.join(DIST, "blog", "dzen.xml"), dzenXml(posts), "utf8");
+  log("wrote blog/dzen.xml");
+
   // Landing shell LAST, and only on a build that actually wrote article files.
   //
   // dist/index.html is Caddy's SPA fallback, so whatever canonical it carries is
@@ -875,8 +903,9 @@ async function main() {
   // RESIDUAL: an article published AFTER this build is served by the fallback
   // until the next deploy, and so reports "/" as its canonical for that window.
   // Content-wise it is an empty shell to a non-JS crawler either way; the article
-  // gets its own canonical the moment a deploy renders it. Closing it properly
-  // means rebuilding on publish (blog-rebuild-frontend, dormant on prod today).
+  // gets its own canonical the moment a deploy renders it. Publishing already
+  // triggers that rebuild on prod (blog-rebuild-frontend from the admin, the
+  // door's publish for Shurik's posts), so the window is one Timeweb build long.
   if (posts.length > 0) {
     await writeFile(path.join(DIST, "index.html"), renderCanonicalShell(template, "/"), "utf8");
     log("wrote landing canonical shell");

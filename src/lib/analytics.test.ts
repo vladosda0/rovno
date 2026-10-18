@@ -141,6 +141,18 @@ describe("initMetrika and the Supabase auth fragment", () => {
     expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
   });
 
+  it("does not load the tag on a blog draft preview link", async () => {
+    vi.useFakeTimers();
+    setUrl("/share/blog/v1.QA-BLOG-PREVIEW.QA-SIGNATURE");
+    const initMetrika = await loadInitMetrika();
+
+    initMetrika();
+    vi.advanceTimersByTime(1_000);
+
+    expect(initCalls(ym)).toHaveLength(0);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
+  });
+
   it("does not load the tag when the share path differs only in case", async () => {
     vi.useFakeTimers();
     setUrl("/SHARE/ESTIMATE/QA-SHARE-TOKEN");
@@ -477,6 +489,16 @@ describe("analyticsPageUrl path sanitising", () => {
     expect(url).not.toContain("QA-DOCUMENT-TOKEN");
   });
 
+  it("replaces a blog preview token in the path with the route template", async () => {
+    setUrl("/share/blog/v1.QA-BLOG-PREVIEW.QA-SIGNATURE");
+    const { analyticsPageUrl } = await loadAnalytics();
+
+    const url = analyticsPageUrl();
+
+    expect(url).toBe(`${window.location.origin}/share/blog/:token`);
+    expect(url).not.toContain("QA-BLOG-PREVIEW");
+  });
+
   it("replaces an invite token in the path with the route template", async () => {
     setUrl("/invite/accept/QA-INVITE-TOKEN?lang=ru");
     const { analyticsPageUrl } = await loadAnalytics();
@@ -566,12 +588,13 @@ describe("ANALYTICS_ROUTES stays in step with App.tsx", () => {
     expect(stale).toEqual([]);
   });
 
-  it("marks the four token-bearing routes, and only those, as secret", () => {
+  it("marks the five token-bearing routes, and only those, as secret", () => {
     const secret = ANALYTICS_ROUTES.filter((route) => route.secret).map((route) => route.pattern);
 
     expect(secret).toEqual([
       "/share/estimate/:shareId",
       "/share/document/:token",
+      "/share/blog/:token",
       "/share/report/:token",
       "/invite/accept/:inviteToken",
     ]);

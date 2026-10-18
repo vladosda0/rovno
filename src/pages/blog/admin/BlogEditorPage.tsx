@@ -559,6 +559,9 @@ export default function BlogEditorPage() {
           <Badge variant={form.status === "published" ? "default" : "secondary"}>
             {form.status === "published" ? "Опубликовано" : "Черновик"}
           </Badge>
+          {loadedPost?.author && (
+            <span className="text-xs text-muted-foreground">Автор: {loadedPost.author.display_name}</span>
+          )}
           <span className={`text-xs ${saveState === "error" ? "text-destructive" : "text-muted-foreground"}`}>
             {saveStatusText}
           </span>

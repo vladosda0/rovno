@@ -13,6 +13,9 @@ describe("scrubText", () => {
     expect(scrubText("https://rovno.ai/share/estimate/QA-SHARE-TOKEN")).toBe(
       "https://rovno.ai/share/estimate/[FILTERED]",
     );
+    expect(scrubText("https://rovno.ai/share/blog/v1.AAAAAAAAAAAAAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBB")).toBe(
+      "https://rovno.ai/share/blog/[FILTERED]",
+    );
     expect(scrubText("https://rovno.ai/invite/accept/QA-INVITE?lang=ru")).toBe(
       "https://rovno.ai/invite/accept/[FILTERED]?lang=ru",
     );

@@ -45,7 +45,7 @@ const SCRUB_RULES: ScrubRule[] = [
     // Credential-bearing PATH segments. On these routes the segment IS the
     // credential, and the query-param rule below cannot see it because it is
     // not a query param. Kept in step with the `secret: true` entries of
-    // ANALYTICS_ROUTES (src/lib/analytics.ts), which redact the same four
+    // ANALYTICS_ROUTES (src/lib/analytics.ts), which redact the same
     // routes for Metrika.
     name: "credential-path-segment",
     // %2f as well as /: the app itself percent-encodes these paths into a
@@ -53,7 +53,7 @@ const SCRUB_RULES: ScrubRule[] = [
     // and the encoded form reached the tracker verbatim while this matched only
     // literal separators. The `i` flag covers %2F and an upper-cased route.
     pattern:
-      /((?:\/|%2f)(?:share(?:\/|%2f)document|share(?:\/|%2f)report|share(?:\/|%2f)estimate|invite(?:\/|%2f)accept)(?:\/|%2f))[^/?#&\s"'<>]+/gi,
+      /((?:\/|%2f)(?:share(?:\/|%2f)document|share(?:\/|%2f)report|share(?:\/|%2f)blog|share(?:\/|%2f)estimate|invite(?:\/|%2f)accept)(?:\/|%2f))[^/?#&\s"'<>]+/gi,
     replacement: "$1[FILTERED]",
   },
   {

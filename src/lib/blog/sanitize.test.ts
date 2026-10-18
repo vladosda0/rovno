@@ -77,6 +77,37 @@ describe("sanitizeArticleHtml", () => {
     expect(out).toMatch(/loading="lazy"/);
   });
 
+  it("keeps a table exactly as the editor's getHTML() writes it", () => {
+    // @tiptap/extension-table 3.27.1 with resizable: false. colgroup and thead
+    // sit in DOMPurify's FORBID_CONTENTS list (above), which only matters if the
+    // element itself is removed; this asserts it is not, attributes included.
+    const html =
+      '<table style="min-width: 50px;"><colgroup><col style="min-width: 25px;"><col style="min-width: 25px;"></colgroup>' +
+      '<tbody><tr><th colspan="1" rowspan="1"><p>Работа</p></th><th colspan="1" rowspan="1"><p>Цена, ₽</p></th></tr>' +
+      '<tr><td colspan="1" rowspan="1"><p><strong>Штукатурка</strong></p><p>по маякам</p></td>' +
+      '<td colspan="1" rowspan="1"><p><a href="https://rovno.ai/blog/x/">700&nbsp;–&nbsp;850</a></p></td></tr></tbody></table>';
+
+    const out = sanitizeArticleHtml(html);
+
+    expect(out).toBe(html);
+    for (const tag of ["table", "colgroup", "col", "tbody", "tr", "th", "td", "p"]) {
+      expect(out, tag).toMatch(new RegExp(`<${tag}[ >]`));
+    }
+  });
+
+  it("keeps a thead, which the editor never writes but a pasted table may carry", () => {
+    const out = sanitizeArticleHtml("<table><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>");
+
+    expect(out).toMatch(/<thead><tr><th>A<\/th><\/tr><\/thead>/);
+  });
+
+  it("strips event handlers from table cells", () => {
+    const out = sanitizeArticleHtml('<table><tbody><tr><td onclick="alert(1)" colspan="1"><p>x</p></td></tr></tbody></table>');
+
+    expect(out).not.toMatch(/onclick/i);
+    expect(out).toMatch(/<td colspan="1"><p>x<\/p><\/td>/);
+  });
+
   it("removes a non-allowlisted iframe", () => {
     expect(sanitizeArticleHtml('<iframe src="https://evil.com/x"></iframe>')).not.toMatch(/<iframe/i);
   });

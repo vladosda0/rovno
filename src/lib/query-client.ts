@@ -14,7 +14,7 @@ import { getSignedOutSince } from "@/hooks/use-runtime-auth";
  * Add a key here whenever a route's path segment is its credential — the same
  * set as the `secret: true` entries of ANALYTICS_ROUTES.
  */
-const CREDENTIAL_QUERY_KEYS = new Set(["document-share", "estimate-share", "invite-token"]);
+const CREDENTIAL_QUERY_KEYS = new Set(["document-share", "estimate-share", "invite-token", "blog-preview"]);
 
 /** The key with its credential elements replaced, safe to attach to an event. */
 export function redactQueryKey(queryKey: readonly unknown[]): unknown[] {

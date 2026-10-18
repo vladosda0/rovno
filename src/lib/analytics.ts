@@ -329,6 +329,7 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/theme" },
   { pattern: "/share/estimate/:shareId", secret: true },
   { pattern: "/share/document/:token", secret: true },
+  { pattern: "/share/blog/:token", secret: true },
   { pattern: "/share/report/:token", secret: true },
   { pattern: "/invite/accept/:inviteToken", secret: true },
   { pattern: "/blog" },

@@ -27,6 +27,20 @@
   border-radius: var(--r-md);
 }
 
+/* Tables: the look comes from blog.css (.rv-article table). The editor wraps
+   each table in a .tableWrapper div (extension-table's node view); a cell
+   selection (drag across cells, prosemirror-tables) gets the same orange as
+   a selected image. */
+.rv-editor-content .tableWrapper {
+  max-width: 100%;
+}
+
+.rv-editor-content td.selectedCell,
+.rv-editor-content th.selectedCell {
+  outline: 2px solid var(--rv-orange);
+  outline-offset: -2px;
+}
+
 .rv-editor-content [data-youtube-video] {
   pointer-events: none; /* select the node instead of playing inline while editing */
 }
