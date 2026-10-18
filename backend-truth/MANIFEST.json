@@ -619,6 +619,10 @@
     {
       "path": "supabase/migrations/20261016020200_client_report_mark_rpcs.sql",
       "sha256": "bd904191383c24ecf95fcf2b191fec2c5e1d45b685e36a28445bee55ce0dcee6"
+    },
+    {
+      "path": "supabase/migrations/20261016110000_blog_system_authors.sql",
+      "sha256": "dfc4d0067f02c404a83fe2d5482a0ea8c629e779e3b872d2feef8550494d44f4"
     }
   ],
   "generated_artifacts": [

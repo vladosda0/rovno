@@ -2394,30 +2394,33 @@ export type Database = {
         "blog_authors": {
           Row: {
           "id": string
-          "profile_id": string
+          "profile_id": string | null
           "display_name": string
           "bio": string | null
           "avatar_url": string | null
           "created_at": string
           "updated_at": string
+          "system_key": string | null
           }
           Insert: {
           "id"?: string
-          "profile_id": string
+          "profile_id"?: string | null
           "display_name": string
           "bio"?: string | null
           "avatar_url"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "system_key"?: string | null
           }
           Update: {
           "id"?: string
-          "profile_id"?: string
+          "profile_id"?: string | null
           "display_name"?: string
           "bio"?: string | null
           "avatar_url"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "system_key"?: string | null
           }
           Relationships: []
         }
