@@ -44,7 +44,15 @@ import {
 } from "@/components/estimate-v2/EstimateDocument";
 import { getPageGeometry, mmToPx } from "@/components/estimate-v2/estimate-pagination";
 import { EstimateExportForm } from "@/components/estimate-v2/EstimateExportForm";
-import { useClientInfo, useOrgCard, useSetClientInfo, useSetOrgCard } from "@/hooks/use-org-card";
+import {
+  useClientInfo,
+  useClientInfoScope,
+  useOrgCard,
+  useOrgCardScope,
+  useSetClientInfo,
+  useSetOrgCard,
+} from "@/hooks/use-org-card";
+import { canEditOrgCard } from "@/data/org-card-source";
 import { useActiveOrg } from "@/hooks/use-orgs";
 import {
   type ClientInfo,
@@ -154,13 +162,15 @@ export function EstimateExportModal({
   const activeOrg = useActiveOrg();
   const orgId = activeOrg?.id ?? null;
   const projectId = payload?.projectId ?? null;
-  // When the user has no active org, fall back to a project-scoped local key
-  // so signing details still persist on this device. The banner in the modal
-  // tells the user this is what will happen.
-  const effectiveOrgKey = orgId ?? (projectId ? `local:${projectId}` : null);
+  // Requisites live on the server (org, or the profile without an org); the
+  // demo and local workspaces keep them in this browser.
+  const orgCardScope = useOrgCardScope(projectId, activeOrg);
+  const clientInfoScope = useClientInfoScope(projectId);
+  const orgCardEditable = canEditOrgCard(orgCardScope);
 
-  const orgCardQuery = useOrgCard(effectiveOrgKey);
-  const clientInfoQuery = useClientInfo(projectId);
+  // Read (and move the browser copy) only once the window is open.
+  const orgCardQuery = useOrgCard(open ? orgCardScope : null);
+  const clientInfoQuery = useClientInfo(open ? clientInfoScope : null);
   const setOrgCardMutation = useSetOrgCard();
   const setClientInfoMutation = useSetClientInfo();
 
@@ -300,16 +310,21 @@ export function EstimateExportModal({
     variant !== "client_signing"
     || (orgCardHasRequiredFields(orgCardDraft) && clientInfoHasRequiredFields(clientInfoDraft));
 
+  // A failed save does not stop the export: the document is built from what is
+  // on screen, and the person is told the details were not saved.
   const persistSigningDraft = async () => {
     if (variant !== "client_signing") return;
     const tasks: Promise<unknown>[] = [];
-    if (effectiveOrgKey) {
-      tasks.push(setOrgCardMutation.mutateAsync({ orgId: effectiveOrgKey, card: orgCardDraft }));
+    if (orgCardScope && orgCardEditable) {
+      tasks.push(setOrgCardMutation.mutateAsync({ scope: orgCardScope, card: orgCardDraft }));
     }
-    if (projectId) {
-      tasks.push(setClientInfoMutation.mutateAsync({ projectId, info: clientInfoDraft }));
+    if (clientInfoScope) {
+      tasks.push(setClientInfoMutation.mutateAsync({ scope: clientInfoScope, info: clientInfoDraft }));
     }
-    await Promise.all(tasks);
+    const results = await Promise.allSettled(tasks);
+    if (results.some((result) => result.status === "rejected")) {
+      toast({ title: t("estimate.export.toast.requisitesNotSaved"), variant: "destructive" });
+    }
   };
 
   const ensureSigningReady = () => {
@@ -345,9 +360,6 @@ export function EstimateExportModal({
     setPreparingPdf(true);
     try {
       await persistSigningDraft();
-    } catch {
-      toast({ title: t("estimate.export.toast.pdfFailed"), variant: "destructive" });
-      return;
     } finally {
       preparingPdfRef.current = false;
       setPreparingPdf(false);
@@ -405,7 +417,16 @@ export function EstimateExportModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] w-[96vw] max-w-6xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent
+        className="flex max-h-[92vh] w-[96vw] max-w-6xl flex-col gap-0 overflow-hidden p-0"
+        onEscapeKeyDown={(event) => {
+          // Escape in an open suggestion list closes the list, not the window.
+          const target = event.target;
+          if (target instanceof HTMLElement && target.getAttribute("aria-expanded") === "true") {
+            event.preventDefault();
+          }
+        }}
+      >
         <DialogHeader className="border-b border-border px-5 py-4">
           <DialogTitle>{t("estimate.export.modal.title")}</DialogTitle>
           <DialogDescription>{t("estimate.export.modal.description")}</DialogDescription>
@@ -450,6 +471,8 @@ export function EstimateExportModal({
                 onOrgCardChange={setOrgCardDraft}
                 clientInfo={clientInfoDraft}
                 onClientInfoChange={setClientInfoDraft}
+                canEditOrgCard={orgCardEditable}
+                requisitesScope={orgCardScope?.kind ?? "device"}
               />
             ) : null}
 
@@ -578,7 +601,9 @@ export function EstimateExportModal({
         {variant === "client_signing" && !orgId ? (
           <div className="border-t border-border bg-info/5 px-5 py-2 text-caption text-info">
             <Info className="mr-1 inline h-3.5 w-3.5" />
-            {t("estimate.export.signing.noActiveOrg")}
+            {orgCardScope?.kind === "device"
+              ? t("estimate.export.signing.noActiveOrgDevice")
+              : t("estimate.export.signing.noActiveOrg")}
           </div>
         ) : null}
       </DialogContent>

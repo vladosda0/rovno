@@ -19,8 +19,10 @@ vi.mock("@/hooks/use-toast", () => ({
   toast: mockToast,
   useToast: () => ({ toast: mockToast, dismiss: vi.fn(), toasts: [] }),
 }));
-vi.mock("@/hooks/use-orgs", () => ({ useActiveOrg: () => ({ id: "org-1" }) }));
+vi.mock("@/hooks/use-orgs", () => ({ useActiveOrg: () => ({ id: "org-1", role: "owner" }) }));
 vi.mock("@/hooks/use-org-card", () => ({
+  useOrgCardScope: () => ({ kind: "org", orgId: "org-1", canEdit: true }),
+  useClientInfoScope: () => ({ kind: "server", projectId: "p1" }),
   useOrgCard: () => orgCard,
   useClientInfo: () => clientInfo,
   useSetOrgCard: () => ({ mutateAsync: mockSaveOrgCard }),
@@ -198,17 +200,33 @@ describe("EstimateExportModal: Download PDF", () => {
     expect(text).toContain("Снос перегородок");
   });
 
-  it("tells the person when the signing details could not be saved", async () => {
+  it("still builds the PDF from the screen when the signing details could not be saved", async () => {
     mockSaveOrgCard.mockRejectedValue(new Error("network"));
     renderModal();
 
     fireEvent.click(screen.getByRole("radio", { name: /For signing/ }));
     fireEvent.click(screen.getByRole("button", { name: "Download PDF" }));
 
-    await waitFor(() =>
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" })),
-    );
-    expect(mockDownloadSheets).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockDownloadSheets).toHaveBeenCalledTimes(1));
+    expect(mockSaveClientInfo).toHaveBeenCalledTimes(1);
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: "The details were not saved. The document uses what is on screen.",
+      variant: "destructive",
+    }));
+    const text = mockDownloadSheets.mock.calls[0][0].map((sheet: HTMLElement) => sheet.textContent).join(" ");
+    expect(text).toContain("ООО Ремонт");
+  });
+
+  it("still prints the signing variant when the client details could not be saved", async () => {
+    mockSaveClientInfo.mockRejectedValue(new Error("network"));
+    renderModal();
+
+    fireEvent.click(screen.getByRole("radio", { name: /For signing/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Print" }));
+
+    await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(1));
+    expect(mockSaveOrgCard).toHaveBeenCalledTimes(1);
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
   });
 
   it("still prints with Print", async () => {
