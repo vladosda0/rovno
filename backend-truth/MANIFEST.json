@@ -635,6 +635,10 @@
     {
       "path": "supabase/migrations/20261020020000_org_profile_requisites_and_project_client_info.sql",
       "sha256": "7123196f2b946f07398e06a0db85c7034396188bc292858ab8635200fde6daae"
+    },
+    {
+      "path": "supabase/migrations/20261020030000_knowledge_base_storage.sql",
+      "sha256": "91ff46999d308d14a87a2f91ee666ebe72e7e4b07cbecafffc479d14b5a4ab95"
     }
   ],
   "generated_artifacts": [

@@ -2808,6 +2808,201 @@ export type Database = {
           }
           Relationships: []
         }
+        "kb_documents": {
+          Row: {
+          "doc_id": string
+          "slug": string
+          "designation": string | null
+          "title": string
+          "category": string
+          "folder": "sp" | "gost" | "laws" | "snip" | "sanpin" | "guides" | "manufacturers" | "international" | "cis" | "other"
+          "display_mode": "full_text" | "card"
+          "object_types": unknown
+          "domains": unknown
+          "applicability_note": string | null
+          "publisher": string | null
+          "country": string | null
+          "edition": string | null
+          "effective_from": unknown | null
+          "last_checked_at": unknown | null
+          "source_links": Json
+          "registry_version": string
+          "is_published": boolean
+          "full_text_available": boolean
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "doc_id"?: string
+          "slug": string
+          "designation"?: string | null
+          "title": string
+          "category": string
+          "folder": "sp" | "gost" | "laws" | "snip" | "sanpin" | "guides" | "manufacturers" | "international" | "cis" | "other"
+          "display_mode": "full_text" | "card"
+          "object_types"?: unknown
+          "domains"?: unknown
+          "applicability_note"?: string | null
+          "publisher"?: string | null
+          "country"?: string | null
+          "edition"?: string | null
+          "effective_from"?: unknown | null
+          "last_checked_at"?: unknown | null
+          "source_links"?: Json
+          "registry_version": string
+          "is_published"?: boolean
+          "full_text_available"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "doc_id"?: string
+          "slug"?: string
+          "designation"?: string | null
+          "title"?: string
+          "category"?: string
+          "folder"?: "sp" | "gost" | "laws" | "snip" | "sanpin" | "guides" | "manufacturers" | "international" | "cis" | "other"
+          "display_mode"?: "full_text" | "card"
+          "object_types"?: unknown
+          "domains"?: unknown
+          "applicability_note"?: string | null
+          "publisher"?: string | null
+          "country"?: string | null
+          "edition"?: string | null
+          "effective_from"?: unknown | null
+          "last_checked_at"?: unknown | null
+          "source_links"?: Json
+          "registry_version"?: string
+          "is_published"?: boolean
+          "full_text_available"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_clauses": {
+          Row: {
+          "id": string
+          "doc_id": string
+          "anchor": string
+          "heading": string | null
+          "body": string
+          "position": number
+          "is_published": boolean
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "doc_id": string
+          "anchor": string
+          "heading"?: string | null
+          "body": string
+          "position": number
+          "is_published"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "doc_id"?: string
+          "anchor"?: string
+          "heading"?: string | null
+          "body"?: string
+          "position"?: number
+          "is_published"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_solutions": {
+          Row: {
+          "id": string
+          "slug": string
+          "title": string
+          "body": Json
+          "status": "draft" | "checked" | "reviewed" | "published"
+          "checked_at": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "slug": string
+          "title": string
+          "body"?: Json
+          "status"?: "draft" | "checked" | "reviewed" | "published"
+          "checked_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "slug"?: string
+          "title"?: string
+          "body"?: Json
+          "status"?: "draft" | "checked" | "reviewed" | "published"
+          "checked_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_solution_facts": {
+          Row: {
+          "id": string
+          "solution_id": string
+          "position": number
+          "fact": string
+          "doc_id": string
+          "clause_anchor": string | null
+          "quote": string | null
+          "created_at": string
+          }
+          Insert: {
+          "id"?: string
+          "solution_id": string
+          "position": number
+          "fact": string
+          "doc_id": string
+          "clause_anchor"?: string | null
+          "quote"?: string | null
+          "created_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "solution_id"?: string
+          "position"?: number
+          "fact"?: string
+          "doc_id"?: string
+          "clause_anchor"?: string | null
+          "quote"?: string | null
+          "created_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_gaps": {
+          Row: {
+          "id": string
+          "question": string
+          "context": Json
+          "created_at": string
+          }
+          Insert: {
+          "id"?: string
+          "question": string
+          "context"?: Json
+          "created_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "question"?: string
+          "context"?: Json
+          "created_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -3233,6 +3428,10 @@ export type Database = {
           "p_actor": string
           }
           Returns: boolean
+        }
+        "kb_folder_counts": {
+          Args: Record<PropertyKey, never>
+          Returns: unknown
         }
         "list_canonical_stages_with_works": {
           Args: {
