@@ -6,7 +6,7 @@ import {
   type TbankIntegrationStatus,
 } from "@/lib/tbank-widget";
 
-// If the addcardIframe never reports loaded within this window, fall back to the
+// If the card form never reports loaded within this window, fall back to the
 // hosted-page link instead of stranding an empty box (audit M3).
 const ADDCARD_LOAD_TIMEOUT_MS = 8000;
 
@@ -19,10 +19,13 @@ interface TBankAddCardFormProps {
   onFailed?: () => void;
 }
 
-// Embeds T-Bank's card-binding form via integration.js (features.addcardIframe),
+// Embeds T-Bank's card-binding form via integration.js (features.addcard.iframe),
 // initialised once. The PAN is entered on T-Bank's side. Best-effort: if the script /
 // VITE_TBANK_TERMINAL_KEY / init fails, it calls onFailed so the dialog can offer the
 // hosted-page link; the RebillId is captured server-side via the AddCard notification.
+// When the form finishes, integration.js sends the whole window to the terminal's
+// SuccessAddCardURL / FailAddCardURL (no router override here); that page asks the
+// bank for the result.
 export function TBankAddCardForm({ paymentUrl, onSuccess, onFailed }: TBankAddCardFormProps) {
   const { i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,12 +34,25 @@ export function TBankAddCardForm({ paymentUrl, onSuccess, onFailed }: TBankAddCa
   useEffect(() => {
     let active = true;
     let alive = false;
+    let signalled = false;
+    const signalFailed = () => {
+      if (signalled) return;
+      signalled = true;
+      onFailed?.();
+    };
+    // Non-destructive backstop (audit M3 + codex P2): if the iframe never signals it is
+    // alive (no loadedCallback / no status event), REVEAL the hosted-page fallback WITHOUT
+    // tearing down the iframe, so a working-but-silent form stays usable.
+    const timer = window.setTimeout(() => {
+      if (active && !alive) signalFailed();
+    }, ADDCARD_LOAD_TIMEOUT_MS);
     // Hard failure (no terminal key / script load / init reject): the iframe cannot mount,
     // so unmount the empty box and let the dialog show the hosted-page fallback.
     const hardFail = () => {
       if (!active) return;
+      window.clearTimeout(timer);
       setFailed(true);
-      onFailed?.();
+      signalFailed();
     };
     // Any loaded/status signal means the form is alive (the backstop below then no-ops).
     const markAlive = () => {
@@ -51,12 +67,6 @@ export function TBankAddCardForm({ paymentUrl, onSuccess, onFailed }: TBankAddCa
       hardFail();
       return;
     }
-    // Non-destructive backstop (audit M3 + codex P2): if the iframe never signals it is
-    // alive (no loadedCallback / no status event), REVEAL the hosted-page fallback WITHOUT
-    // tearing down the iframe, so a working-but-silent form stays usable.
-    const timer = window.setTimeout(() => {
-      if (active && !alive) onFailed?.();
-    }, ADDCARD_LOAD_TIMEOUT_MS);
     loadTbankIntegration()
       .then((integration) => {
         if (!active || !containerRef.current) return undefined;
@@ -65,17 +75,19 @@ export function TBankAddCardForm({ paymentUrl, onSuccess, onFailed }: TBankAddCa
             terminalKey,
             product: "eacq",
             features: {
-              addcardIframe: {
-                container: containerRef.current,
-                config: {
-                  language: (i18n.language === "en" ? "en" : "ru") as "ru" | "en",
-                  // Pass the callbacks in both the top-level and the nested `status` shape
-                  // so SUCCESS fires regardless of integration.js's exact iframe shape.
-                  loadedCallback: markAlive,
-                  changedCallback: onStatus,
-                  status: { changedCallback: onStatus },
+              addcard: {
+                iframe: {
+                  container: containerRef.current,
+                  config: {
+                    language: (i18n.language === "en" ? "en" : "ru") as "ru" | "en",
+                    // Pass the callbacks in both the top-level and the nested `status` shape
+                    // so SUCCESS fires regardless of integration.js's exact iframe shape.
+                    loadedCallback: markAlive,
+                    changedCallback: onStatus,
+                    status: { changedCallback: onStatus },
+                  },
+                  paymentStartCallback: () => Promise.resolve(paymentUrl),
                 },
-                paymentStartCallback: () => Promise.resolve(paymentUrl),
               },
             },
           })

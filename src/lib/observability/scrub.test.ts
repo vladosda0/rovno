@@ -7,8 +7,14 @@ describe("scrubText", () => {
     expect(scrubText(`https://rovno.ai/share/document/${token}`)).toBe(
       "https://rovno.ai/share/document/[FILTERED]",
     );
+    expect(scrubText("https://rovno.ai/share/report/QA-REPORT-TOKEN?report=1")).toBe(
+      "https://rovno.ai/share/report/[FILTERED]?report=1",
+    );
     expect(scrubText("https://rovno.ai/share/estimate/QA-SHARE-TOKEN")).toBe(
       "https://rovno.ai/share/estimate/[FILTERED]",
+    );
+    expect(scrubText("https://rovno.ai/share/blog/v1.AAAAAAAAAAAAAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBB")).toBe(
+      "https://rovno.ai/share/blog/[FILTERED]",
     );
     expect(scrubText("https://rovno.ai/invite/accept/QA-INVITE?lang=ru")).toBe(
       "https://rovno.ai/invite/accept/[FILTERED]?lang=ru",
@@ -95,6 +101,23 @@ describe("scrubText", () => {
     expect(scrubText("https://rovno.ai/auth/confirm?token_hash=pkce_abc123&type=signup")).toBe(
       "https://rovno.ai/auth/confirm?token_hash=[FILTERED]&type=signup",
     );
+  });
+
+  it("filters a sensitive param in first position and right after the fragment mark", () => {
+    expect(scrubText("token_hash=pkce_abc123&type=signup")).toBe("token_hash=[FILTERED]&type=signup");
+    expect(scrubText("https://rovno.ai/auth/reset#refresh_token=r3fr3sh&type=recovery")).toBe(
+      "https://rovno.ai/auth/reset#refresh_token=[FILTERED]&type=recovery",
+    );
+  });
+
+  it("filters a sensitive param that starts a later line", () => {
+    expect(scrubText("request failed\nrefresh_token=r3fr3sh&type=recovery")).toBe(
+      "request failed\nrefresh_token=[FILTERED]&type=recovery",
+    );
+  });
+
+  it("leaves a look-alike name in the middle of a word alone", () => {
+    expect(scrubText("see barcode=4607 on the label")).toBe("see barcode=4607 on the label");
   });
 
   it("filters an email carried as a query param, including percent-encoded", () => {

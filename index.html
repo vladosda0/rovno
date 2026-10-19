@@ -5,13 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <script>
-      // www.rovno.ai -> rovno.ai. Timeweb App Platform serves the same app on
-      // every attached domain and offers no edge redirect, so without this www
-      // answers with a duplicate of the whole site. Inline and first in <head>
-      // so it fires before the icon/manifest fetches and the SPA boot below.
-      // Plain ES3: this script is served untranspiled.
+      // www.rovno.ai -> rovno.ai, стройагент.рф -> rovno.ai. Timeweb App Platform
+      // serves the same app on every attached domain and offers no edge redirect,
+      // so without this www answers with a duplicate of the whole site. Inline and
+      // first in <head> so it fires before the icon/manifest fetches and the SPA
+      // boot below. Plain ES3: this script is served untranspiled.
       (function () {
         var host = location.host;
+        // стройагент.рф is not used as an app: every page goes to rovno.ai
+        // (Vlad, 2026-10-15). location.host carries the punycode form.
+        if (host === "xn--80aggnxbnhjh.xn--p1ai" || host === "www.xn--80aggnxbnhjh.xn--p1ai") {
+          location.replace("https://rovno.ai" + location.pathname + location.search + location.hash);
+          return;
+        }
         if (host.slice(0, 4) !== "www.") return;
         var bare = host.slice(4);
         // Leave hosts with no registrable domain left alone (e.g. www.localhost).

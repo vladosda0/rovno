@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { TIER_LIMITS } from "@/data/tier-limits";
 
 export function BillingPanel() {
   const { t, i18n } = useTranslation();
-  const { data: quota, isLoading } = useTierQuota();
+  const { data: quota, isLoading, isError, refetch } = useTierQuota();
   const [plansOpen, setPlansOpen] = useState(false);
   const workspaceMode = useWorkspaceMode();
   // A logged-out visitor on a Supabase deployment (AppLayout doesn't redirect)
@@ -26,6 +26,15 @@ export function BillingPanel() {
   // session, so swap it for a sign-in nudge. Demo / local keep the CTA (the plan
   // comparison is part of the product showcase); pending-supabase is transient.
   const needsSignIn = workspaceMode.kind === "guest";
+  // With a session the plan is unknown until get_current_usage answers; naming
+  // "free" before that upsells a subscriber the plan they already pay for.
+  const planUnknown =
+    (workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase") &&
+    quota === undefined;
+  const planLoadFailed = planUnknown && isError;
+  useEffect(() => {
+    if (planUnknown) setPlansOpen(false);
+  }, [planUnknown]);
 
   // Plan comes from the active subscription (get_current_usage), the billing
   // source of truth — not the legacy profiles.plan field.
@@ -50,15 +59,38 @@ export function BillingPanel() {
               <Sparkles className="h-5 w-5 text-accent" />
             </div>
             <div className="flex-1 min-w-0 space-y-0.5">
-              <p className="text-body-sm font-semibold text-foreground">
-                {t("billing.planSuffix", { plan: planLabel })}
-              </p>
-              <p className="text-caption text-muted-foreground">{t("billing.currentTier")}</p>
+              {planLoadFailed ? (
+                <p role="alert" className="text-body-sm font-semibold text-foreground">
+                  {t("billing.planLoadError")}
+                </p>
+              ) : (
+                <>
+                  {planUnknown ? (
+                    <Skeleton data-testid="billing-plan-skeleton" className="h-5 w-40" />
+                  ) : (
+                    <p className="text-body-sm font-semibold text-foreground">
+                      {t("billing.planSuffix", { plan: planLabel })}
+                    </p>
+                  )}
+                  <p className="text-caption text-muted-foreground">{t("billing.currentTier")}</p>
+                </>
+              )}
             </div>
+            {planLoadFailed ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full sm:w-auto sm:shrink-0"
+                onClick={() => { void refetch(); }}
+              >
+                {t("common.retry")}
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
               className="w-full sm:w-auto sm:shrink-0"
+              disabled={planUnknown}
               onClick={() => { trackEvent("billing_panel_compare_plans_clicked"); setPlansOpen(true); }}
             >
               {t("billing.comparePlans")}
@@ -121,7 +153,7 @@ export function BillingPanel() {
             <div className="pt-sp-1">
               <SignInPrompt hint={t("billing.signInHint")} ctaLabel={t("billing.signIn")} />
             </div>
-          ) : canUpgrade ? (
+          ) : canUpgrade && !planUnknown ? (
             <div className="flex flex-wrap gap-sp-2 pt-sp-1">
               <Button
                 className="w-full sm:w-auto"
@@ -140,7 +172,7 @@ export function BillingPanel() {
           Placed last so the quiet cancel link sits at the bottom of the page. */}
       {BILLING_ENABLED ? <SubscriptionSection /> : null}
 
-      <PlansDialog open={plansOpen} onOpenChange={setPlansOpen} currentPlan={planCode} />
+      <PlansDialog open={plansOpen && !planUnknown} onOpenChange={setPlansOpen} currentPlan={planCode} />
     </div>
   );
 }

@@ -39,6 +39,7 @@ function profileRow(overrides: Partial<Parameters<typeof mapProfileRowToUser>[0]
     plan: "pro" as const,
     credits_free: 5,
     credits_paid: 25,
+    gender: null,
     created_at: "2026-03-01T00:00:00.000Z",
     updated_at: "2026-03-01T00:00:00.000Z",
     ...overrides,
@@ -192,7 +193,9 @@ describe("workspace-source helpers", () => {
       plan: "pro",
       credits_free: 5,
       credits_paid: 25,
+      gender: null,
     });
+    expect(mapProfileRowToUser(profileRow({ gender: "female" })).gender).toBe("female");
   });
 
   it("maps project rows to the frontend Project contract with null stage fallback", () => {

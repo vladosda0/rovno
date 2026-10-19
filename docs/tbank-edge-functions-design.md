@@ -64,7 +64,7 @@
 
 - **Path:** `POST /functions/v1/tbank-init-payment`
 - **Auth:** Supabase JWT (юзер должен быть авторизован; `service_role` тоже допустим для admin-кейсов)
-- **CORS:** allow origin = `https://rovno.ai`, `https://стройагент.рф`, `http://localhost:8080` (staging)
+- **CORS:** allow origin = the list in `supabase/functions/tbank-init-payment/origins.ts` in rovno-db (`https://rovno.ai`, `https://www.rovno.ai`, `http://localhost:8080`, the staging site). `стройагент.рф` is not on it since rovno-db #147: it redirects to `rovno.ai`.
 
 **Request body:**
 ```ts

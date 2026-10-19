@@ -6,7 +6,9 @@
 //  - floating "+" menu on an empty paragraph: image upload, YouTube embed,
 //    bullet/ordered list, code block, divider;
 //  - drag-drop and paste of image files uploads to the blog-images bucket and
-//    inserts a <figure> (image + caption) at the drop/caret position.
+//    inserts a <figure> (image + caption) at the drop/caret position;
+//  - tables (from Shurik's door) load and their cells edit as text; there is
+//    no button to insert one.
 //
 // The content area is rendered with the SAME .rv-article classes the public
 // page uses — the editor is WYSIWYG against blog.css.
@@ -14,9 +16,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
-import StarterKit from "@tiptap/starter-kit";
-import Image from "@tiptap/extension-image";
-import Youtube from "@tiptap/extension-youtube";
 import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code, Link2, Link2Off,
@@ -26,10 +25,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { uploadBlogImage } from "@/lib/blog/api";
 import { isInternalHref, normalizeHref } from "@/lib/blog/link-href";
-import { Figcaption, Figure } from "./Figure";
-import { FaqAnswer, FaqItem, FaqQuestion } from "./Faq";
+import { blogContentExtensions } from "./blogExtensions";
 import {
-  IsolatedInputRules,
   handleIsolatedDrop,
   insertBlockNodesHoisted,
   isolatedEditorProps,
@@ -114,30 +111,7 @@ export function RichTextEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [2, 3] },
-        link: {
-          openOnClick: false,
-          autolink: true,
-          defaultProtocol: "https",
-          // Defaults for autolinked (always outbound) URLs. applyLink overrides
-          // both to null on internal links so they open in the same tab.
-          HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
-        },
-      }),
-      Figure,
-      Figcaption,
-      FaqItem,
-      FaqQuestion,
-      FaqAnswer,
-      // Must be registered: `isolating` guards commands, not input rules. Typing
-      // `---` in a caption or an FAQ answer otherwise tears the node apart.
-      IsolatedInputRules,
-      // Legacy: articles written before the figure node still hold plain `image`
-      // nodes. Unregistering Image would make TipTap drop them on hydrate, and
-      // the autosave would then write the loss back to the DB.
-      Image,
-      Youtube.configure({ nocookie: true, width: 0, height: 0, HTMLAttributes: {} }),
+      ...blogContentExtensions(),
       Placeholder.configure({
         // Not just the focused node: an empty FAQ question needs its hint even
         // while the caret sits in the answer below it. CSS scopes which of the

@@ -29,6 +29,7 @@ import {
   projectDomainAllowsView,
   seamCanViewSensitiveDetail,
 } from "@/lib/permissions";
+import { seamAllowsClientReport } from "@/lib/client-report-dialog";
 import { resolveActionState } from "@/lib/permission-contract-actions";
 import { Copy, Info, LayoutDashboard, MapPin } from "lucide-react";
 
@@ -196,6 +197,7 @@ export default function ProjectDashboard() {
         canCreatePhoto={canContributeGallery}
         canManageProcurement={canManageProcurement}
         canManageParticipants={canManageParticipants}
+        canShareClientReport={seamAllowsClientReport(perm.seam)}
         actorRole={actorRole}
         actorAiAccess={actorAiAccess}
       />

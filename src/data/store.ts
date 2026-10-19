@@ -10,6 +10,7 @@ import type {
   Media,
   Event,
   Notification,
+  ShurikMessage,
   ContractorProposal,
   EstimateVersion,
   EstimateItem,
@@ -57,6 +58,7 @@ interface BrowserWorkspaceState {
   media: Media[];
   events: Event[];
   notifications: Notification[];
+  shurikMessages: ShurikMessage[];
   contractorProposals: ContractorProposal[];
   invites: WorkspaceProjectInvite[];
 }
@@ -67,6 +69,10 @@ function getResolvedTimezone(): string {
   if (typeof Intl === "undefined") return "UTC";
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
+
+// Demo and local identity is rebuilt from seed data or the stored auth profile; the gender a
+// person picks there lives here, for the session.
+const sessionGender: Partial<Record<BrowserWorkspaceKind, User["gender"]>> = {};
 
 function createLocalUser(profile: StoredAuthProfile | null): User {
   if (!profile || !isAuthenticated()) {
@@ -79,6 +85,7 @@ function createLocalUser(profile: StoredAuthProfile | null): User {
       plan: "free",
       credits_free: 0,
       credits_paid: 0,
+      ...(sessionGender.local ? { gender: sessionGender.local } : {}),
     };
   }
 
@@ -91,6 +98,7 @@ function createLocalUser(profile: StoredAuthProfile | null): User {
     plan: profile.plan === "pro" || profile.plan === "business" ? profile.plan : "free",
     credits_free: seedUser.credits_free,
     credits_paid: 0,
+    ...(sessionGender.local ? { gender: sessionGender.local } : {}),
   };
 }
 
@@ -107,6 +115,7 @@ function createSeededDemoState(): BrowserWorkspaceState {
     media: [...seedMedia],
     events: [...seedEvents],
     notifications: [...seedNotifications],
+    shurikMessages: [],
     contractorProposals: [],
     invites: [...seedInvites],
   };
@@ -125,6 +134,7 @@ function createEmptyLocalState(profile: StoredAuthProfile | null): BrowserWorksp
     media: [],
     events: [],
     notifications: [],
+    shurikMessages: [],
     contractorProposals: [],
     invites: [],
   };
@@ -143,6 +153,7 @@ function cloneWorkspaceState(state: BrowserWorkspaceState): BrowserWorkspaceStat
     media: [...state.media],
     events: [...state.events],
     notifications: [...state.notifications],
+    shurikMessages: [...state.shurikMessages],
     contractorProposals: [...state.contractorProposals],
     invites: [...state.invites],
   };
@@ -151,7 +162,7 @@ function cloneWorkspaceState(state: BrowserWorkspaceState): BrowserWorkspaceStat
 function sanitizeDemoState(state: BrowserWorkspaceState): BrowserWorkspaceState {
   return {
     ...state,
-    user: { ...seedUser },
+    user: { ...seedUser, ...(sessionGender.demo ? { gender: sessionGender.demo } : {}) },
   };
 }
 
@@ -172,6 +183,7 @@ function loadPersistedDemoState(): BrowserWorkspaceState | null {
       media: parsed.media ?? [...seedMedia],
       events: parsed.events ?? [...seedEvents],
       notifications: parsed.notifications ?? [...seedNotifications],
+      shurikMessages: parsed.shurikMessages ?? [],
       contractorProposals: parsed.contractorProposals ?? [],
       invites: parsed.invites ?? [...seedInvites],
     });
@@ -289,6 +301,12 @@ function notify() {
 
 export function getCurrentUserForMode(mode: BrowserWorkspaceKind): User {
   return getStateForMode(mode).user;
+}
+
+/** Demo and local keep the gender for the session only; nothing else of the identity is written. */
+export function setCurrentUserGender(mode: BrowserWorkspaceKind, gender: User["gender"]) {
+  sessionGender[mode] = gender ?? null;
+  updateWorkspaceState(() => {}, mode);
 }
 
 export function getProjectsForMode(mode: BrowserWorkspaceKind): Project[] {
@@ -442,6 +460,29 @@ export function addTask(task: Task, options: AddTaskOptions = {}) {
         ...(options.source ? { source: options.source } : {}),
       },
     });
+  });
+}
+
+/** Newest first, the order the panel shows them in. */
+export function getShurikMessages(userId: string): ShurikMessage[] {
+  return getStateForMode().shurikMessages
+    .filter((message) => message.user_id === userId)
+    .sort((left, right) => right.created_at.localeCompare(left.created_at));
+}
+
+export function addShurikMessage(message: ShurikMessage) {
+  updateWorkspaceState((state) => {
+    state.shurikMessages = [...state.shurikMessages, message];
+  });
+}
+
+export function markShurikMessagesRead(ids: string[]) {
+  if (ids.length === 0) return;
+  const readAt = new Date().toISOString();
+  updateWorkspaceState((state) => {
+    state.shurikMessages = state.shurikMessages.map((message) =>
+      ids.includes(message.id) && !message.is_read ? { ...message, is_read: true, read_at: readAt } : message,
+    );
   });
 }
 
@@ -887,6 +928,7 @@ function resetDemoState() {
   } catch {
     // Ignore storage failures; the in-memory reset below still applies.
   }
+  delete sessionGender.demo;
   demoState = sanitizeDemoState(createSeededDemoState());
   notify();
 }
@@ -897,6 +939,8 @@ function resetDemoState() {
 onDemoSessionDeactivated(resetDemoState);
 
 export function __unsafeResetStoreForTests() {
+  delete sessionGender.demo;
+  delete sessionGender.local;
   demoState = sanitizeDemoState(loadPersistedDemoState() ?? createSeededDemoState());
   localState = createEmptyLocalState(getStoredAuthProfile());
   localProfileId = localState.user.id;

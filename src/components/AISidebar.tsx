@@ -4,20 +4,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
 import { resolveFirstMoveEntry, type ChipSeed } from "@/lib/ai-chip-attribution";
-import {
-  buildSidebarOpener,
-  isSidebarOpenerKillSwitchEnabled,
-  type OpenerLevel,
-} from "@/lib/ai-sidebar-opener";
-import {
-  localDayKey,
-  readOpenerState,
-  resolveOpenerLevel,
-  withFirstMove,
-  withShown,
-  writeOpenerState,
-} from "@/lib/ai-sidebar-opener-state";
+import { buildSidebarOpener, isSidebarOpenerKillSwitchEnabled } from "@/lib/ai-sidebar-opener";
 import { SidebarOpener, SidebarOpenerSkeleton } from "@/components/ai/SidebarOpener";
+import { ShurikHintCard } from "@/components/ai/ShurikHintCard";
+import { useShurikHintOfDay, useShurikHintRenderable } from "@/hooks/use-shurik-hint";
+import { profileFullName, shurikGreeting } from "@/lib/shurik-hints";
 import { getEventGroupTimestampMs } from "@/lib/event-activity-timestamp";
 import {
   Bot,
@@ -55,7 +46,11 @@ import { AIQuotaWarning } from "@/components/billing/AIQuotaWarning";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { MediaImage } from "@/components/MediaImage";
-import { WorkLog } from "@/components/ai/WorkLog";
+import { ActiveWorkLog } from "@/components/ai/WorkLog";
+import { isFreshAssistantReply, ShurikBubble } from "@/components/ai/ShurikBubble";
+import { ShurikMessageList } from "@/components/ai/ShurikMessageList";
+import { SHURIK_PANEL_TAB_IDS, ShurikPanelTabs, type ShurikPanelTab } from "@/components/ai/ShurikPanelTabs";
+import { useShurikMessages } from "@/hooks/use-shurik-messages";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
 import { GroundingCallout } from "@/components/ai/GroundingCallout";
@@ -125,6 +120,7 @@ import {
   commitPhotoConsultActions,
   commitProposal,
   filterPhotoConsultProposalChangesBySeam,
+  photoConsultTaskDescription,
   type PhotoConsultApplyAction,
 } from "@/lib/commit-proposal";
 import { proposalFailureReasonKey, resolveProposalFastFail } from "@/lib/ai-proposal-execution";
@@ -145,6 +141,11 @@ import {
 } from "@/data/store";
 import { format, isToday, isYesterday } from "date-fns";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
+import {
+  CLIENT_REPORT_CHIP_KEY,
+  canOpenClientReport,
+  openClientReportDialog,
+} from "@/lib/client-report-dialog";
 import {
   type AiLlmProvider,
   readStoredAiLlmProvider,
@@ -551,6 +552,9 @@ interface ScopedAISidebarState {
 interface AISidebarProps {
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
+  /** Which tab is shown. Left out, the panel keeps the choice itself and starts on the chat. */
+  panelTab?: ShurikPanelTab;
+  onPanelTabChange?: (next: ShurikPanelTab) => void;
 }
 
 const scopedSidebarStateByKey = new Map<string, ScopedAISidebarState>();
@@ -743,7 +747,19 @@ function liveAssistantNoProjectDataLine(_lang: AiAssistantUiLanguage, t: Transla
   return t("ai.sidebar.liveAssistant.noProjectData");
 }
 
-export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
+export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabChange }: AISidebarProps) {
+  const [ownPanelTab, setOwnPanelTab] = useState<ShurikPanelTab>("chat");
+  const activePanelTab = panelTab ?? ownPanelTab;
+  const showNotifications = activePanelTab === "notifications";
+  const selectPanelTab = (next: ShurikPanelTab) => {
+    setOwnPanelTab(next);
+    onPanelTabChange?.(next);
+  };
+  const {
+    messages: shurikMessages,
+    unreadCount: shurikUnreadCount,
+    markRead: markShurikMessagesRead,
+  } = useShurikMessages();
   const { t, i18n } = useTranslation();
   const translateKeys = useCallback((keys: string[]) => keys.map((k) => t(k)), [t]);
   const WORK_STEPS_GENERATE = useMemo(() => translateKeys(WORK_STEP_KEYS_GENERATE), [translateKeys]);
@@ -1935,14 +1951,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         // Null before the opener shipped and whenever it was not on screen, which
         // is what keeps this one series comparable across the release boundary.
         opener_shown_id: openerShow?.id ?? null,
-        opener_level: openerShow?.level ?? null,
       });
-      if (openerShow) {
-        // Any first move counts, typed or clicked: the fade measures whether the
-        // block is useless, not whether its chips are (PRD section 5.2).
-        const userId = workspaceProfileId ?? "anonymous";
-        writeOpenerState(userId, withFirstMove(readOpenerState(userId)));
-      }
     }
 
     runAssistantForContent(content, userMsg.id, targetProjectId || undefined, userMsg.mode);
@@ -2196,7 +2205,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           kind: "create_task",
           projectId: photoConsult.photo.project_id,
           title: action.label,
-          description: `AI-identified issue from photo: ${photoConsult.photo.caption}`,
+          description: photoConsultTaskDescription(photoConsult.photo.caption, t),
           stageId: photoConsult.task?.stage_id ?? stage?.id ?? "",
           photoIds: [photoConsult.photo.id],
         });
@@ -2368,12 +2377,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     messages.length === 0;
 
   /**
-   * One entry per appearance, carrying the project it belongs to: the level cannot
-   * change under the user mid-read, `ai_opener_shown` cannot fire twice for one
-   * appearance, and switching to another empty project mints a new one instead of
-   * reusing the previous project's id (audit finding 6).
+   * One entry per appearance, carrying the project it belongs to: `ai_opener_shown`
+   * cannot fire twice for one appearance, and switching to another empty project
+   * mints a new one instead of reusing the previous project's id (audit finding 6).
    */
-  const [openerShow, setOpenerShow] = useState<{ id: string; level: OpenerLevel; projectId: string } | null>(null);
+  const [openerShow, setOpenerShow] = useState<{ id: string; projectId: string } | null>(null);
 
   /**
    * True only while something is genuinely in flight. The skeleton is tied to THIS,
@@ -2390,10 +2398,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       ctxTasksState.isLoading);
 
   /**
-   * Nothing is asserted, recorded or reported until the data behind the signals has
-   * loaded. Only the task counts are gated because only task signals ship in v1
-   * (`V1_ENABLED_DOMAINS`); the estimate and procurement sources cannot yet say
-   * whether they have loaded, which is why their signals are out.
+   * Nothing is recorded or reported until the task counts the chip row is ordered by
+   * have loaded.
    */
   const openerReady = openerEligible && !openerDataLoading && openerContext !== null;
 
@@ -2412,39 +2418,35 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       return;
     }
     if (openerShow?.projectId === resolvedPermissionProjectId) return;
-    const userId = workspaceProfileId ?? "anonymous";
-    const stored = readOpenerState(userId);
-    // Level is read BEFORE this show is recorded, so the very first appearance is
-    // still L0 rather than being aged by itself.
     setOpenerShow({
       id: `opener-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      level: resolveOpenerLevel(stored),
       projectId: resolvedPermissionProjectId,
     });
-    writeOpenerState(userId, withShown(stored, localDayKey(new Date())));
-  }, [openerReady, openerShow, resolvedPermissionProjectId, workspaceProfileId]);
+  }, [openerReady, openerShow, resolvedPermissionProjectId]);
 
-  /**
-   * From the seam rather than from `ctx.user.role`, which is typed as a plain
-   * string: the role decides which signals may exist at all, so it should not
-   * reach the catalogue through a cast.
-   */
+  /** From the seam rather than from `ctx.user.role`, which is typed as a plain string. */
   const openerRole = useMemo(
     () => (seamForProjectCommit ? getProjectRole(seamForProjectCommit) : "viewer"),
     [seamForProjectCommit],
   );
 
+  const clientReportFromChat = canOpenClientReport(seamForProjectCommit, workspaceMode.kind);
+
   const opener = useMemo(() => {
     if (!openerShow) return null;
     return buildSidebarOpener({
       ctx: openerContext,
-      role: openerRole,
-      level: openerShow.level,
       compact: isMobile,
       quotaExhausted: openerQuotaExhausted,
+      clientReport: clientReportFromChat,
       t,
     });
-  }, [openerShow, openerContext, openerRole, isMobile, openerQuotaExhausted, t]);
+  }, [openerShow, openerContext, isMobile, openerQuotaExhausted, clientReportFromChat, t]);
+
+  // ── Hint of the day (slice 8): one card over the project chat, picked by the server ──
+  const hintProjectId = isProjectContext && resolvedPermissionProjectId ? resolvedPermissionProjectId : null;
+  const { hint: hintOfDay, dismiss: dismissHintOfDay } = useShurikHintOfDay(hintProjectId);
+  const hintCardShown = useShurikHintRenderable(hintOfDay, hintProjectId);
 
   const openerReportedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -2455,7 +2457,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       project_id: resolvedPermissionProjectId,
       surface: "ai",
       opener_shown_id: openerShow.id,
-      opener_level: openerShow.level,
       signals: opener.signals.join(","),
       role: openerRole,
     });
@@ -3083,17 +3084,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     const rating = messageRatings[message.id];
     const isSaved = savedMessageIds.has(message.id);
     const isRegenerating = regeneratingMessageId === message.id;
-    return (
-      <div key={`active-chat-${message.id}`} className="px-0 py-1.5 min-w-0 max-w-full">
-        <div className={`rounded-md border border-border/60 px-2 py-1.5 min-w-0 max-w-full ${
-          isUserMessage ? "bg-sidebar-accent/40" : "bg-muted/20"
-        }`}>
+    const body = (
+      <>
           <div className="flex items-center gap-1.5">
-            <div className="flex h-5 w-5 items-center justify-center rounded-md bg-muted">
-              {isUserMessage
-                ? <User className="h-3 w-3 text-muted-foreground" />
-                : <Bot className="h-3 w-3 text-accent" />}
-            </div>
+            {isUserMessage && (
+              <div className="flex h-5 w-5 items-center justify-center rounded-md bg-muted">
+                <User className="h-3 w-3 text-muted-foreground" />
+              </div>
+            )}
             <p className="text-caption font-medium text-foreground">
               {isUserMessage ? t("ai.sidebar.chat.you") : t("ai.sidebar.chat.ai")}
             </p>
@@ -3205,7 +3203,17 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               </button>
             </div>
           )}
-        </div>
+      </>
+    );
+    return (
+      <div key={`active-chat-${message.id}`} className="px-0 py-1.5 min-w-0 max-w-full">
+        {isUserMessage ? (
+          <div className="rounded-md border border-border/60 bg-sidebar-accent/40 px-2 py-1.5 min-w-0 max-w-full">
+            {body}
+          </div>
+        ) : (
+          <ShurikBubble wink={isFreshAssistantReply(message, Date.now())}>{body}</ShurikBubble>
+        )}
       </div>
     );
   }
@@ -3215,16 +3223,20 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     "bg-success/10", "bg-destructive/10",
   ];
 
+  // In a project chat the empty composer greets the person by the time of day and by name.
   const composerPlaceholder = learnMode
     ? t("ai.sidebar.composer.placeholderLearn")
     : photoConsult
       ? t("ai.sidebar.composer.placeholderConsult")
-      : t("ai.sidebar.composer.placeholderDefault");
+      : isProjectContext
+        ? shurikGreeting(t, new Date(), profileFullName(user))
+        : t("ai.sidebar.composer.placeholderDefault");
 
   const composerTextarea = (
     <Textarea
       ref={composerTextareaRef}
       placeholder={composerPlaceholder}
+      aria-label={t("ai.sidebar.composer.placeholderDefault")}
       className={cn(
         /* block + min-h-0: default Textarea uses flex; avoids flex row preventing autosized height growth */
         "block min-h-[38px] max-h-[220px] w-full resize-none border-0 bg-transparent px-1 py-2 text-body-sm shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-50",
@@ -3502,6 +3514,59 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               </div>
             ) : (
               <>
+                <div className="px-3 pt-2 shrink-0">
+                  <ShurikPanelTabs tab={activePanelTab} onTabChange={selectPanelTab} unreadCount={shurikUnreadCount} />
+                </div>
+
+                {showNotifications && (
+                  <ScrollArea
+                    id={SHURIK_PANEL_TAB_IDS.notifications.panel}
+                    role="tabpanel"
+                    aria-labelledby={SHURIK_PANEL_TAB_IDS.notifications.tab}
+                    className="flex-1 min-h-0"
+                  >
+                    <ShurikMessageList
+                      messages={shurikMessages}
+                      onMarkRead={markShurikMessagesRead}
+                      onAction={() => {
+                        // On a phone the panel covers the page the button has just opened.
+                        if (isMobile) onCollapsedChange(true);
+                      }}
+                      clientReportAvailable={workspaceMode.kind === "supabase"}
+                      className="px-3 py-2"
+                    />
+                  </ScrollArea>
+                )}
+
+                {/* Chat and composer stay mounted behind the Notifications tab, so a half-typed
+                    question and the scroll position are still there on the way back. */}
+                <div
+                  id={SHURIK_PANEL_TAB_IDS.chat.panel}
+                  role="tabpanel"
+                  aria-labelledby={SHURIK_PANEL_TAB_IDS.chat.tab}
+                  hidden={showNotifications}
+                  className={cn("flex-1 min-h-0 min-w-0 flex flex-col", showNotifications && "hidden")}
+                >
+                {/* The hint of the day stands under the tabs and does not scroll with the conversation. */}
+                {hintCardShown && hintOfDay && hintProjectId && (
+                  <div className="px-3 pt-2 shrink-0">
+                    <ShurikHintCard
+                      hint={hintOfDay}
+                      projectId={hintProjectId}
+                      onDismiss={dismissHintOfDay}
+                      onNavigate={(href) => {
+                        navigate(href);
+                        // On a phone the panel covers the page the button has just opened.
+                        if (isMobile) onCollapsedChange(true);
+                      }}
+                      onAsk={(question) => {
+                        chipSeedRef.current = null;
+                        setInputValue(question);
+                        composerTextareaRef.current?.focus();
+                      }}
+                    />
+                  </div>
+                )}
                 {/* === MAIN BODY === */}
                 <div className="flex-1 min-h-0 flex flex-col" style={{ width: "100%" }}>
                   {/* Inline filters */}
@@ -3820,10 +3885,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                   {/* Keep current interactive blocks and animations */}
                   {activeWindow === "worklog" && latestWorkLog && (
                     <div className="w-full min-w-0 space-y-1.5">
-                      <WorkLog
-                        steps={latestWorkLog.steps}
-                        holdFinalStep={Boolean(latestWorkLog.holdFinalStep)}
-                      />
+                      <ActiveWorkLog log={latestWorkLog} />
                       {proposalQueue?.phase === "executing" && activeExecutionItem && (
                         <div className="glass rounded-card p-2 space-y-1">
                           <p className="text-caption text-foreground font-medium">
@@ -3846,7 +3908,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                   )}
 
                   {activeWindow === "proposal_queue" && proposalQueue && activeQueueItem && (
-                    <div className="w-full min-w-0">
+                    <ShurikBubble className="w-full">
+                      <p className="mb-1 text-caption font-medium text-foreground">{t("ai.shurik.name")}</p>
                       <ProposalQueueCard
                         item={activeQueueItem}
                         index={proposalQueue.activeIndex}
@@ -3868,7 +3931,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                         onBack={handleQueueBack}
                         onNext={handleQueueNext}
                       />
-                    </div>
+                    </ShurikBubble>
                   )}
 
                   {showPhotoConsultCard && photoConsult && (
@@ -3947,7 +4010,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                         <SidebarOpener
                           opener={opener}
                           chipsDisabled={openerQuotaExhausted}
+                          hideLines={hintCardShown}
                           onSelect={(text, chipKey) => {
+                            if (chipKey === CLIENT_REPORT_CHIP_KEY && clientReportFromChat) {
+                              openClientReportDialog(resolvedPermissionProjectId);
+                              return;
+                            }
                             chipSeedRef.current = { chipKey, text };
                             setInputValue(text);
                           }}
@@ -4026,6 +4094,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                       </div>
                     </>
                   )}
+                </div>
                 </div>
               </>
             )}

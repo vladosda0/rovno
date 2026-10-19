@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { useCardOnFile } from "@/hooks/useCardOnFile";
+import { useCardBindingSync } from "@/hooks/useCardBindingSync";
 import { PaymentHistory } from "@/components/billing/PaymentHistory";
 import { ChangePaymentMethodDialog } from "@/components/billing/ChangePaymentMethodDialog";
 import { CancelSubscriptionDialog } from "@/components/billing/CancelSubscriptionDialog";
@@ -28,6 +29,8 @@ export function SubscriptionSection() {
   const { t, i18n } = useTranslation();
   const { subscription, status, readOnly, isLoading, refetch } = useActiveSubscription();
   const { data: card, refetch: refetchCard } = useCardOnFile();
+  // A bind finished on the bank's page while this screen was closed is picked up here.
+  useCardBindingSync(refetchCard);
   const [clearingDowngrade, setClearingDowngrade] = useState(false);
   const [reactivating, setReactivating] = useState(false);
 
@@ -199,14 +202,16 @@ export function SubscriptionSection() {
                 {t("settings.billing.autoRenewOffNote", { date: endsAt })}
               </p>
             ) : null}
-            <button
-              type="button"
-              onClick={reactivate}
-              disabled={reactivating}
-              className="text-caption font-medium text-accent underline underline-offset-2 hover:text-accent/80 disabled:opacity-50"
-            >
-              {t("settings.billing.reactivate")}
-            </button>
+            {subscription.provider === "tbank" ? (
+              <button
+                type="button"
+                onClick={reactivate}
+                disabled={reactivating}
+                className="text-caption font-medium text-accent underline underline-offset-2 hover:text-accent/80 disabled:opacity-50"
+              >
+                {t("settings.billing.reactivate")}
+              </button>
+            ) : null}
           </>
         )}
       </div>

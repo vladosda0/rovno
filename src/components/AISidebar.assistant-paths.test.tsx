@@ -1,6 +1,6 @@
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 // Radix Select in jsdom: pointer capture + scrollIntoView used by focus management.
 if (typeof Element.prototype.hasPointerCapture !== "function") {
@@ -114,7 +114,7 @@ describe("AISidebar assistant paths", () => {
         </QueryClientProvider>,
       );
 
-      const composer = screen.getByPlaceholderText("Ask AI...");
+      const composer = screen.getByLabelText("Ask Shurik...");
       fireEvent.change(composer, { target: { value: "estimate scope question" } });
       fireEvent.keyDown(composer, { key: "Enter" });
 
@@ -151,7 +151,7 @@ describe("AISidebar assistant paths", () => {
         </QueryClientProvider>,
       );
 
-      const composer = screen.getByPlaceholderText("Ask AI...");
+      const composer = screen.getByLabelText("Ask Shurik...");
       fireEvent.change(composer, { target: { value: "first question" } });
       fireEvent.keyDown(composer, { key: "Enter" });
 
@@ -184,7 +184,7 @@ describe("AISidebar assistant paths", () => {
         </QueryClientProvider>,
       );
 
-      const composer = screen.getByPlaceholderText("Ask AI...");
+      const composer = screen.getByLabelText("Ask Shurik...");
       fireEvent.change(composer, { target: { value: "what should I check next?" } });
       fireEvent.keyDown(composer, { key: "Enter" });
 
@@ -196,7 +196,14 @@ describe("AISidebar assistant paths", () => {
         explanation: "DONE",
         grounding: "ungrounded",
       });
-      expect(await screen.findByText("DONE")).toBeInTheDocument();
+      const reply = await screen.findByText("DONE");
+      expect(reply).toBeInTheDocument();
+
+      const bubble = reply.closest('[data-testid="shurik-bubble"]') as HTMLElement;
+      expect(bubble).not.toBeNull();
+      expect(within(bubble).getByText("Shurik")).toBeInTheDocument();
+      expect(bubble.querySelector("img")?.getAttribute("src")).toBe("/shurik/wink-ok.png");
+      expect(screen.getByText("what should I check next?").closest('[data-testid="shurik-bubble"]')).toBeNull();
     });
   });
 
@@ -223,7 +230,7 @@ describe("AISidebar assistant paths", () => {
 
       expect(invokeLiveTextAssistantMock).not.toHaveBeenCalled();
 
-      const composer = screen.getByPlaceholderText("Ask AI...");
+      const composer = screen.getByLabelText("Ask Shurik...");
       fireEvent.change(composer, { target: { value: "add task for rough-in" } });
       fireEvent.keyDown(composer, { key: "Enter" });
 
@@ -233,6 +240,7 @@ describe("AISidebar assistant paths", () => {
 
       expect(screen.getByText(/I've prepared \d+ proposal/i)).toBeInTheDocument();
       expect(screen.getByText(/Review them below/i)).toBeInTheDocument();
+      expect(screen.getByText(/^Proposal 1\//).closest('[data-testid="shurik-bubble"]')).not.toBeNull();
       expect(invokeLiveTextAssistantMock).not.toHaveBeenCalled();
     });
   });

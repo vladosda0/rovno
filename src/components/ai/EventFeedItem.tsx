@@ -6,7 +6,7 @@ import { getEventGroupTimestampMs } from "@/lib/event-activity-timestamp";
 import { getUserById } from "@/data/store";
 import type { Event } from "@/types/entities";
 import { isAIEvent } from "@/components/ai/event-utils";
-import { getEventCaption, getEventIcon, isFallbackActor } from "@/lib/event-catalog";
+import { getEventCaption, getEventIcon, resolveCaptionEnding } from "@/lib/event-catalog";
 
 function getEventRoute(evt: Event): string | null {
   const base = `/project/${evt.project_id}`;
@@ -38,9 +38,8 @@ export function EventFeedItem({ event, compact, highlighted }: EventFeedItemProp
   const route = getEventRoute(event);
   const isAiOrigin = isAIEvent(event);
   const Icon = getEventIcon(event.type, isAiOrigin);
-  const fallbackActor = isFallbackActor(isAiOrigin, Boolean(actor));
   const actorLabel = isAiOrigin ? t("ai.event.actorAI") : (actor?.name ?? t("ai.event.actorSystem"));
-  const caption = getEventCaption(t, event.type, fallbackActor);
+  const caption = getEventCaption(t, event.type, resolveCaptionEnding(isAiOrigin, actor));
 
   const handleClick = () => {
     if (route) navigate(route);

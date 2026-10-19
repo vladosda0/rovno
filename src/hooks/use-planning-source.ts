@@ -135,7 +135,7 @@ export function usePlanningProjectStages(projectId: string): Stage[] {
   return usePlanningProjectStagesState(projectId).stages;
 }
 
-export function usePlanningProjectTasksState(projectId: string): { tasks: Task[]; isLoading: boolean } {
+export function usePlanningProjectTasksState(projectId: string): { tasks: Task[]; isLoading: boolean; isFetching: boolean } {
   const mode = useWorkspaceMode();
   const estimateState = useEstimateV2Project(projectId);
   const estimateSync = estimateState.sync;
@@ -215,14 +215,14 @@ export function usePlanningProjectTasksState(projectId: string): { tasks: Task[]
   }, [demoTasks, estimateState.lines, mode.kind, remoteTasks, supabaseProfileId]);
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return { tasks: derivedTasks, isLoading: false };
+    return { tasks: derivedTasks, isLoading: false, isFetching: false };
   }
 
   if (!supabaseMode) {
-    return { tasks: EMPTY_PLANNING_TASKS, isLoading: mode.kind === "pending-supabase" };
+    return { tasks: EMPTY_PLANNING_TASKS, isLoading: mode.kind === "pending-supabase", isFetching: false };
   }
 
-  return { tasks: derivedTasks, isLoading: tasksQuery.isPending };
+  return { tasks: derivedTasks, isLoading: tasksQuery.isPending, isFetching: tasksQuery.isFetching };
 }
 
 export function usePlanningProjectTasks(projectId: string): Task[] {

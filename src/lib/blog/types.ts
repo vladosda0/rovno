@@ -8,7 +8,19 @@
 
 export interface BlogAuthor {
   id: string;
-  profile_id: string;
+  /**
+   * The user account behind the byline. NULL for a system author (Шурик,
+   * rovno-db 20261016110000_blog_system_authors): exactly one of profile_id and
+   * system_key is set. A null never equals a signed-in user's id, so a system
+   * author can never pass the "is this me" check the admin runs.
+   */
+  profile_id: string | null;
+  /**
+   * Stable key of a system author ('shurik'), NULL for a human one. Optional
+   * because fetchMyBlogAuthor does not select it: it looks the caller up by
+   * profile_id, and a system author is never the caller.
+   */
+  system_key?: string | null;
   display_name: string;
   bio: string | null;
   avatar_url: string | null;

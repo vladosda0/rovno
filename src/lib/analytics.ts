@@ -1,3 +1,5 @@
+import { safeNextPath } from "@/lib/safe-next-path";
+
 export type AnalyticsEventName =
   | "estimate_editor_started"
   | "estimate_status_change_requested"
@@ -327,6 +329,8 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/theme" },
   { pattern: "/share/estimate/:shareId", secret: true },
   { pattern: "/share/document/:token", secret: true },
+  { pattern: "/share/blog/:token", secret: true },
+  { pattern: "/share/report/:token", secret: true },
   { pattern: "/invite/accept/:inviteToken", secret: true },
   { pattern: "/blog" },
   { pattern: "/blog/tag/:tag" },
@@ -371,8 +375,15 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
 /** What an unrecognised path is reported as. */
 const ANALYTICS_UNKNOWN_PATH = "/unknown";
 
+// Decoded the way the router decodes before it matches (decodePath in
+// @remix-run/router): per segment, and the raw path when an escape is malformed.
 function pathSegments(path: string): string[] {
-  return path.split("/").filter((segment) => segment !== "");
+  const raw = path.split("/").filter((segment) => segment !== "");
+  try {
+    return raw.map((segment) => decodeURIComponent(segment).replace(/\//g, "%2F"));
+  } catch {
+    return raw;
+  }
 }
 
 // Case-insensitive because the router is: react-router-dom 6.30.3 renders
@@ -505,6 +516,10 @@ function carriesSecretRouteValue(params: URLSearchParams): boolean {
     }
     if (!decoded.startsWith("/")) continue;
     if (matchAnalyticsRoute(decoded.split(/[?#]/, 1)[0])?.secret === true) return true;
+    // Also resolved the way the auth pages resolve `next`, so a dot segment
+    // cannot hide a secret route from the textual match.
+    const resolved = safeNextPath(decoded);
+    if (resolved !== null && matchAnalyticsRoute(resolved.split(/[?#]/, 1)[0])?.secret === true) return true;
   }
   return false;
 }

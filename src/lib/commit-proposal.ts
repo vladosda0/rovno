@@ -50,6 +50,13 @@ export interface CommitProposalOptions {
   t?: Translator;
 }
 
+/** Description of the task the assistant creates from a photo consult. */
+export function photoConsultTaskDescription(caption: string, t?: Translator): string {
+  return t
+    ? t("ai.sidebar.consult.taskDescription", { caption })
+    : `Shurik spotted an issue in the photo: ${caption}`;
+}
+
 export type PhotoConsultApplyKind = "create_task" | "task_comment" | "task_status_done";
 
 export interface PhotoConsultApplyAction {
@@ -505,7 +512,7 @@ export function commitProposal(proposal: AIProposal, options: CommitProposalOpti
             status: "draft",
             content: options.t
               ? options.t("ai.sidebar.proposal.demo.documentDraftBody", { title: change.label })
-              : `AI-generated draft for ${change.label}`,
+              : `Draft prepared by Shurik: ${change.label}`,
           }],
         });
         const documentEvtId = `evt-doc-ai-${Date.now()}-${count}`;

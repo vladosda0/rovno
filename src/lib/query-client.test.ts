@@ -17,6 +17,10 @@ describe("redactQueryKey", () => {
       "invite-token",
       "[FILTERED]",
     ]);
+    expect(redactQueryKey(["blog-preview", "v1.AAAAAAAAAAAAAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBB"])).toEqual([
+      "blog-preview",
+      "[FILTERED]",
+    ]);
   });
 
   it("leaves ordinary keys intact, so per-resource reporting still works", () => {

@@ -2,7 +2,7 @@ import {
   Activity, Bot, Calculator, CheckCircle2, ClipboardList, FileText, GitBranch,
   Image, MessageSquare, Plus, ShoppingCart, Users, XCircle, type LucideIcon,
 } from "lucide-react";
-import { EVENT_TYPES, type EventType } from "@/types/entities";
+import { EVENT_TYPES, type EventType, type User } from "@/types/entities";
 
 export interface EventCatalogEntry {
   /** i18n key holding the caption, e.g. "создал{{a}} задачу". */
@@ -80,28 +80,36 @@ export function getEventIcon(type: string, aiOrigin = false): LucideIcon {
 
 type Translate = (key: string, params?: Record<string, string>) => string;
 
+/** What fills the gender slot of a Russian past-tense caption: «создал», «создала», «создал(а)». */
+export type CaptionEnding = "" | "а" | "(а)";
+
 /**
  * The one way to turn an event type into a caption.
  *
- * Russian past-tense agrees with the actor's gender and profiles carry no
- * gender field, so the template holds a slot the caller must fill; a caller
- * that resolved the key itself and forgot the slot would render the literal
- * "{{a}}" on screen. Keeping key and slot behind one call makes that
- * unreachable, and keeps the two surfaces from disagreeing about the same row.
- *
- * `feminineActor` is true only for the non-human fallback actor ("Система").
- * English ignores the slot.
+ * Russian past-tense agrees with the actor's gender, so the template holds a
+ * slot the caller must fill; a caller that resolved the key itself and forgot
+ * the slot would render the literal "{{a}}" on screen. Keeping key and slot
+ * behind one call makes that unreachable, and keeps the two surfaces from
+ * disagreeing about the same row. English ignores the slot.
  */
-export function getEventCaption(t: Translate, type: string, feminineActor: boolean): string {
-  return t(getEventLabelKey(type), { a: feminineActor ? "а" : "" });
+export function getEventCaption(t: Translate, type: string, ending: CaptionEnding): string {
+  return t(getEventLabelKey(type), { a: ending });
 }
 
 /**
- * The one rule both feed surfaces use to pick the caption's gender, so they
- * cannot disagree about the same row. Only the non-human fallback actor
- * ("Система") is feminine: "ИИ" is masculine, and so is a person, until
- * profiles carry a gender field.
+ * The one rule both feed surfaces use to pick the caption's ending, so they
+ * cannot disagree about the same row. A person: by the gender in the profile,
+ * both forms when it is not stated. "Шурик" is masculine. The non-human
+ * fallback actor ("Система"), shown when the actor does not resolve, is
+ * feminine.
  */
-export function isFallbackActor(aiOrigin: boolean, actorResolved: boolean): boolean {
-  return !aiOrigin && !actorResolved;
+export function resolveCaptionEnding(
+  aiOrigin: boolean,
+  actor: Pick<User, "gender"> | undefined,
+): CaptionEnding {
+  if (aiOrigin) return "";
+  if (!actor) return "а";
+  if (actor.gender === "male") return "";
+  if (actor.gender === "female") return "а";
+  return "(а)";
 }

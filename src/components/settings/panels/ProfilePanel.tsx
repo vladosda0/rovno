@@ -10,6 +10,16 @@ import {
 import { useAvatarUpload } from "@/hooks/use-avatar-upload";
 import { SignInPrompt } from "@/components/settings/SignInPrompt";
 import { PHONE_PREFILL, phoneValueForSave } from "@/lib/phone";
+import {
+  AUTO_TIMEZONE,
+  isUnsetProfileTimezone,
+  readBrowserTimezone,
+  readTimezoneFromBrowser,
+  rememberTimezoneFromBrowser,
+  timezoneSelectValue,
+  timezoneToStore,
+  UTC_OPTION,
+} from "@/lib/profile-timezone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,12 +27,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsSection } from "@/components/settings/SettingsSection";
+import { GenderChoice, type GenderChoiceValue } from "@/components/settings/GenderChoice";
 import { Camera, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const TIMEZONES = [
-  { value: "auto", labelKey: "profile.timezoneOption.auto" },
-  { value: "UTC", label: "UTC (UTC+0)" },
+  { value: AUTO_TIMEZONE, labelKey: "profile.timezoneOption.auto" },
+  { value: UTC_OPTION, label: "UTC (UTC+0)" },
   { value: "Europe/Moscow", label: "Europe/Moscow (UTC+3)" },
   { value: "Europe/London", label: "Europe/London (UTC+0)" },
   { value: "America/New_York", label: "America/New York (UTC-5)" },
@@ -37,8 +48,8 @@ const TIMEZONES = [
 //
 // This panel no longer sends `locale` at all. That is safe because
 // updateProfileIdentity is a genuine partial update (`if (patch.locale !==
-// undefined)` in the Supabase source; the browser source ignores the patch
-// entirely), so omitting the field leaves the column untouched rather than
+// undefined)` in the Supabase source; the browser source applies only `gender`
+// and ignores the rest), so omitting the field leaves the column untouched rather than
 // nulling it. workspace-source.identity.test.ts pins that invariant, because it
 // is now the only thing standing between a Профиль save and a reset locale.
 //
@@ -78,7 +89,23 @@ export function ProfilePanel() {
   const [email, setEmail] = useState(user.email);
   const [roleTitle, setRoleTitle] = useState("");
   const [phone, setPhone] = useState(PHONE_PREFILL);
-  const [timezone, setTimezone] = useState(user.timezone || "auto");
+  // The database holds a real zone even when the auto option is the one chosen; that the zone
+  // came from this browser is remembered on the device, and the select shows it as auto again.
+  const [timezoneFromBrowser, setTimezoneFromBrowser] = useState(() => readTimezoneFromBrowser(user.id));
+  const storedTimezone = timezoneSelectValue(user.timezone, timezoneFromBrowser);
+  const [timezone, setTimezone] = useState(storedTimezone);
+  // Picking in the select is what makes a zone the person's own: the default `UTC` shows as
+  // the UTC option too, and saving some other field must not turn it into a chosen one.
+  const [timezoneTouched, setTimezoneTouched] = useState(false);
+  const pickTimezone = (value: string) => {
+    setTimezone(value);
+    setTimezoneTouched(true);
+  };
+  const storedGender: GenderChoiceValue = user.gender ?? null;
+  // Undefined until the person picks: the field then shows what the profile carries, so a
+  // value that arrives after the form opened is neither hidden nor overwritten by a save.
+  const [genderPick, setGenderPick] = useState<GenderChoiceValue | undefined>(undefined);
+  const gender = genderPick === undefined ? storedGender : genderPick;
   const [signature, setSignature] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState(user.avatar ?? "");
@@ -88,10 +115,24 @@ export function ProfilePanel() {
   useEffect(() => {
     setName(user.name);
     setEmail(user.email);
-    setTimezone(user.timezone || "auto");
+    const fromBrowser = readTimezoneFromBrowser(user.id);
+    setTimezoneFromBrowser(fromBrowser);
+    setTimezone(timezoneSelectValue(user.timezone, fromBrowser));
+    setTimezoneTouched(false);
     setAvatarUrl(user.avatar ?? "");
+    setGenderPick(undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
+
+  // The app writes the browser's zone into a profile that never had one, possibly while this
+  // form is open. A selection still on the unset value follows it; anything picked here stays.
+  useEffect(() => {
+    const fromBrowser = readTimezoneFromBrowser(user.id);
+    if (fromBrowser !== true || timezoneFromBrowser !== null) return;
+    setTimezoneFromBrowser(true);
+    setTimezone((selected) => (isUnsetProfileTimezone(selected) ? AUTO_TIMEZONE : selected));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.timezone]);
 
   // Seed contact-info fields once per active user. Keyed on user.id so a
   // background refetch can't clobber in-progress edits, but switching the active
@@ -110,7 +151,6 @@ export function ProfilePanel() {
   // renders as an empty trigger (rovno #54). Carry BOTH the persisted zone and
   // the selected one: either can be off the list, and either can change without
   // the other.
-  const storedTimezone = user.timezone || "auto";
   const extraZones = [storedTimezone, timezone].filter(
     (value, i, all) => all.indexOf(value) === i && !TIMEZONES.some((tz) => tz.value === value),
   );
@@ -120,10 +160,16 @@ export function ProfilePanel() {
   const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const saving = updateIdentity.isPending || updateContactInfo.isPending;
 
+  const followsBrowser = timezone === AUTO_TIMEZONE;
+  const timezoneToSave = followsBrowser ? readBrowserTimezone() : timezoneToStore(timezone);
+  const timezoneDirty =
+    timezoneTouched && timezoneToSave !== null && (timezone !== storedTimezone || timezoneToSave !== user.timezone);
+
   const isDirty =
     name !== user.name ||
     (avatarUrl ?? "") !== (user.avatar ?? "") ||
-    timezone !== (user.timezone || "auto") ||
+    timezoneDirty ||
+    gender !== storedGender ||
     roleTitle !== (contactInfo?.roleTitle ?? "") ||
     (phoneValueForSave(phone) ?? "") !== (contactInfo?.phone ?? "") ||
     bio !== (contactInfo?.bio ?? "") ||
@@ -154,7 +200,10 @@ export function ProfilePanel() {
         updateIdentity.mutateAsync({
           fullName: name.trim() || null,
           avatarUrl: avatarUrl || null,
-          timezone,
+          // Left out unless the person picked a zone: the column then keeps its value.
+          ...(timezoneDirty && timezoneToSave ? { timezone: timezoneToSave } : {}),
+          // Left out unless it changed, like the zone.
+          ...(gender !== storedGender ? { gender } : {}),
         }),
         updateContactInfo.mutateAsync({
           roleTitle: roleTitle.trim() || null,
@@ -163,6 +212,12 @@ export function ProfilePanel() {
           signatureBlock: signature.trim() || null,
         }),
       ]);
+      if (timezoneDirty && workspaceMode.kind === "supabase") {
+        rememberTimezoneFromBrowser(user.id, followsBrowser);
+        setTimezoneFromBrowser(followsBrowser);
+      }
+      setTimezoneTouched(false);
+      setGenderPick(undefined);
       toast({ title: t("profile.savedToast"), description: t("profile.savedToastDescription") });
     } catch (error) {
       toast({
@@ -175,8 +230,10 @@ export function ProfilePanel() {
 
   const handleDiscard = () => {
     setName(user.name);
-    setTimezone(user.timezone || "auto");
+    setTimezone(storedTimezone);
+    setTimezoneTouched(false);
     setAvatarUrl(user.avatar ?? "");
+    setGenderPick(undefined);
     setRoleTitle(contactInfo?.roleTitle ?? "");
     setPhone(contactInfo?.phone ?? PHONE_PREFILL);
     setBio(contactInfo?.bio ?? "");
@@ -242,7 +299,7 @@ export function ProfilePanel() {
           </div>
           <div className="space-y-1.5">
             <Label>{t("profile.timezone")}</Label>
-            <Select value={timezone} onValueChange={setTimezone}>
+            <Select value={timezone} onValueChange={pickTimezone}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {timezoneOptions.map((tz) => (
@@ -253,7 +310,12 @@ export function ProfilePanel() {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1.5">
+            <Label>{t("profile.gender.label")}</Label>
+            <GenderChoice value={gender} onChange={setGenderPick} disabled={saving} />
+          </div>
         </div>
+        <p className="text-caption text-muted-foreground">{t("profile.gender.hint")}</p>
 
         <div className="space-y-1.5">
           <Label>{t("profile.bio")}</Label>

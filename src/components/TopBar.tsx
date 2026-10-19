@@ -21,10 +21,15 @@ import {
 import { ProjectTabs } from "@/components/ProjectTabs";
 import { HomeTabs } from "@/components/HomeTabs";
 import { MobileNavSheet } from "@/components/MobileNavSheet";
+import { ProjectMuteBell } from "@/components/ProjectMuteControl";
+import { Shurik } from "@/components/ai/Shurik";
+import { ShurikUnreadBadge } from "@/components/ai/ShurikUnreadBadge";
 import { clearWorkspaceUserCache } from "@/data/workspace-profile-cache";
 import { AuthSimulator } from "@/components/settings/AuthSimulator";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { shurikOpenLabel } from "@/lib/shurik-open-label";
 import { useCurrentUser, useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { supabase } from "@/integrations/supabase/client";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
@@ -43,6 +48,9 @@ interface TopBarProps {
   onToggleAiSidebar: () => void;
   onSetAiSidebarOpen?: (open: boolean) => void;
   hideAi?: boolean;
+  /** Given, the phone top bar carries Shurik on the right; left out (a guest), it does not. */
+  onOpenShurikNotifications?: () => void;
+  shurikUnreadCount?: number;
 }
 
 const PROJECT_TAB_TITLE_KEYS = new Set([
@@ -64,7 +72,15 @@ function derivePageTitle(t: (key: string) => string, pathname: string): string {
   return "";
 }
 
-export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOpen, hideAi = false }: TopBarProps) {
+export function TopBar({
+  aiSidebarCollapsed,
+  onToggleAiSidebar,
+  onSetAiSidebarOpen,
+  hideAi = false,
+  onOpenShurikNotifications,
+  shurikUnreadCount = 0,
+}: TopBarProps) {
+  const isMobile = useIsMobile();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -285,7 +301,22 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
       <span className="flex-1 truncate text-center text-body-sm font-medium text-foreground">
         {pageTitle}
       </span>
-      <div className="h-9 w-9 shrink-0" aria-hidden />
+      {/* The hanging Shurik is not drawn below `md`; this is where he lives on a phone. */}
+      {isMobile && onOpenShurikNotifications ? (
+        <button
+          type="button"
+          onClick={onOpenShurikNotifications}
+          aria-label={shurikOpenLabel(t, shurikUnreadCount)}
+          className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="relative inline-flex">
+            <Shurik size={30} decorative />
+            <ShurikUnreadBadge count={shurikUnreadCount} size="sm" className="absolute -right-[7px] -top-[5px]" />
+          </span>
+        </button>
+      ) : (
+        <div className="h-9 w-9 shrink-0" aria-hidden />
+      )}
     </div>
   );
 
@@ -386,6 +417,8 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {currentProject && <ProjectMuteBell projectId={currentProject.id} projectTitle={currentProject.title} />}
 
           {!aiSidebarCollapsed && (
             <Button

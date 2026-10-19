@@ -92,7 +92,7 @@ Frontend / app workspace for Rovno:
 
 | Branch | Purpose | Deploys to |
 |---|---|---|
-| `main` | **Production**. Protected from direct push. Only proven code. | `rovno.ai`, `стройагент.рф` (Timeweb Cloud Apps app `rovno`) |
+| `main` | **Production**. Protected from direct push. Only proven code. | `rovno.ai` (Timeweb Cloud Apps app `rovno`; `стройагент.рф` is attached but redirects to `rovno.ai`) |
 | `dev` | **Staging / integration**. Feature branches converge here. | `*.twc1.net` staging URL (Timeweb app `rovno-staging`) |
 | `feature/*`, `fix/*`, `chore/*`, `codex/*`, `claude/*`, `session-*/*` | Working branches. Created from `dev`, merged back via PR. | Not deployed (local build only). |
 
@@ -119,7 +119,9 @@ Frontend / app workspace for Rovno:
 
 ## 3. Environments
 
-### Production — `https://rovno.ai`, `https://стройагент.рф`
+### Production — `https://rovno.ai`
+
+- **`стройагент.рф`**: not used as an app. The inline script at the top of `index.html` sends every page to the same path on `rovno.ai` (Vlad, 2026-10-15). The rovno-db payment functions drop it from their CORS allowlists in rovno-db #147 (on `dev`; on prod after the next `/release-prod-db`). `www.стройагент.рф` has no TLS certificate, so the script never runs there.
 
 - **Frontend**: Timeweb Cloud Apps app `rovno`, branch `main`, Node 20.
 - **Database / Auth / Storage**: **self-hosted Supabase** on Timeweb VPS (URL in env). Real user data lives here.

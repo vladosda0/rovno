@@ -9,6 +9,7 @@ import type {
   Member,
   Project,
   User,
+  UserGender,
   ViewerRegime,
 } from "@/types/entities";
 import { isDemoSessionActive } from "@/lib/auth-state";
@@ -18,8 +19,6 @@ export type WorkspaceProjectInvite = WorkspaceDatabase["public"]["Tables"]["proj
 type ProfileRow = WorkspaceDatabase["public"]["Tables"]["profiles"]["Row"];
 type ProfileSettingsRow = WorkspaceDatabase["public"]["Tables"]["profile_settings"]["Row"];
 type ProfileSettingsInsert = WorkspaceDatabase["public"]["Tables"]["profile_settings"]["Insert"];
-type NotificationPreferencesRow = WorkspaceDatabase["public"]["Tables"]["notification_preferences"]["Row"];
-type NotificationPreferencesInsert = WorkspaceDatabase["public"]["Tables"]["notification_preferences"]["Insert"];
 type ProfilesUpdate = WorkspaceDatabase["public"]["Tables"]["profiles"]["Update"];
 type ProjectRow = WorkspaceDatabase["public"]["Tables"]["projects"]["Row"];
 type ProjectMemberRow = WorkspaceDatabase["public"]["Tables"]["project_members"]["Row"];
@@ -50,8 +49,6 @@ export interface WorkspaceSource {
   getCurrentUser: () => Promise<User>;
   getProfilePreferences: () => Promise<ProfilePreferences>;
   updateProfilePreferences: (patch: ProfilePreferencesPatch) => Promise<ProfilePreferences>;
-  getNotificationPreferences: () => Promise<NotificationPreferences>;
-  updateNotificationPreferences: (patch: NotificationPreferencesPatch) => Promise<NotificationPreferences>;
   getProfileContactInfo: () => Promise<ProfileContactInfo>;
   updateProfileIdentity: (patch: ProfileIdentityPatch) => Promise<User>;
   updateProfileContactInfo: (patch: ProfileContactInfoPatch) => Promise<ProfileContactInfo>;
@@ -81,24 +78,14 @@ export interface ProfilePreferences {
 
 export type ProfilePreferencesPatch = Partial<ProfilePreferences>;
 
-export type NotificationDigestFrequency = "instant" | "daily" | "weekly";
-
-/** notification_preferences columns the user edits in Settings -> Notifications. */
-export interface NotificationPreferences {
-  inAppEnabled: boolean;
-  emailEnabled: boolean;
-  digestFrequency: NotificationDigestFrequency;
-  eventToggles: Record<string, boolean>;
-}
-
-export type NotificationPreferencesPatch = Partial<NotificationPreferences>;
-
 /** profiles columns the user edits in Settings (identity is also exposed via User). */
 export interface ProfileIdentity {
   fullName: string | null;
   avatarUrl: string | null;
   locale: NonNullable<ProfilesUpdate["locale"]>;
   timezone: string;
+  /** null clears the value: the person chose not to state it. */
+  gender: UserGender | null;
 }
 export type ProfileIdentityPatch = Partial<ProfileIdentity>;
 
@@ -118,13 +105,6 @@ export const DEFAULT_PROFILE_PREFERENCES: ProfilePreferences = {
   weekStart: "monday",
   aiOutputLanguage: "auto",
   automationLevel: "manual",
-};
-
-export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
-  inAppEnabled: true,
-  emailEnabled: false,
-  digestFrequency: "instant",
-  eventToggles: {},
 };
 
 export interface CreateWorkspaceProjectInput {
@@ -152,7 +132,6 @@ const SUPABASE_WORKSPACE_SOURCE = "supabase";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const LOCAL_PROFILE_PREFERENCES_KEY = "profile-preferences";
-const LOCAL_NOTIFICATION_PREFERENCES_KEY = "notification-preferences";
 
 function normalizeProfilePreferences(raw: Partial<ProfilePreferences> | Record<string, unknown> | null | undefined): ProfilePreferences {
   const value = raw ?? {};
@@ -201,70 +180,6 @@ function mapProfileSettingsRowToPreferences(
   row: Pick<ProfileSettingsRow, "currency" | "units" | "date_format" | "week_start" | "ai_output_language" | "automation_level"> | null | undefined,
 ): ProfilePreferences {
   return normalizeProfilePreferences(row as Record<string, unknown> | null | undefined);
-}
-
-function normalizeEventToggles(raw: unknown): Record<string, boolean> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  const result: Record<string, boolean> = {};
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    result[key] = Boolean(value);
-  }
-  return result;
-}
-
-function normalizeNotificationPreferences(
-  raw: Partial<NotificationPreferences> | Record<string, unknown> | null | undefined,
-): NotificationPreferences {
-  const value = raw ?? {};
-  const record = value as Record<string, unknown>;
-  const inAppEnabled = record.inAppEnabled ?? record.in_app_enabled;
-  const emailEnabled = record.emailEnabled ?? record.email_enabled;
-  const digestFrequency = record.digestFrequency ?? record.digest_frequency;
-  const eventToggles = record.eventToggles ?? record.event_toggles;
-
-  return {
-    inAppEnabled: typeof inAppEnabled === "boolean" ? inAppEnabled : DEFAULT_NOTIFICATION_PREFERENCES.inAppEnabled,
-    emailEnabled: typeof emailEnabled === "boolean" ? emailEnabled : DEFAULT_NOTIFICATION_PREFERENCES.emailEnabled,
-    digestFrequency: digestFrequency === "instant" || digestFrequency === "daily" || digestFrequency === "weekly" ? digestFrequency : DEFAULT_NOTIFICATION_PREFERENCES.digestFrequency,
-    eventToggles: normalizeEventToggles(eventToggles),
-  };
-}
-
-function readLocalNotificationPreferences(): NotificationPreferences {
-  if (typeof window === "undefined") return DEFAULT_NOTIFICATION_PREFERENCES;
-  const raw = window.localStorage.getItem(LOCAL_NOTIFICATION_PREFERENCES_KEY);
-  if (raw) {
-    try {
-      return normalizeNotificationPreferences(JSON.parse(raw) as Record<string, unknown>);
-    } catch {
-      return DEFAULT_NOTIFICATION_PREFERENCES;
-    }
-  }
-  return DEFAULT_NOTIFICATION_PREFERENCES;
-}
-
-function writeLocalNotificationPreferences(next: NotificationPreferences): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(LOCAL_NOTIFICATION_PREFERENCES_KEY, JSON.stringify(next));
-}
-
-function mapNotificationPreferencesRowToPreferences(
-  row: Pick<NotificationPreferencesRow, "in_app_enabled" | "email_enabled" | "digest_frequency" | "event_toggles"> | null | undefined,
-): NotificationPreferences {
-  return normalizeNotificationPreferences(row as Record<string, unknown> | null | undefined);
-}
-
-function notificationPreferencesToDbPatch(
-  profileId: string,
-  preferences: NotificationPreferences,
-): NotificationPreferencesInsert {
-  return {
-    profile_id: profileId,
-    in_app_enabled: preferences.inAppEnabled,
-    email_enabled: preferences.emailEnabled,
-    digest_frequency: preferences.digestFrequency,
-    event_toggles: preferences.eventToggles,
-  };
 }
 
 function profilePreferencesToDbPatch(profileId: string, preferences: ProfilePreferences): ProfileSettingsInsert {
@@ -344,22 +259,12 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
       writeLocalProfilePreferences(next);
       return next;
     },
-    async getNotificationPreferences() {
-      return readLocalNotificationPreferences();
-    },
-    async updateNotificationPreferences(patch: NotificationPreferencesPatch) {
-      const next = normalizeNotificationPreferences({
-        ...readLocalNotificationPreferences(),
-        ...patch,
-      });
-      writeLocalNotificationPreferences(next);
-      return next;
-    },
     async getProfileContactInfo() {
       return { roleTitle: null, phone: null, bio: null, signatureBlock: null };
     },
-    async updateProfileIdentity() {
-      // Demo/local identity is seed data and not persisted; echo the current user.
+    async updateProfileIdentity(patch: ProfileIdentityPatch) {
+      // Demo/local identity is seed data and not persisted; only the gender is kept, for the session.
+      if (patch.gender !== undefined) store.setCurrentUserGender(mode, patch.gender);
       return store.getCurrentUserForMode(mode);
     },
     async updateProfileContactInfo(patch: ProfileContactInfoPatch) {
@@ -415,8 +320,12 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
   };
 }
 
+/** The profiles columns a User is built from; every read that feeds mapProfileRowToUser selects these. */
+export const PROFILE_USER_COLUMNS =
+  "id, email, full_name, avatar_url, locale, timezone, plan, credits_free, credits_paid, gender";
+
 export function mapProfileRowToUser(
-  row: Pick<ProfileRow, "id" | "email" | "full_name" | "avatar_url" | "locale" | "timezone" | "plan" | "credits_free" | "credits_paid">,
+  row: Pick<ProfileRow, "id" | "email" | "full_name" | "avatar_url" | "locale" | "timezone" | "plan" | "credits_free" | "credits_paid" | "gender">,
 ): User {
   return {
     id: row.id,
@@ -428,6 +337,7 @@ export function mapProfileRowToUser(
     plan: row.plan,
     credits_free: row.credits_free,
     credits_paid: row.credits_paid,
+    gender: row.gender ?? null,
   };
 }
 
@@ -773,7 +683,7 @@ async function loadVisibleProfiles(
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, full_name, avatar_url, locale, timezone, plan, credits_free, credits_paid")
+    .select(PROFILE_USER_COLUMNS)
     .in("id", uniqueIds);
 
   if (error || !data) return [];
@@ -801,26 +711,12 @@ function createSupabaseWorkspaceSource(
     return mapProfileSettingsRowToPreferences(data);
   }
 
-  async function readRemoteNotificationPreferences(): Promise<NotificationPreferences> {
-    const { data, error } = await supabase
-      .from("notification_preferences")
-      .select("in_app_enabled, email_enabled, digest_frequency, event_toggles")
-      .eq("profile_id", profileId)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
-    }
-
-    return mapNotificationPreferencesRowToPreferences(data);
-  }
-
   return {
     mode: "supabase",
     async getCurrentUser() {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, email, full_name, avatar_url, locale, timezone, plan, credits_free, credits_paid")
+        .select(PROFILE_USER_COLUMNS)
         .eq("id", profileId)
         .maybeSingle();
 
@@ -853,26 +749,6 @@ function createSupabaseWorkspaceSource(
       return mapProfileSettingsRowToPreferences(data);
     },
 
-    async getNotificationPreferences() {
-      return readRemoteNotificationPreferences();
-    },
-
-    async updateNotificationPreferences(patch: NotificationPreferencesPatch) {
-      const current = await readRemoteNotificationPreferences();
-      const next = normalizeNotificationPreferences({ ...current, ...patch });
-      const { data, error } = await supabase
-        .from("notification_preferences")
-        .upsert(notificationPreferencesToDbPatch(profileId, next), { onConflict: "profile_id" })
-        .select("in_app_enabled, email_enabled, digest_frequency, event_toggles")
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      return mapNotificationPreferencesRowToPreferences(data);
-    },
-
     async getProfileContactInfo() {
       const { data, error } = await supabase
         .from("profile_settings")
@@ -898,12 +774,13 @@ function createSupabaseWorkspaceSource(
       if (patch.avatarUrl !== undefined) update.avatar_url = patch.avatarUrl;
       if (patch.locale !== undefined) update.locale = patch.locale;
       if (patch.timezone !== undefined) update.timezone = patch.timezone;
+      if (patch.gender !== undefined) update.gender = patch.gender;
 
       const { data, error } = await supabase
         .from("profiles")
         .update(update)
         .eq("id", profileId)
-        .select("id, email, full_name, avatar_url, locale, timezone, plan, credits_free, credits_paid")
+        .select(PROFILE_USER_COLUMNS)
         .single();
 
       if (error || !data) {

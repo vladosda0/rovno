@@ -52,7 +52,7 @@ const AUTOMATION_LEVELS = [
 
 export function PreferencesPanel() {
   const { t } = useTranslation();
-  const { preferences, isLoading } = useWorkspaceProfilePreferencesState();
+  const { preferences } = useWorkspaceProfilePreferencesState();
   const updatePreferences = useUpdateWorkspaceProfilePreferences();
   const [interfaceLanguage, setInterfaceLanguage] = useState<AppLanguage>(() => getActiveLanguage());
   const [currency, setCurrency] = useState("RUB");
@@ -199,7 +199,7 @@ export function PreferencesPanel() {
       <div className="flex flex-wrap gap-sp-2 pt-sp-1">
         <Button
           className="w-full sm:w-auto"
-          disabled={isLoading || updatePreferences.isPending}
+          disabled={!preferences || updatePreferences.isPending}
           onClick={() => void handleSave()}
         >
           {updatePreferences.isPending ? t("preferences.saving") : t("preferences.save")}

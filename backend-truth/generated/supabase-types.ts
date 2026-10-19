@@ -30,6 +30,7 @@ export type Database = {
           "updated_at": string
           "onboarding_completed_at": string | null
           "tutorials_completed": unknown
+          "gender": "male" | "female" | null
           }
           Insert: {
           "id"?: string
@@ -45,6 +46,7 @@ export type Database = {
           "updated_at"?: string
           "onboarding_completed_at"?: string | null
           "tutorials_completed"?: unknown
+          "gender"?: "male" | "female" | null
           }
           Update: {
           "id"?: string
@@ -60,6 +62,7 @@ export type Database = {
           "updated_at"?: string
           "onboarding_completed_at"?: string | null
           "tutorials_completed"?: unknown
+          "gender"?: "male" | "female" | null
           }
           Relationships: []
         }
@@ -126,6 +129,14 @@ export type Database = {
           "event_toggles": Json
           "created_at": string
           "updated_at": string
+          "briefing_enabled": boolean
+          "briefing_minute": number
+          "briefing_weekends": boolean
+          "telegram_enabled": boolean
+          "telegram_quiet_night": boolean
+          "people_enabled": boolean
+          "hints_chat_enabled": boolean
+          "hints_telegram_enabled": boolean
           }
           Insert: {
           "profile_id"?: string
@@ -135,6 +146,14 @@ export type Database = {
           "event_toggles"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "briefing_enabled"?: boolean
+          "briefing_minute"?: number
+          "briefing_weekends"?: boolean
+          "telegram_enabled"?: boolean
+          "telegram_quiet_night"?: boolean
+          "people_enabled"?: boolean
+          "hints_chat_enabled"?: boolean
+          "hints_telegram_enabled"?: boolean
           }
           Update: {
           "profile_id"?: string
@@ -144,6 +163,14 @@ export type Database = {
           "event_toggles"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "briefing_enabled"?: boolean
+          "briefing_minute"?: number
+          "briefing_weekends"?: boolean
+          "telegram_enabled"?: boolean
+          "telegram_quiet_night"?: boolean
+          "people_enabled"?: boolean
+          "hints_chat_enabled"?: boolean
+          "hints_telegram_enabled"?: boolean
           }
           Relationships: []
         }
@@ -352,6 +379,7 @@ export type Database = {
           "created_at": string
           "updated_at": string
           "estimate_work_id": string | null
+          "blocked_at": string | null
           }
           Insert: {
           "id"?: string
@@ -368,6 +396,7 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "estimate_work_id"?: string | null
+          "blocked_at"?: string | null
           }
           Update: {
           "id"?: string
@@ -384,6 +413,7 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "estimate_work_id"?: string | null
+          "blocked_at"?: string | null
           }
           Relationships: []
         }
@@ -580,6 +610,7 @@ export type Database = {
           "projection_seq": number
           "projection_synced_at": string | null
           "projection_actor": string | null
+          "execution_status_since": string | null
           }
           Insert: {
           "id"?: string
@@ -596,6 +627,7 @@ export type Database = {
           "projection_seq"?: number
           "projection_synced_at"?: string | null
           "projection_actor"?: string | null
+          "execution_status_since"?: string | null
           }
           Update: {
           "id"?: string
@@ -612,6 +644,7 @@ export type Database = {
           "projection_seq"?: number
           "projection_synced_at"?: string | null
           "projection_actor"?: string | null
+          "execution_status_since"?: string | null
           }
           Relationships: []
         }
@@ -1284,6 +1317,7 @@ export type Database = {
           "payload": Json
           "created_at": string
           "read_at": string | null
+          "dedupe_key": string | null
           }
           Insert: {
           "id"?: string
@@ -1296,6 +1330,7 @@ export type Database = {
           "payload"?: Json
           "created_at"?: string
           "read_at"?: string | null
+          "dedupe_key"?: string | null
           }
           Update: {
           "id"?: string
@@ -1308,6 +1343,7 @@ export type Database = {
           "payload"?: Json
           "created_at"?: string
           "read_at"?: string | null
+          "dedupe_key"?: string | null
           }
           Relationships: []
         }
@@ -2358,30 +2394,33 @@ export type Database = {
         "blog_authors": {
           Row: {
           "id": string
-          "profile_id": string
+          "profile_id": string | null
           "display_name": string
           "bio": string | null
           "avatar_url": string | null
           "created_at": string
           "updated_at": string
+          "system_key": string | null
           }
           Insert: {
           "id"?: string
-          "profile_id": string
+          "profile_id"?: string | null
           "display_name": string
           "bio"?: string | null
           "avatar_url"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "system_key"?: string | null
           }
           Update: {
           "id"?: string
-          "profile_id"?: string
+          "profile_id"?: string | null
           "display_name"?: string
           "bio"?: string | null
           "avatar_url"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "system_key"?: string | null
           }
           Relationships: []
         }
@@ -2577,6 +2616,27 @@ export type Database = {
           "revoked_at"?: string | null
           "revoked_by"?: string | null
           "storage_object_id"?: string | null
+          }
+          Relationships: []
+        }
+        "notification_project_mutes": {
+          Row: {
+          "profile_id": string
+          "project_id": string
+          "created_at": string
+          "primary": unknown | null
+          }
+          Insert: {
+          "profile_id": string
+          "project_id": string
+          "created_at"?: string
+          "primary"?: unknown | null
+          }
+          Update: {
+          "profile_id"?: string
+          "project_id"?: string
+          "created_at"?: string
+          "primary"?: unknown | null
           }
           Relationships: []
         }
@@ -3027,6 +3087,18 @@ export type Database = {
         "list_user_organizations": {
           Args: Record<PropertyKey, never>
           Returns: unknown
+        }
+        "mark_client_report_link_copied": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: boolean
+        }
+        "mark_client_report_pdf_downloaded": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: boolean
         }
         "move_org_document_to_folder": {
           Args: {

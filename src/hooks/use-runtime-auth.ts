@@ -34,6 +34,7 @@ let currentState: RuntimeAuthState = LOADING_STATE;
 let authSubscription: { unsubscribe: () => void } | null = null;
 let initPromise: Promise<void> | null = null;
 let testOverrideState: RuntimeAuthState | null = null;
+let lastSignOutAt: number | null = null;
 
 function emitChange() {
   listeners.forEach((listener) => listener());
@@ -74,12 +75,16 @@ async function ensureRuntimeAuthInitialized(): Promise<void> {
   }
 
   initPromise = (async () => {
+    const previousProfileId = currentState.profileId;
     try {
       const { data, error } = await supabase.auth.getSession();
       currentState = error ? GUEST_STATE : toRuntimeAuthState(data.session ?? null);
     } catch {
       currentState = GUEST_STATE;
     } finally {
+      if (previousProfileId !== null && currentState.profileId === null) {
+        lastSignOutAt = Date.now();
+      }
       emitChange();
       initPromise = null;
     }
@@ -100,6 +105,9 @@ async function ensureRuntimeAuthInitialized(): Promise<void> {
       // or the next account on this tab reads the previous one's data.
       if (currentState.profileId !== previousProfileId) {
         clearWorkspaceUserCache();
+      }
+      if (previousProfileId !== null && currentState.profileId === null) {
+        lastSignOutAt = Date.now();
       }
       emitChange();
     });
@@ -126,6 +134,14 @@ function getSnapshot(): RuntimeAuthState {
   return currentState;
 }
 
+/**
+ * When the last signed-in session on this tab ended, while the tab is still
+ * signed out; null once someone signs in again, or if no session has ended.
+ */
+export function getSignedOutSince(): number | null {
+  return currentState.status === "authenticated" ? null : lastSignOutAt;
+}
+
 export function useRuntimeAuth(): RuntimeAuthState {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
@@ -142,6 +158,7 @@ export function __unsafeResetRuntimeAuthForTests(): void {
   testOverrideState = null;
   clearAuthSubscription();
   initPromise = null;
+  lastSignOutAt = null;
   currentState = LOADING_STATE;
   emitChange();
 }

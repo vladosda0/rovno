@@ -107,10 +107,21 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "shurik-sway": {
+          "0%, 100%": { transform: "rotate(-3deg)" },
+          "50%": { transform: "rotate(3deg)" },
+        },
+        "shurik-pop": {
+          "0%": { transform: "scale(0.9) rotate(-6deg)" },
+          "40%": { transform: "scale(1.06) rotate(4deg)" },
+          "100%": { transform: "scale(1) rotate(0deg)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "shurik-sway": "shurik-sway 3s ease-in-out infinite",
+        "shurik-pop": "shurik-pop 0.4s ease-out",
       },
     },
   },

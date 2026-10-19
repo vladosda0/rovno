@@ -140,4 +140,55 @@ describe("Signup", () => {
       expect(signUpMock).not.toHaveBeenCalled();
     });
   });
+
+  it.each(["//evil.example", "/\\evil.example", "/.//evil.example"])("ignores an off-origin next param %s after signup", async (next) => {
+    setAuthRole("guest");
+    signUpMock.mockResolvedValue({
+      data: { session: { user: { id: "profile-1" } } },
+      error: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={[`/auth/signup?next=${encodeURIComponent(next)}`]}>
+        <Routes>
+          <Route path="/auth/signup" element={<Signup />} />
+          <Route path="*" element={<LocationMarker />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Full Name"), { target: { value: "Jane Owner" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location-marker")).toHaveTextContent(/^\/onboarding$/);
+    });
+  });
+
+  it("forwards a same-origin next param to the sign-in link and drops an off-origin one", () => {
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/auth/signup?next=%2Finvite%2Faccept%2Ftoken-123"]}>
+        <Routes>
+          <Route path="/auth/signup" element={<Signup />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login?next=%2Finvite%2Faccept%2Ftoken-123",
+    );
+    unmount();
+
+    render(
+      <MemoryRouter initialEntries={["/auth/signup?next=%2F%2Fevil.example"]}>
+        <Routes>
+          <Route path="/auth/signup" element={<Signup />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/auth/login");
+  });
 });

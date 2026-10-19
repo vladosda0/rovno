@@ -176,6 +176,18 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260908120000_document_shares.sql`
 - `supabase/migrations/20260924120000_cross_project_transfer_server_owned.sql`
 - `supabase/migrations/20261001020000_document_shares_pin_file.sql`
+- `supabase/migrations/20261008020000_notifications_shurik_messages.sql`
+- `supabase/migrations/20261009030000_briefing_settings.sql`
+- `supabase/migrations/20261009035000_tasks_blocked_at.sql`
+- `supabase/migrations/20261011020000_notification_channel_settings.sql`
+- `supabase/migrations/20261013020000_notification_people_enabled.sql`
+- `supabase/migrations/20261014010000_profiles_gender.sql`
+- `supabase/migrations/20261015020000_shurik_hint_settings.sql`
+- `supabase/migrations/20261016020000_estimate_execution_status_since.sql`
+- `supabase/migrations/20261016020200_client_report_mark_rpcs.sql`
+- `supabase/migrations/20261016110000_blog_system_authors.sql`
+- `supabase/migrations/20261019010000_pin_invite_invited_by.sql`
+- `supabase/migrations/20261019010100_share_approval_requires_session.sql`
 
 ## Exclusions
 

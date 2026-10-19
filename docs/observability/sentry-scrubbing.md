@@ -38,9 +38,9 @@ contexts, request url/query — recursively, keys included).
 |---|---|---|
 | `jwt` | `eyJ…​.…​.…​` three base64url segments | `[TOKEN]` |
 | `bearer` | `Bearer <opaque>` | `Bearer [TOKEN]` |
-| `credential-path-segment` | `/share/document/<t>`, `/share/estimate/<t>`, `/invite/accept/<t>`, and the same three percent-encoded (`%2Fshare%2Fdocument%2F<t>`, as the app writes them into `?next=`) | `…/[FILTERED]` |
+| `credential-path-segment` | `/share/document/<t>`, `/share/report/<t>`, `/share/estimate/<t>`, `/share/blog/<t>`, `/invite/accept/<t>`, and the same five percent-encoded (`%2Fshare%2Fdocument%2F<t>`, as the app writes them into `?next=`) | `…/[FILTERED]` |
 | `share-token` | a bare 48-lowercase-hex document-share token | `[TOKEN]` |
-| `sensitive-query-param` | `?…apikey/api_key/token/access_token/refresh_token/password/secret/code=VALUE` | `…=[FILTERED]` |
+| `sensitive-query-param` | `apikey/api_key/access_token/refresh_token/provider_refresh_token/provider_token/token_hash/token/password/secret/code/email=VALUE` at the start of a line or after `?`, `&`, `#` | `…=[FILTERED]` |
 | `email` | `local@domain.tld` | `[EMAIL]` |
 | `phone-ru` | `+7 / 8 / 7` + 10 digits with spaces/dashes/parens | `[PHONE]` |
 | `address-ru` | `ул.` `г.` `д.` `кв.` `город` `улица` … + following token | `[ADDRESS]` |

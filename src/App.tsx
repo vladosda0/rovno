@@ -43,6 +43,8 @@ const ProjectDocuments = lazy(() => import("@/pages/project/ProjectDocuments"));
 const ProjectParticipants = lazy(() => import("@/pages/project/ProjectParticipants"));
 const ShareEstimate = lazy(() => import("@/pages/share/ShareEstimate"));
 const ShareDocument = lazy(() => import("@/pages/share/ShareDocument"));
+const ShareBlogDraft = lazy(() => import("@/pages/share/ShareBlogDraft"));
+const ShareReport = lazy(() => import("@/pages/share/ShareReport"));
 const InviteAccept = lazy(() => import("@/pages/invite/InviteAccept"));
 const ThemeDemo = lazy(() => import("@/pages/ThemeDemo"));
 const BlogIndex = lazy(() => import("@/pages/blog/BlogIndex"));
@@ -86,6 +88,8 @@ const App = () => (
           <Route path="/theme" element={routeElement(<ThemeDemo />)} />
           <Route path="/share/estimate/:shareId" element={routeElement(<ShareEstimate />)} />
           <Route path="/share/document/:token" element={routeElement(<ShareDocument />)} />
+          <Route path="/share/blog/:token" element={routeElement(<ShareBlogDraft />)} />
+          <Route path="/share/report/:token" element={routeElement(<ShareReport />)} />
           <Route path="/invite/accept/:inviteToken" element={routeElement(<InviteAccept />)} />
 
           {/* Public blog (SEO surface; static prerender covers these routes) */}

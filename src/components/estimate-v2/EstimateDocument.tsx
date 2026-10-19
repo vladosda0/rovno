@@ -700,10 +700,11 @@ export function EstimateDocument(props: EstimateDocumentProps) {
   );
 }
 
-function Sheet({ geom, children }: { geom: PageGeometry; children: ReactNode }) {
+function Sheet({ geom, flat = false, children }: { geom: PageGeometry; flat?: boolean; children: ReactNode }) {
   return (
     <div
       className="est-sheet"
+      data-pdf-sheet={flat ? "" : undefined}
       style={{
         ...BASE_TEXT,
         width: `${geom.pageWidthMm}mm`,
@@ -713,8 +714,8 @@ function Sheet({ geom, children }: { geom: PageGeometry; children: ReactNode }) 
         background: "#ffffff",
         display: "flex",
         flexDirection: "column",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
-        borderRadius: "2px",
+        boxShadow: flat ? "none" : "0 2px 10px rgba(0,0,0,0.18)",
+        borderRadius: flat ? 0 : "2px",
       }}
     >
       {children}
@@ -967,4 +968,27 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/**
+ * The estimate as unscaled, shadowless A4 sheets laid out by `pages` (the
+ * preview's layout), for drawing into a PDF file. Each sheet is marked
+ * `data-pdf-sheet`. An unusable layout falls back to one sheet.
+ */
+export function EstimatePdfSheets({ pages, ...props }: EstimateDocumentProps & { pages: string[][] | null }) {
+  const orientation = props.orientation ?? getOrientationForVariant(props.variant);
+  const geom = getPageGeometry(orientation);
+  const blocks = buildEstimateBlocks({ ...props, orientation });
+  const blockMap = new Map(blocks.map((b) => [b.id, b]));
+  const allIds = blocks.map((b) => b.id);
+  const effectivePages = pageLayoutMatchesBlocks(pages, allIds) ? (pages as string[][]) : [allIds];
+  return (
+    <>
+      {effectivePages.map((ids, pi) => (
+        <Sheet key={pi} geom={geom} flat>
+          <PageBlocks ids={ids} blockMap={blockMap} />
+        </Sheet>
+      ))}
+    </>
+  );
 }

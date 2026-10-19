@@ -141,6 +141,18 @@ describe("initMetrika and the Supabase auth fragment", () => {
     expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
   });
 
+  it("does not load the tag on a blog draft preview link", async () => {
+    vi.useFakeTimers();
+    setUrl("/share/blog/v1.QA-BLOG-PREVIEW.QA-SIGNATURE");
+    const initMetrika = await loadInitMetrika();
+
+    initMetrika();
+    vi.advanceTimersByTime(1_000);
+
+    expect(initCalls(ym)).toHaveLength(0);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
+  });
+
   it("does not load the tag when the share path differs only in case", async () => {
     vi.useFakeTimers();
     setUrl("/SHARE/ESTIMATE/QA-SHARE-TOKEN");
@@ -267,6 +279,11 @@ describe("initMetrika and the Supabase auth fragment", () => {
     ["an invite token", `/auth/login?next=%2Finvite%2Faccept%2F${"a".repeat(32)}`],
     ["a share-estimate id", "/auth/signup?next=%2Fshare%2Festimate%2Fsome-share-id"],
     ["a share-document token", `/auth/login?next=%2Fshare%2Fdocument%2F${"b".repeat(48)}`],
+    ["a share link behind a dot segment", "/auth/login?next=%2Fshare%2Festimate%2F%252e%2FQA-SHARE-TOKEN"],
+    ["a share link behind a literal dot segment", "/auth/login?next=%2Fshare%2Festimate%2F.%2FQA-SHARE-TOKEN"],
+    ["a share link behind a dot segment with a fragment", "/auth/login?next=%2Fshare%2Festimate%2F.%2FQA-SHARE-TOKEN%23%2Fitems"],
+    ["a share link behind a protocol-relative prefix", "/auth/login?next=%2F%2Fshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["an invite link behind a parent segment", `/auth/signup?next=%2Fhome%2F..%2Finvite%2Faccept%2F${"c".repeat(32)}`],
   ])("does not start when `next` carries %s", async (_label, url) => {
     vi.useFakeTimers();
     setUrl(url);
@@ -328,12 +345,29 @@ describe("the secret-route boundary (rovno#153)", () => {
     expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
   });
 
+  it("never starts the tag in a document that opened on a percent-encoded share link", async () => {
+    vi.useFakeTimers();
+    setUrl("/share/%65stimate/QA-SHARE-TOKEN");
+    const analytics = await loadAnalytics();
+    vi.spyOn(analytics.documentNavigation, "replace").mockImplementation(() => {});
+
+    analytics.initMetrika();
+    vi.advanceTimersByTime(30_000);
+    analytics.ensureMetrikaStarted();
+
+    expect(initCalls(ym)).toHaveLength(0);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
+  });
+
   it.each([
     ["into a share link from a page that may run the tag", "/home", "/share/estimate/QA-SHARE-TOKEN", true],
     ["into an invite from a page that may run the tag", "/project/p1/tasks", "/invite/accept/QA-INVITE", true],
     ["out of a share link", "/share/document/QA-DOC-TOKEN", "/home", true],
     ["between two ordinary pages", "/home", "/project/p1/tasks", false],
     ["between two share links", "/share/estimate/QA-OLD", "/share/estimate/QA-NEWER", false],
+    ["into a share link with a percent-encoded segment", "/home", "/share/%65stimate/QA-SHARE-TOKEN", true],
+    ["into an invite with a percent-encoded segment", "/home", "/invite/%61ccept/QA-INVITE", true],
+    ["onto a path with a malformed escape", "/home", "/project/%E0%A4%A/tasks", false],
   ])("a navigation %s (%s -> %s) needs a fresh page load: %s", async (_label, from, to, fresh) => {
     setUrl(from);
     const analytics = await loadAnalytics();
@@ -425,6 +459,16 @@ describe("analyticsPageUrl path sanitising", () => {
     expect(url).not.toContain("QA-SHARE-TOKEN");
   });
 
+  it("replaces a share token in the path when a segment is percent-encoded", async () => {
+    setUrl("/share/%65stimate/QA-SHARE-TOKEN");
+    const { analyticsPageUrl } = await loadAnalytics();
+
+    const url = analyticsPageUrl();
+
+    expect(url).toBe(`${window.location.origin}/share/estimate/:shareId`);
+    expect(url).not.toContain("QA-SHARE-TOKEN");
+  });
+
   it("replaces a share token in the path when the path differs only in case", async () => {
     setUrl("/SHARE/ESTIMATE/QA-SHARE-TOKEN");
     const { analyticsPageUrl } = await loadAnalytics();
@@ -443,6 +487,16 @@ describe("analyticsPageUrl path sanitising", () => {
 
     expect(url).toBe(`${window.location.origin}/share/document/:token`);
     expect(url).not.toContain("QA-DOCUMENT-TOKEN");
+  });
+
+  it("replaces a blog preview token in the path with the route template", async () => {
+    setUrl("/share/blog/v1.QA-BLOG-PREVIEW.QA-SIGNATURE");
+    const { analyticsPageUrl } = await loadAnalytics();
+
+    const url = analyticsPageUrl();
+
+    expect(url).toBe(`${window.location.origin}/share/blog/:token`);
+    expect(url).not.toContain("QA-BLOG-PREVIEW");
   });
 
   it("replaces an invite token in the path with the route template", async () => {
@@ -534,12 +588,14 @@ describe("ANALYTICS_ROUTES stays in step with App.tsx", () => {
     expect(stale).toEqual([]);
   });
 
-  it("marks the three token-bearing routes, and only those, as secret", () => {
+  it("marks the five token-bearing routes, and only those, as secret", () => {
     const secret = ANALYTICS_ROUTES.filter((route) => route.secret).map((route) => route.pattern);
 
     expect(secret).toEqual([
       "/share/estimate/:shareId",
       "/share/document/:token",
+      "/share/blog/:token",
+      "/share/report/:token",
       "/invite/accept/:inviteToken",
     ]);
   });

@@ -1,6 +1,6 @@
 import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProjectTasks from "@/pages/project/ProjectTasks";
 import { TaskNoLongerAvailableError } from "@/data/planning-source";
@@ -12,6 +12,7 @@ import type { MemberRole } from "@/types/entities";
 const mocks = vi.hoisted(() => ({
   useProject: vi.fn(),
   useTasks: vi.fn(),
+  tasksFetching: vi.fn(() => false),
   usePermission: vi.fn(),
   useMedia: vi.fn(),
   useWorkspaceMode: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock("@/hooks/use-planning-source", () => ({
   usePlanningProjectTasksState: (projectId: string) => ({
     tasks: mocks.useTasks(projectId),
     isLoading: false,
+    isFetching: mocks.tasksFetching(),
   }),
 }));
 
@@ -90,7 +92,14 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mocks.toast }),
 }));
 
-function renderProjectTasks() {
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location-probe">{location.pathname + location.search}</span>;
+}
+
+function renderProjectTasks(
+  initialEntry: string | { pathname: string; search?: string; state?: unknown } = "/project/project-1/tasks",
+) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -99,15 +108,16 @@ function renderProjectTasks() {
     },
   });
 
-  return render(
+  const makeTree = () => (
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/project/project-1/tasks"]}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <Routes>
-          <Route path="/project/:id/tasks" element={<ProjectTasks />} />
+          <Route path="/project/:id/tasks" element={<><ProjectTasks /><LocationProbe /></>} />
         </Routes>
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  return { ...render(makeTree()), makeTree };
 }
 
 function buildTask(overrides: Record<string, unknown> = {}) {
@@ -159,6 +169,7 @@ function buildPermission(role: MemberRole) {
 
 describe("ProjectTasks", () => {
   beforeEach(() => {
+    mocks.tasksFetching.mockReturnValue(false);
     mocks.useProject.mockReturnValue({
       project: {
         id: "project-1",
@@ -1024,6 +1035,51 @@ describe("ProjectTasks", () => {
 
   // Regression: Back/Cancel used to drop the user on the board with nothing
   // selected, so the task they were in the middle of had to be found again.
+  it("opens the task named in the address and drops the parameter", async () => {
+    mocks.useTasks.mockReturnValue([buildTask()]);
+
+    renderProjectTasks("/project/project-1/tasks?task=task-1&from=telegram");
+
+    expect(within(await screen.findByRole("dialog")).getAllByText("Estimate task").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("location-probe")).toHaveTextContent("/project/project-1/tasks?from=telegram");
+  });
+
+  it("opens nothing for a task the project does not have, and still drops the parameter", async () => {
+    mocks.useTasks.mockReturnValue([buildTask()]);
+
+    renderProjectTasks("/project/project-1/tasks?task=task-of-another-project");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location-probe")).toHaveTextContent(/^\/project\/project-1\/tasks$/),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("waits for the list still being fetched before calling an id unknown", async () => {
+    mocks.useTasks.mockReturnValue([]);
+    mocks.tasksFetching.mockReturnValue(true);
+
+    const view = renderProjectTasks("/project/project-1/tasks?task=task-1");
+
+    expect(screen.getByTestId("location-probe")).toHaveTextContent("/project/project-1/tasks?task=task-1");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    mocks.useTasks.mockReturnValue([buildTask()]);
+    mocks.tasksFetching.mockReturnValue(false);
+    view.rerender(view.makeTree());
+
+    expect(within(await screen.findByRole("dialog")).getAllByText("Estimate task").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("location-probe")).toHaveTextContent(/^\/project\/project-1\/tasks$/);
+  });
+
+  it("still opens a task handed over in navigation state", async () => {
+    mocks.useTasks.mockReturnValue([buildTask()]);
+
+    renderProjectTasks({ pathname: "/project/project-1/tasks", state: { openTaskId: "task-1" } });
+
+    expect(within(await screen.findByRole("dialog")).getAllByText("Estimate task").length).toBeGreaterThan(0);
+  });
+
   it("returns to the task card when the Done prompt is dismissed", async () => {
     mocks.usePermission.mockReturnValue(buildPermission("contractor"));
     mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);

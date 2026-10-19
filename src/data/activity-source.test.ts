@@ -67,6 +67,7 @@ function notificationRow(
     },
     created_at: "2026-03-01T10:00:00.000Z",
     read_at: null,
+    dedupe_key: null,
     ...overrides,
   };
 }

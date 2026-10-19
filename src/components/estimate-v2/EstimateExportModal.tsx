@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   Copy,
@@ -33,7 +34,9 @@ import {
   variantShowsRequisites,
 } from "@/lib/estimate-export-data";
 import { printHtmlDocument } from "@/lib/print-html";
+import { downloadSheetsAsPdf } from "@/lib/download-pdf";
 import {
+  EstimatePdfSheets,
   PaginatedEstimateDocument,
   getOrientationForVariant,
   renderEstimatePagesToHtml,
@@ -198,6 +201,37 @@ export function EstimateExportModal({
     setShareState((current) => (current.phase === "idle" ? current : { phase: "idle" }));
   }, [variant]);
 
+  // The sheets are rendered off screen only while a file is being built.
+  const [pdfJob, setPdfJob] = useState<{
+    payload: ExportPayload;
+    labels: EstimateDocumentLabels;
+    variant: ExportVariant;
+    pages: string[][] | null;
+    orgCard: OrgCard | null;
+    clientInfo: ClientInfo | null;
+    fileName: string;
+  } | null>(null);
+  const [preparingPdf, setPreparingPdf] = useState(false);
+  const preparingPdfRef = useRef(false);
+  const pdfSheetsRef = useRef<HTMLDivElement>(null);
+  const pdfStartedFor = useRef<typeof pdfJob>(null);
+
+  useEffect(() => {
+    // The ref guard keeps a re-run of this effect from saving the file twice.
+    if (!pdfJob || pdfStartedFor.current === pdfJob) return;
+    pdfStartedFor.current = pdfJob;
+    const sheets = Array.from(pdfSheetsRef.current?.querySelectorAll<HTMLElement>("[data-pdf-sheet]") ?? []);
+    downloadSheetsAsPdf(sheets, {
+      fileName: pdfJob.fileName,
+      orientation: getOrientationForVariant(pdfJob.variant),
+      marginYMm: getPageGeometry(getOrientationForVariant(pdfJob.variant)).marginYMm,
+    })
+      .catch(() => {
+        toast({ title: t("estimate.export.toast.pdfFailed"), variant: "destructive" });
+      })
+      .finally(() => setPdfJob(null));
+  }, [pdfJob, t, toast]);
+
   // --- Preview zoom + pagination ---
   const previewScrollRef = useRef<HTMLDivElement>(null);
   // zoomPct === null means "fit to width" (auto, follows the pane size).
@@ -278,14 +312,17 @@ export function EstimateExportModal({
     await Promise.all(tasks);
   };
 
-  const triggerPrintFlow = async (mode: "print" | "pdf") => {
-    if (!signingReady) {
-      toast({
-        title: t("estimate.export.toast.fillRequired"),
-        variant: "destructive",
-      });
-      return;
-    }
+  const ensureSigningReady = () => {
+    if (signingReady) return true;
+    toast({
+      title: t("estimate.export.toast.fillRequired"),
+      variant: "destructive",
+    });
+    return false;
+  };
+
+  const handlePrint = async () => {
+    if (!ensureSigningReady()) return;
     await persistSigningDraft();
     const html = renderEstimatePagesToHtml(
       {
@@ -299,17 +336,35 @@ export function EstimateExportModal({
       latestPagesRef.current?.variant === variant ? latestPagesRef.current.pages : null,
       `${labels.title} – ${payload.projectTitle}`,
     );
-    if (mode === "pdf") {
-      toast({
-        title: t("estimate.export.toast.downloadPdfHint.title"),
-        description: t("estimate.export.toast.downloadPdfHint.description"),
-      });
-    }
     printHtmlDocument(html, { titleForDownload: payload.projectTitle });
   };
 
-  const handlePrint = () => { void triggerPrintFlow("print"); };
-  const handleDownloadPdf = () => { void triggerPrintFlow("pdf"); };
+  const handleDownloadPdf = async () => {
+    if (preparingPdfRef.current || pdfJob || !ensureSigningReady()) return;
+    preparingPdfRef.current = true;
+    setPreparingPdf(true);
+    try {
+      await persistSigningDraft();
+    } catch {
+      toast({ title: t("estimate.export.toast.pdfFailed"), variant: "destructive" });
+      return;
+    } finally {
+      preparingPdfRef.current = false;
+      setPreparingPdf(false);
+    }
+    setPdfJob({
+      payload,
+      labels,
+      variant,
+      pages: latestPagesRef.current?.variant === variant ? latestPagesRef.current.pages : null,
+      orgCard: variant === "client_signing" ? orgCardDraft : null,
+      clientInfo: variant === "client_signing" ? clientInfoDraft : null,
+      fileName: t("estimate.export.pdfFileName", {
+        project: payload.projectTitle,
+        variant: t(VARIANT_TITLE_KEYS[variant]),
+      }),
+    });
+  };
 
   const handleShare = async () => {
     setShareState({ phase: "loading" });
@@ -363,6 +418,7 @@ export function EstimateExportModal({
               <RadioGroup
                 value={variant}
                 onValueChange={(value) => setVariant(value as ExportVariant)}
+                disabled={preparingPdf || pdfJob !== null}
                 className="gap-2"
               >
                 <VariantOption
@@ -486,11 +542,17 @@ export function EstimateExportModal({
                 {t("estimate.export.actions.downloadCsv")}
               </Button>
             ) : null}
-            <Button variant="outline" onClick={handleDownloadPdf} disabled={!signingReady}>
-              <FileText className="mr-1.5 h-4 w-4" />
+            <Button
+              variant="outline"
+              onClick={() => { void handleDownloadPdf(); }}
+              disabled={!signingReady || preparingPdf || pdfJob !== null}
+            >
+              {preparingPdf || pdfJob
+                ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                : <FileText className="mr-1.5 h-4 w-4" />}
               {t("estimate.export.actions.downloadPdf")}
             </Button>
-            <Button variant="outline" onClick={handlePrint} disabled={!signingReady}>
+            <Button variant="outline" onClick={() => { void handlePrint(); }} disabled={!signingReady}>
               <Printer className="mr-1.5 h-4 w-4" />
               {t("estimate.export.actions.print")}
             </Button>
@@ -520,9 +582,33 @@ export function EstimateExportModal({
           </div>
         ) : null}
       </DialogContent>
+      {pdfJob && createPortal(
+        <div
+          ref={pdfSheetsRef}
+          aria-hidden
+          {...{ inert: "" }}
+          style={{ position: "fixed", left: -10000, top: 0, pointerEvents: "none" }}
+        >
+          <EstimatePdfSheets
+            payload={pdfJob.payload}
+            variant={pdfJob.variant}
+            orgCard={pdfJob.orgCard}
+            clientInfo={pdfJob.clientInfo}
+            labels={pdfJob.labels}
+            pages={pdfJob.pages}
+          />
+        </div>,
+        document.body,
+      )}
     </Dialog>
   );
 }
+
+const VARIANT_TITLE_KEYS: Record<ExportVariant, string> = {
+  client_simple: "estimate.export.variant.clientSimple.title",
+  client_signing: "estimate.export.variant.clientSigning.title",
+  internal: "estimate.export.variant.internal.title",
+};
 
 interface VariantOptionProps {
   value: ExportVariant;

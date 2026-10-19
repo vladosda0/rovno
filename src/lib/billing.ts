@@ -113,7 +113,7 @@ export interface AddCardResponse {
   // binding server-side by request_key in the AddCard notification).
   readonly request_key: string;
   readonly customer_key: string;
-  // T-Bank hosted card-binding page; embedded by the addcardIframe widget and used as
+  // T-Bank hosted card-binding page; embedded by the card form (addcard.iframe) and used as
   // the fallback when it can't mount.
   readonly payment_url: string | null;
 }

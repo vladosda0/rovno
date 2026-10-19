@@ -111,4 +111,124 @@ describe("PlansDialog downgrade guard", () => {
     // ...but never toggles auto-renew as a side effect (the removed P1-3 hole).
     expect(rpc).not.toHaveBeenCalledWith("tbank_set_auto_renew", expect.anything());
   });
+
+  it("drops the downgrade confirm when the parent closes the plans dialog", async () => {
+    activeSubReturn = {
+      status: "active",
+      subscription: brigadeSub(true),
+      readOnly: false,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    const tree = (open: boolean) => (
+      <MemoryRouter>
+        <PlansDialog open={open} onOpenChange={() => {}} currentPlan="brigade" />
+      </MemoryRouter>
+    );
+
+    const { rerender } = render(tree(true));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Switch" }));
+    });
+    expect(screen.getByRole("button", { name: /schedule switch/i })).toBeTruthy();
+
+    await act(async () => {
+      rerender(tree(false));
+    });
+    expect(screen.queryByRole("button", { name: /schedule switch/i })).toBeNull();
+
+    // Reopening must not bring back a confirm for the target picked before the close.
+    await act(async () => {
+      rerender(tree(true));
+    });
+    expect(screen.queryByRole("button", { name: /schedule switch/i })).toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("offers a promo subscriber no downgrade and no cancel note", () => {
+    activeSubReturn = {
+      status: "active",
+      subscription: { ...brigadeSub(false), provider: "promo", amount_cents: 0, canceled_at: null },
+      readOnly: false,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    renderDialog();
+    expect(screen.queryByRole("button", { name: "Switch" })).toBeNull();
+    expect(screen.queryByText("Downgrade via subscription cancellation")).toBeNull();
+  });
+
+  it("keeps the upgrade button for a promo subscriber", () => {
+    activeSubReturn = {
+      status: "active",
+      subscription: {
+        ...brigadeSub(false),
+        provider: "promo",
+        plan_code: "master",
+        amount_cents: 0,
+        canceled_at: null,
+      },
+      readOnly: false,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    renderDialog();
+    expect(screen.getByRole("button", { name: "Upgrade" })).toBeTruthy();
+    expect(screen.queryByText("Downgrade via subscription cancellation")).toBeNull();
+  });
+
+  it("keeps the cancel note for a T-Bank subscriber", () => {
+    activeSubReturn = {
+      status: "active",
+      subscription: brigadeSub(true),
+      readOnly: false,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    renderDialog();
+    expect(screen.getByText("Downgrade via subscription cancellation")).toBeTruthy();
+  });
+
+  it.each([
+    ["no row", { status: "none", isLoading: false, isError: false }],
+    ["a row still loading", { status: "none", isLoading: true, isError: false }],
+    ["a failed load", { status: "none", isLoading: false, isError: true }],
+  ] as const)("offers no downgrade and no cancel note with %s", (_label, state) => {
+    activeSubReturn = {
+      ...state,
+      subscription: null,
+      readOnly: false,
+      refetch: vi.fn(),
+    };
+
+    renderDialog();
+    expect(screen.queryByRole("button", { name: "Switch" })).toBeNull();
+    expect(screen.queryByText("Downgrade via subscription cancellation")).toBeNull();
+  });
+
+  it("keeps the upgrade button when the subscription row is unknown", () => {
+    activeSubReturn = {
+      status: "none",
+      subscription: null,
+      readOnly: false,
+      isLoading: true,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    render(
+      <MemoryRouter>
+        <PlansDialog open onOpenChange={() => {}} currentPlan="master" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("button", { name: "Upgrade" })).toBeTruthy();
+    expect(screen.queryByText("Downgrade via subscription cancellation")).toBeNull();
+  });
 });

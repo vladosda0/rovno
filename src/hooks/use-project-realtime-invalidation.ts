@@ -14,6 +14,7 @@ import {
   hasPendingProjectDraftSync,
   hydrateEstimateV2ProjectFromWorkspace,
 } from "@/data/estimate-v2-store";
+import { captureException } from "@/lib/observability/sentry";
 
 /**
  * P2 realtime consumer: reacts to project_sync_events with query invalidation
@@ -108,7 +109,9 @@ export function useProjectRealtimeInvalidation(
           // not cover an empty local structure (a delete-all mid-debounce),
           // so hydrating then would silently revert that in-flight edit.
           if (!hasPendingProjectDraftSync(projectId)) {
-            void hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId });
+            void hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId }).catch((error) =>
+              captureException(error, { tags: { source: "estimate-hydrate", trigger: "realtime" } }),
+            );
           }
         }
         if (kinds.has("tasks") || kinds.has("checklist")) {

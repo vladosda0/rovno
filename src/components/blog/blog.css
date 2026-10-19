@@ -178,6 +178,22 @@
   object-fit: cover;
 }
 
+/* Shurik's poses are full-figure stickers: whole, no round crop, larger
+   (authorAvatarConfig.mjs). */
+.rv-landing .rv-author-bio img.rv-author-bio__sticker {
+  width: auto;
+  height: 88px;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+/* The text column next to a wide avatar must shrink on a 320px phone instead
+   of running into the card's padding. */
+.rv-landing .rv-author-bio > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .rv-landing .rv-author-bio .rv-author-bio__initial {
   display: inline-flex;
   align-items: center;
@@ -458,6 +474,151 @@
   margin: 32px 0;
 }
 
+/* ---------- Tables (look A «Синяя шапка», Vlad's pick 16.10.2026) ----------
+   The HTML is @tiptap/extension-table's getHTML() as is: <table style> >
+   <colgroup> > <tbody> > <tr> > <th>/<td> > <p>, header row first, no
+   wrapper element. So the scroller IS the table: display:block makes it the
+   box that clips the rounded corners and scrolls sideways on a phone, and the
+   tbody takes over the table layout at full width. Works the same in the SPA,
+   the prerendered static page and the editor (which adds a .tableWrapper div
+   around the same table). */
+
+.rv-landing .rv-article table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line-blue-soft);
+  border-radius: 8px;
+  background: #fff;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  /* The article's own text colour (landing.css .rv-landing p), so a table
+     reads as part of the text around it. */
+  color: var(--fg1);
+}
+
+.rv-landing .rv-article table > tbody {
+  display: table;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.rv-landing .rv-article th,
+.rv-landing .rv-article td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.rv-landing .rv-article th {
+  background: var(--rv-blue);
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.rv-landing .rv-article td {
+  border-top: 1px solid var(--line-blue-soft);
+}
+
+.rv-landing .rv-article tbody tr:nth-child(even) {
+  background: rgba(30, 92, 203, 0.04);
+}
+
+/* Cells sit on fractional pixel edges, and per-cell backgrounds leave
+   hairline seams between them on a phone. The header colour is painted on
+   the row as well, so whatever shows through a seam is the same blue. */
+.rv-landing .rv-article tr:has(> th) {
+  background: var(--rv-blue);
+}
+
+/* landing.css styles every .rv-landing p (colour, size, line height); inside
+   a cell the paragraph must take the cell's instead, or the header text turns
+   blue on blue. */
+.rv-landing .rv-article th p,
+.rv-landing .rv-article td p {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+.rv-landing .rv-article th p + p,
+.rv-landing .rv-article td p + p {
+  margin-top: 8px;
+}
+
+/* A link in the blue header would be blue on blue. */
+.rv-landing .rv-article th a {
+  color: inherit;
+  text-decoration-color: currentColor;
+}
+
+/* ---------- Draft preview banner (/share/blog/:token) ---------- */
+
+.rv-landing .rv-preview-banner-wrap {
+  max-width: 720px;
+  margin: 0 auto 32px;
+}
+
+.rv-landing .rv-preview-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: var(--font-mono-ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.rv-landing .rv-preview-banner__title {
+  font-weight: 600;
+}
+
+.rv-landing .rv-preview-banner--draft {
+  background: #FFF3C8;
+  color: #5b4500;
+  border: 1px solid #F0D27A;
+}
+
+.rv-landing .rv-preview-banner--published {
+  background: #E3F2E4;
+  color: #1d5a22;
+  border: 1px solid #A9D5AD;
+}
+
+.rv-landing .rv-preview-banner--bad {
+  background: #FBE3DC;
+  color: #7a2410;
+  border: 1px solid #F1B5A3;
+}
+
+.rv-landing .rv-preview-banner__action {
+  display: inline-block;
+  margin-top: 8px;
+  font-family: var(--font-mono-ui);
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--rv-blue);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.rv-landing .rv-preview-banner__action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* ---------- Article page chrome ---------- */
 
 .rv-landing .rv-article-header {
@@ -532,4 +693,15 @@
   .rv-landing .rv-article { font-size: 17px; }
   .rv-landing .rv-article h2 { font-size: 28px; }
   .rv-landing .rv-article h3 { font-size: 22px; }
+}
+
+/* Phone: a table of three or more columns keeps a readable width and scrolls
+   sideways inside its own box; the page itself never gets wider than the
+   screen. Two columns fit as they are. Without :has() support the table just
+   squeezes, which is still readable. */
+@media (max-width: 600px) {
+  .rv-landing .rv-article table { font-size: 15px; }
+  .rv-landing .rv-article th { font-size: 14px; }
+  .rv-landing .rv-article table:has(tr > :nth-child(3)) > tbody { min-width: 520px; }
+  .rv-landing .rv-preview-banner-wrap { margin-bottom: 24px; }
 }

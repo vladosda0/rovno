@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
 import { resolvePayloadPreferredIsoTimestamp } from "@/lib/event-activity-timestamp";
-import { mapProfileRowToUser, resolveWorkspaceMode, type WorkspaceMode } from "@/data/workspace-source";
+import { mapProfileRowToUser, PROFILE_USER_COLUMNS, resolveWorkspaceMode, type WorkspaceMode } from "@/data/workspace-source";
 import {
   cacheWorkspaceUsers,
   currentWorkspaceUserEpoch,
@@ -466,7 +466,7 @@ function lookupActor(supabase: TypedSupabaseClient, id: string): Promise<void> {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, email, full_name, avatar_url, locale, timezone, plan, credits_free, credits_paid")
+        .select(PROFILE_USER_COLUMNS)
         .in("id", [id]);
 
       if (error || !data) return;

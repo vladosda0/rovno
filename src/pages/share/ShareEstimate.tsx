@@ -178,6 +178,7 @@ export default function ShareEstimate() {
   const handleApprove = async (stamp: ApprovalStamp) => {
     if (!canApprove) {
       toast({ title: t("share.estimate.toast.noLonger"), variant: "destructive" });
+      setApprovalModalOpen(false);
       return;
     }
 

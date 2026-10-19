@@ -52,7 +52,7 @@ function renderSidebar() {
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return screen.getByPlaceholderText("Ask AI...");
+  return screen.getByLabelText("Ask Shurik...");
 }
 
 describe("AISidebar first-move instrumentation", () => {
@@ -151,7 +151,7 @@ describe("AISidebar first-move instrumentation", () => {
     // second send has to wait for it to come back. Asserting two submissions is
     // what keeps this test honest: without the wait the second pair of events
     // lands on a detached node and the test would pass while covering nothing.
-    const reopened = await screen.findByPlaceholderText("Ask AI...", {}, { timeout: 10_000 });
+    const reopened = await screen.findByLabelText("Ask Shurik...", {}, { timeout: 10_000 });
     fireEvent.change(reopened, { target: { value: "second" } });
     fireEvent.keyDown(reopened, { key: "Enter" });
 
@@ -183,7 +183,8 @@ describe("AISidebar first-move instrumentation", () => {
 
     const payload = firstMoveCalls()[0][1] as Record<string, unknown>;
     expect(payload.opener_shown_id).toEqual(expect.any(String));
-    expect(payload.opener_level).toBe("l0");
+    // The levels (three-day introduction, fade) went with slice 8.
+    expect(payload).not.toHaveProperty("opener_level");
   });
 
   it("does not count a show on a project whose thread was restored from storage", () => {

@@ -28,7 +28,7 @@ vi.mock("react-i18next", () => ({
     // форматируется по i18n.language, и без него компонент падает на рендере.
     i18n: { language: mockLang },
     t: (key: string, params?: Record<string, string>) =>
-      key === "ai.event.actorAI" ? "ИИ"
+      key === "ai.event.actorAI" ? "Шурик"
       : key === "ai.event.actorSystem" ? "Система"
       : key === "activity.event.document.created" ? `добавил${params?.a ?? "{{a}}"} документ`
       : key,
@@ -52,13 +52,26 @@ function event(overrides: Partial<Event> = {}): Event {
 }
 
 describe("EventFeedItem", () => {
-  it("renders a resolved person with the masculine caption", () => {
+  it("renders a person who stated no gender with both forms", () => {
     isAIEvent.mockReturnValue(false);
     getUserById.mockReturnValue({ id: "profile-1", name: "Анна Петрова" });
 
     render(<EventFeedItem event={event()} />);
 
     expect(screen.getByText("Анна Петрова")).toBeTruthy();
+    expect(screen.getByText("добавил(а) документ")).toBeTruthy();
+  });
+
+  it("renders a woman with the feminine caption and a man with the masculine one", () => {
+    isAIEvent.mockReturnValue(false);
+
+    getUserById.mockReturnValue({ id: "profile-1", name: "Анна Петрова", gender: "female" });
+    const woman = render(<EventFeedItem event={event()} />);
+    expect(screen.getByText("добавила документ")).toBeTruthy();
+    woman.unmount();
+
+    getUserById.mockReturnValue({ id: "profile-1", name: "Иван Петров", gender: "male" });
+    render(<EventFeedItem event={event()} />);
     expect(screen.getByText("добавил документ")).toBeTruthy();
   });
 
@@ -101,7 +114,7 @@ describe("EventFeedItem", () => {
 
     render(<EventFeedItem event={event({ actor_id: "ai" })} />);
 
-    expect(screen.getByText("ИИ")).toBeTruthy();
+    expect(screen.getByText("Шурик")).toBeTruthy();
     expect(screen.getByText("добавил документ")).toBeTruthy();
   });
 

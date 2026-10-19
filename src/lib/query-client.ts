@@ -1,6 +1,7 @@
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { captureException } from "@/lib/observability/sentry";
 import { shouldReportDataLayerError } from "@/lib/observability/data-layer-errors";
+import { getSignedOutSince } from "@/hooks/use-runtime-auth";
 
 /**
  * Query keys whose REMAINING elements are a credential, not an id. On these
@@ -13,7 +14,7 @@ import { shouldReportDataLayerError } from "@/lib/observability/data-layer-error
  * Add a key here whenever a route's path segment is its credential — the same
  * set as the `secret: true` entries of ANALYTICS_ROUTES.
  */
-const CREDENTIAL_QUERY_KEYS = new Set(["document-share", "estimate-share", "invite-token"]);
+const CREDENTIAL_QUERY_KEYS = new Set(["document-share", "estimate-share", "invite-token", "blog-preview"]);
 
 /** The key with its credential elements replaced, safe to attach to an event. */
 export function redactQueryKey(queryKey: readonly unknown[]): unknown[] {
@@ -33,7 +34,7 @@ export const queryClient = new QueryClient({
   // retries) so this stays a defect signal, not noise.
   queryCache: new QueryCache({
     onError: (error, query) => {
-      if (!shouldReportDataLayerError(error, "query")) return;
+      if (!shouldReportDataLayerError(error, "query", { signedOutAt: getSignedOutSince() })) return;
       // The queryKey head (resource/RPC name) goes into a TAG so Sentry alert
       // rules can match critical data sources (e.g. search_canonical_library).
       const keyHead = query.queryKey[0];

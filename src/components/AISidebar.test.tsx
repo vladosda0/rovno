@@ -95,7 +95,7 @@ describe("AISidebar", () => {
       </QueryClientProvider>,
     );
 
-    const composer = screen.getByPlaceholderText("Ask AI...");
+    const composer = screen.getByLabelText("Ask Shurik...");
 
     fireEvent.change(composer, { target: { value: "alpha history" } });
     fireEvent.keyDown(composer, { key: "Enter" });
@@ -109,7 +109,7 @@ describe("AISidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Project B" }));
     expect(screen.queryByText("alpha history")).not.toBeInTheDocument();
 
-    const projectBComposer = screen.getByPlaceholderText("Ask AI...");
+    const projectBComposer = screen.getByLabelText("Ask Shurik...");
     fireEvent.change(projectBComposer, { target: { value: "beta history" } });
     fireEvent.keyDown(projectBComposer, { key: "Enter" });
 
@@ -119,8 +119,17 @@ describe("AISidebar", () => {
 
     expect(screen.getByText("beta history")).toBeInTheDocument();
 
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Project A" }));
     expect(screen.getByText("alpha history")).toBeInTheDocument();
+    const restored = Array.from(document.querySelectorAll('[data-testid="shurik-bubble"] img'));
+    expect(restored.length).toBeGreaterThan(0);
+    for (const figure of restored) {
+      expect(figure.getAttribute("src")).toBe("/shurik/avatar.png");
+    }
     expect(screen.queryByText("beta history")).not.toBeInTheDocument();
   });
 });

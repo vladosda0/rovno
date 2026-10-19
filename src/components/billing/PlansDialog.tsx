@@ -69,6 +69,14 @@ export function PlansDialog({ open, onOpenChange, currentPlan }: PlansDialogProp
   // validates against; prefer it over the quota-derived prop so the dialog never
   // offers a switch the backend would reject (they normally match).
   const effectiveCurrentPlan = subscription?.plan_code ?? currentPlan;
+  // Cancel, resume and scheduled downgrade exist only for T-Bank rows. Anything
+  // else (a promo or free row, no row, a row still loading or failed to load)
+  // gets no downgrade and no cancel note.
+  const nonTbank = subscription?.provider !== "tbank";
+
+  // The confirm belongs to the open plans dialog: a parent that closes the
+  // dialog must not leave a pressable confirm for a target picked earlier.
+  if (!open && downgradeTo !== null) setDowngradeTo(null);
 
   const handleSelect = (code: TierCode) => {
     trackEvent("plans_dialog_plan_selected", { from: effectiveCurrentPlan, to: code });
@@ -191,13 +199,15 @@ export function PlansDialog({ open, onOpenChange, currentPlan }: PlansDialogProp
                       <Button variant="outline" className="w-full" disabled>{t("plans.dialog.currentCta")}</Button>
                     ) : isPaid ? (
                       BILLING_ENABLED ? (
-                        <Button className="w-full" onClick={() => handleSelect(code)}>
-                          {isUpgrade ? t("plans.dialog.upgradeCta") : t("plans.dialog.switchCta")}
-                        </Button>
+                        isUpgrade || !nonTbank ? (
+                          <Button className="w-full" onClick={() => handleSelect(code)}>
+                            {isUpgrade ? t("plans.dialog.upgradeCta") : t("plans.dialog.switchCta")}
+                          </Button>
+                        ) : null
                       ) : (
                         <Button variant="outline" className="w-full" disabled>{t("plans.dialog.soonCta")}</Button>
                       )
-                    ) : (
+                    ) : nonTbank ? null : (
                       // Free, when the user is on a paid plan: downgrade = cancel,
                       // managed in the subscription section.
                       <p className="text-center text-caption text-muted-foreground">{t("plans.dialog.downgradeNote")}</p>

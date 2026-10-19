@@ -16,7 +16,7 @@ import { OrgBlock } from "@/components/home/OrgBlock";
 import { PendingInvitationsBlock } from "@/components/home/PendingInvitationsBlock";
 import { useWorkspaceProjectsSensitiveDetailMap } from "@/hooks/use-home-sensitive-detail-map";
 import { getActivityDisplayDetailForHome } from "@/lib/activity-display";
-import { getEventCaption, isFallbackActor } from "@/lib/event-catalog";
+import { getEventCaption, resolveCaptionEnding } from "@/lib/event-catalog";
 import { isAIEvent } from "@/components/ai/event-utils";
 import { useProjectsStatusSummary } from "@/hooks/use-planning-source";
 import {
@@ -269,7 +269,7 @@ export function OverviewTab() {
                       ?? getEventCaption(
                         t,
                         evt.type,
-                        isFallbackActor(isAIEvent(evt), Boolean(store.getUserById(evt.actor_id))),
+                        resolveCaptionEnding(isAIEvent(evt), store.getUserById(evt.actor_id)),
                       );
                     return (
                       <div key={evt.id} className="flex items-center gap-2 p-1.5 text-caption text-muted-foreground">

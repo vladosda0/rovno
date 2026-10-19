@@ -131,6 +131,7 @@ export default function BlogEditorPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [tagsInput, setTagsInput] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [statusWriting, setStatusWriting] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [seoOpen, setSeoOpen] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
@@ -395,7 +396,13 @@ export default function BlogEditorPage() {
       toast({ title: "Проверьте слаг", description: SLUG_ISSUE_TEXT[issue], variant: "destructive" });
       return;
     }
+    setStatusWriting(true);
     const publishedAt = formRef.current.publishedAt ?? new Date().toISOString();
+    const before = {
+      status: formRef.current.status,
+      publishedAt: formRef.current.publishedAt,
+      slugTouched: formRef.current.slugTouched,
+    };
     setForm((f) => ({ ...f, status: "published", publishedAt, slug, slugTouched: true }));
     formRef.current = { ...formRef.current, status: "published", publishedAt, slug, slugTouched: true };
     // Persist with the status flip included.
@@ -417,6 +424,7 @@ export default function BlogEditorPage() {
         setLastSavedAt(new Date());
         return true;
       } catch (error) {
+        setForm((f) => ({ ...f, ...before }));
         setSaveState("error");
         toast({
           title: "Не удалось опубликовать",
@@ -426,6 +434,7 @@ export default function BlogEditorPage() {
         return false;
       }
     })();
+    setStatusWriting(false);
     if (ok) {
       // Fire the Timeweb rebuild so the static (crawler-visible) blog pages
       // regenerate. Failure here must not read as a failed publish.
@@ -461,6 +470,8 @@ export default function BlogEditorPage() {
 
   const unpublish = useCallback(async () => {
     if (!postIdRef.current) return;
+    setStatusWriting(true);
+    const { status } = formRef.current;
     setForm((f) => ({ ...f, status: "draft" }));
     formRef.current = { ...formRef.current, status: "draft" };
     try {
@@ -471,11 +482,14 @@ export default function BlogEditorPage() {
       // reassuring "снята с публикации".
       void rebuildAfterTakedown("unpublish", toast);
     } catch (error) {
+      setForm((f) => ({ ...f, status }));
       toast({
         title: "Не удалось снять с публикации",
         description: error instanceof Error ? error.message : String(error),
         variant: "destructive",
       });
+    } finally {
+      setStatusWriting(false);
     }
   }, [toast, updateMutation]);
 
@@ -545,6 +559,9 @@ export default function BlogEditorPage() {
           <Badge variant={form.status === "published" ? "default" : "secondary"}>
             {form.status === "published" ? "Опубликовано" : "Черновик"}
           </Badge>
+          {loadedPost?.author && (
+            <span className="text-xs text-muted-foreground">Автор: {loadedPost.author.display_name}</span>
+          )}
           <span className={`text-xs ${saveState === "error" ? "text-destructive" : "text-muted-foreground"}`}>
             {saveStatusText}
           </span>
@@ -554,11 +571,11 @@ export default function BlogEditorPage() {
               Предпросмотр
             </Button>
             {form.status === "published" ? (
-              <Button variant="outline" size="sm" onClick={() => void unpublish()}>
+              <Button variant="outline" size="sm" disabled={statusWriting} onClick={() => void unpublish()}>
                 Снять с публикации
               </Button>
             ) : (
-              <Button size="sm" onClick={() => void publish()}>
+              <Button size="sm" disabled={statusWriting} onClick={() => void publish()}>
                 Опубликовать
               </Button>
             )}

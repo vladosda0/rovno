@@ -69,7 +69,7 @@ export default function Landing() {
       <Problem />
       <Process />
       <UseCases />
-      <Pricing startPath={startPath} />
+      <Pricing startPath={startPath} isAuthed={isSupabaseAuthed} />
       <FAQ />
       <FinalCTA startPath={startPath} onDemo={handleDemo} />
       <BlogTeaser />

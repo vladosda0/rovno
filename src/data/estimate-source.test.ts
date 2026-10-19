@@ -262,6 +262,7 @@ describe("saveCurrentEstimateDraft", () => {
             projection_seq: 0,
             projection_synced_at: null,
             projection_actor: null,
+            execution_status_since: null,
           },
         ],
         estimate_versions: [

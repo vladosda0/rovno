@@ -239,6 +239,7 @@ describe("Checkout", () => {
     // 2 990 (Бригада) - 990 (Мастер) = 2 000 due today; 2 990 from the next period.
     const due = screen.getByText(/^2\s000\s₽$/);
     expect(due).toBeInTheDocument();
+    expect(due).not.toHaveTextContent("/mo");
     expect(screen.getByText(/2\s990\s₽/, { selector: "p" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox").parentElement).toHaveTextContent(/2\s990\s₽/);
 
@@ -251,6 +252,109 @@ describe("Checkout", () => {
     });
     expect(screen.getByRole("switch").parentElement).toHaveTextContent(/2\s000\s₽/);
     expect(screen.getByRole("switch").parentElement).not.toHaveTextContent(/2\s990\s₽/);
+  });
+
+  it("first purchase from the free plan reads as a subscription, not an upgrade surcharge", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+    activeSubReturn = {
+      ...noSubscription(),
+      status: "active",
+      subscription: {
+        id: "s0",
+        profile_id: "pid-1",
+        provider: "tbank",
+        plan_code: "free",
+        status: "active",
+        is_current: true,
+        currency: "RUB",
+        amount_cents: 0,
+        auto_renew: false,
+        current_period_starts_at: "2026-05-15T00:00:00Z",
+        current_period_ends_at: "2099-06-15T00:00:00Z",
+        canceled_at: null,
+        grace_until: null,
+        created_at: "2026-05-15T00:00:00Z",
+        pending_plan_code: null,
+      },
+    };
+
+    renderCheckout("master");
+
+    const due = screen.getByText(/^990\s₽/, { selector: "span.text-h3" });
+    expect(due).toHaveTextContent("/mo");
+    expect(screen.getByText(/renews automatically every month/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Upgrade from|Бесплатно/)).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /don't want auto-renewal/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("switch"));
+    });
+    expect(screen.getByText(/One-time payment for 1 month/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Upgrade from|Бесплатно/)).not.toBeInTheDocument();
+  });
+
+  it("buying a higher plan after the current one lapsed reads as a subscription", () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+    activeSubReturn = {
+      ...noSubscription(),
+      status: "expired",
+      readOnly: true,
+      subscription: {
+        id: "s1",
+        profile_id: "pid-1",
+        provider: "tbank",
+        plan_code: "master",
+        status: "active",
+        is_current: true,
+        currency: "RUB",
+        amount_cents: 99000,
+        auto_renew: false,
+        current_period_starts_at: "2026-04-15T00:00:00Z",
+        current_period_ends_at: "2026-05-15T00:00:00Z",
+        canceled_at: null,
+        grace_until: null,
+        created_at: "2026-04-15T00:00:00Z",
+        pending_plan_code: null,
+      },
+    };
+
+    renderCheckout("brigade");
+
+    expect(screen.getByText(/^2\s990\s₽/, { selector: "span.text-h3" })).toHaveTextContent("/mo");
+    expect(screen.getByText(/renews automatically every month/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Upgrade from/)).not.toBeInTheDocument();
+  });
+
+  it("a current plan the catalogue does not know reads as a subscription", () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+    activeSubReturn = {
+      ...noSubscription(),
+      status: "active",
+      subscription: {
+        id: "s2",
+        profile_id: "pid-1",
+        provider: "tbank",
+        plan_code: "legacy",
+        status: "active",
+        is_current: true,
+        currency: "RUB",
+        amount_cents: 0,
+        auto_renew: false,
+        current_period_starts_at: "2026-05-15T00:00:00Z",
+        current_period_ends_at: "2099-06-15T00:00:00Z",
+        canceled_at: null,
+        grace_until: null,
+        created_at: "2026-05-15T00:00:00Z",
+        pending_plan_code: null,
+      },
+    };
+
+    renderCheckout("master");
+
+    expect(screen.getByText(/^990\s₽/, { selector: "span.text-h3" })).toHaveTextContent("/mo");
+    expect(screen.queryByText(/Upgrade from/)).not.toBeInTheDocument();
   });
 
   it("F: records the one-time consent version when auto-renewal is opted out", async () => {

@@ -12,7 +12,9 @@ const {
   getEstimateV2ProjectStateMock,
   hydrateMock,
   hasPendingMock,
+  captureExceptionMock,
 } = vi.hoisted(() => ({
+  captureExceptionMock: vi.fn(),
   subscribeMock: vi.fn(),
   unsubscribeMock: vi.fn(),
   useWorkspaceModeMock: vi.fn(),
@@ -27,6 +29,8 @@ vi.mock("@/lib/project-sync-events", async () => {
   );
   return { ...actual, subscribeToProjectSyncEvents: subscribeMock };
 });
+
+vi.mock("@/lib/observability/sentry", () => ({ captureException: captureExceptionMock }));
 
 vi.mock("@/hooks/use-workspace-source", async () => {
   const actual = await vi.importActual<typeof import("@/hooks/use-workspace-source")>(
@@ -85,6 +89,7 @@ describe("useProjectRealtimeInvalidation", () => {
     unsubscribeMock.mockReset();
     hydrateMock.mockReset().mockResolvedValue(undefined);
     hasPendingMock.mockReset().mockReturnValue(false);
+    captureExceptionMock.mockReset();
     useWorkspaceModeMock.mockReturnValue({ kind: "supabase", profileId: "me" });
     getEstimateV2ProjectStateMock.mockReturnValue({ sync: { estimateRevision: "rev-local" } });
   });
@@ -129,6 +134,20 @@ describe("useProjectRealtimeInvalidation", () => {
     });
     expect(hydrateMock).toHaveBeenCalledWith("project-1", { profileId: "me" });
     expect(invalidated.length).toBeGreaterThanOrEqual(5);
+    view.unmount();
+  });
+
+  it("reports a failed hydrate instead of leaving the rejection unhandled", async () => {
+    const failure = { code: "PGRST303", message: "JWT expired" };
+    hydrateMock.mockRejectedValue(failure);
+    const view = mount();
+    await act(async () => {
+      onEvents?.([event({ id: 5, kind: "projection", revision: "rev-remote" })]);
+    });
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+    expect(captureExceptionMock).toHaveBeenCalledWith(failure, {
+      tags: { source: "estimate-hydrate", trigger: "realtime" },
+    });
     view.unmount();
   });
 

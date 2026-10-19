@@ -44,6 +44,10 @@ function PostRow({ post }: { post: BlogPostWithAuthor }) {
           {post.title}
         </button>
         <p className="truncate text-xs text-muted-foreground">/blog/{post.slug}/</p>
+        {/* Several authors share this list (Shurik's drafts land here too). */}
+        {post.author && (
+          <p className="truncate text-xs text-muted-foreground">Автор: {post.author.display_name}</p>
+        )}
       </div>
       <Badge variant={post.status === "published" ? "default" : "secondary"}>
         {post.status === "published" ? "Опубликовано" : "Черновик"}

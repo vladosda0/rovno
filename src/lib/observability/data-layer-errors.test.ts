@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { shouldReportDataLayerError } from "./data-layer-errors";
+import { FunctionsFetchError, FunctionsHttpError } from "@supabase/supabase-js";
+import { SIGN_OUT_RACE_WINDOW_MS, shouldReportDataLayerError } from "./data-layer-errors";
 
 function tierLimitError() {
   return {
@@ -13,6 +14,25 @@ describe("shouldReportDataLayerError", () => {
     const abort = new DOMException("The operation was aborted.", "AbortError");
     expect(shouldReportDataLayerError(abort, "query")).toBe(false);
     expect(shouldReportDataLayerError(abort, "mutation")).toBe(false);
+  });
+
+  it("skips the plain-object abort postgrest-js returns, which has no name", () => {
+    const aborted = {
+      message: "AbortError: signal is aborted without reason",
+      details: "",
+      hint: "Request was aborted (timeout or manual cancellation)",
+      code: "",
+    };
+    expect(shouldReportDataLayerError(aborted, "query")).toBe(false);
+    expect(shouldReportDataLayerError(aborted, "mutation")).toBe(false);
+
+    // A server error that merely quotes the word keeps its non-empty code.
+    expect(
+      shouldReportDataLayerError({ message: "AbortError: upstream gave up", code: "PGRST000" }, "mutation"),
+    ).toBe(true);
+    expect(
+      shouldReportDataLayerError({ message: "saw AbortError: mid-message", details: "", hint: "", code: "" }, "mutation"),
+    ).toBe(true);
   });
 
   it("skips backend tier-limit paywall errors", () => {
@@ -43,6 +63,25 @@ describe("shouldReportDataLayerError", () => {
     expect(shouldReportDataLayerError(firefox, "query")).toBe(false);
   });
 
+  it("skips an edge-function call that never left the browser, for queries only", () => {
+    const offlineInvoke = new FunctionsFetchError(new TypeError("Failed to fetch"));
+    expect(shouldReportDataLayerError(offlineInvoke, "query")).toBe(false);
+    expect(shouldReportDataLayerError(offlineInvoke, "mutation")).toBe(true);
+
+    // The wrapper says only that the fetch chain rejected; the cause decides.
+    expect(shouldReportDataLayerError(new FunctionsFetchError(new RangeError("bug")), "query")).toBe(true);
+    expect(shouldReportDataLayerError(new FunctionsFetchError(new Error("Failed to fetch")), "query")).toBe(true);
+    expect(shouldReportDataLayerError(new FunctionsFetchError(undefined), "query")).toBe(true);
+
+    // The function answered: that is a server outcome, not connectivity.
+    expect(shouldReportDataLayerError(new FunctionsHttpError(new Response(null, { status: 500 })), "query")).toBe(true);
+    expect(shouldReportDataLayerError({ name: "FunctionsFetchError", message: "x" }, "query")).toBe(true);
+    // The class is what is matched, never the text.
+    expect(
+      shouldReportDataLayerError(new Error("Failed to send a request to the Edge Function"), "query"),
+    ).toBe(true);
+  });
+
   it("still reports a defect whose message merely contains a network pattern", () => {
     // "load failed" is a substring of "upload failed": matching the message
     // alone would classify a real defect as offline noise.
@@ -69,5 +108,53 @@ describe("shouldReportDataLayerError", () => {
 
     const postgrest = { message: 'permission denied for table "estimates"', code: "42501" };
     expect(shouldReportDataLayerError(postgrest, "query")).toBe(true);
+  });
+
+  it("skips a coded refusal only when it is a thrown Error", () => {
+    const refusal = Object.assign(new Error("Too many card binding attempts"), { code: "attempt_limit" });
+    expect(shouldReportDataLayerError(refusal, "mutation")).toBe(false);
+    expect(shouldReportDataLayerError(refusal, "query")).toBe(false);
+
+    expect(shouldReportDataLayerError({ message: "boom", code: "attempt_limit" }, "mutation")).toBe(true);
+    expect(shouldReportDataLayerError(Object.assign(new Error("boom"), { code: "42501" }), "mutation")).toBe(true);
+  });
+
+  describe("a refusal answered as anon right after a sign-out", () => {
+    const anonDenied = {
+      code: "42501",
+      details: null,
+      hint: "Grant the required privileges to the current role with: GRANT SELECT ON public.profiles TO anon;",
+      message: "permission denied for table profiles",
+    };
+    const signedOutAt = 1_000_000;
+
+    it("skips it for a query inside the window", () => {
+      expect(shouldReportDataLayerError(anonDenied, "query", { signedOutAt, now: signedOutAt + 500 })).toBe(false);
+      for (const code of ["PGRST301", "PGRST303"]) {
+        expect(
+          shouldReportDataLayerError({ code, message: "JWT expired" }, "query", { signedOutAt, now: signedOutAt + 500 }),
+        ).toBe(false);
+      }
+    });
+
+    it("reports it once the window has passed, or with no sign-out at all", () => {
+      expect(
+        shouldReportDataLayerError(anonDenied, "query", { signedOutAt, now: signedOutAt + SIGN_OUT_RACE_WINDOW_MS + 1 }),
+      ).toBe(true);
+      expect(shouldReportDataLayerError(anonDenied, "query", { signedOutAt: null, now: signedOutAt })).toBe(true);
+      expect(shouldReportDataLayerError(anonDenied, "query", { signedOutAt: null, now: 500 })).toBe(true);
+      expect(shouldReportDataLayerError(anonDenied, "query")).toBe(true);
+    });
+
+    it("reports a refusal dated before the sign-out", () => {
+      expect(shouldReportDataLayerError(anonDenied, "query", { signedOutAt, now: signedOutAt - 1 })).toBe(true);
+    });
+
+    it("keeps reporting mutations and other codes inside the window", () => {
+      expect(shouldReportDataLayerError(anonDenied, "mutation", { signedOutAt, now: signedOutAt + 500 })).toBe(true);
+      expect(
+        shouldReportDataLayerError({ code: "23505", message: "duplicate key" }, "query", { signedOutAt, now: signedOutAt + 500 }),
+      ).toBe(true);
+    });
   });
 });

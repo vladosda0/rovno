@@ -1,0 +1,648 @@
+{
+  "content": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "Смета «под ключ» для дома 120 м² — это "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "bold"
+              }
+            ],
+            "text": "жирный"
+          },
+          {
+            "type": "text",
+            "text": ", "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "курсив"
+          },
+          {
+            "type": "text",
+            "text": ", "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "underline"
+              }
+            ],
+            "text": "подчёркнутый"
+          },
+          {
+            "type": "text",
+            "text": ", "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "strike"
+              }
+            ],
+            "text": "зачёркнутый"
+          },
+          {
+            "type": "text",
+            "text": " и код "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "code"
+              }
+            ],
+            "text": "НДС < 22% & ФСНБ-2022"
+          },
+          {
+            "type": "text",
+            "text": ". Норма в "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "link",
+                "attrs": {
+                  "href": "https://minstroyrf.gov.ru/docs/421/?from=blog&page=2",
+                  "target": "_blank",
+                  "rel": "noopener noreferrer",
+                  "class": null,
+                  "title": null
+                }
+              }
+            ],
+            "text": "приказе Минстроя"
+          },
+          {
+            "type": "text",
+            "text": ", подробности в "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "link",
+                "attrs": {
+                  "href": "https://rovno.ai/blog/gid-po-stroitelnoy-smete/",
+                  "target": null,
+                  "rel": null,
+                  "class": null,
+                  "title": null
+                }
+              }
+            ],
+            "text": "гиде по "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "link",
+                "attrs": {
+                  "href": "https://rovno.ai/blog/gid-po-stroitelnoy-smete/",
+                  "target": null,
+                  "rel": null,
+                  "class": null,
+                  "title": null
+                }
+              },
+              {
+                "type": "bold"
+              },
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "строительной смете"
+          },
+          {
+            "type": "text",
+            "text": ": цены > 0 & без «воды»."
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Сколько стоит смета в 2026 году & почему <дорого>"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 3
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Что входит в цену"
+          }
+        ]
+      },
+      {
+        "type": "bulletList",
+        "content": [
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Обмерный план"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "text": "Ведомость"
+                  },
+                  {
+                    "type": "text",
+                    "text": " объёмов работ"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Расчёт по "
+                  },
+                  {
+                    "type": "text",
+                    "marks": [
+                      {
+                        "type": "italic"
+                      },
+                      {
+                        "type": "underline"
+                      }
+                    ],
+                    "text": "ФСНБ-2022"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "orderedList",
+        "attrs": {
+          "start": 1,
+          "type": null
+        },
+        "content": [
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Собрать исходные данные"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Посчитать объёмы"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Сверить цены с регионом"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "blockquote",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "Смета без обмеров — это гадание."
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "— прораб, "
+              },
+              {
+                "type": "text",
+                "marks": [
+                  {
+                    "type": "strike"
+                  }
+                ],
+                "text": "20 лет"
+              },
+              {
+                "type": "text",
+                "text": " на объектах"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "horizontalRule"
+      },
+      {
+        "type": "figure",
+        "attrs": {
+          "src": "https://aaycwobhdkrrgfxwcfxg.supabase.co/storage/v1/object/public/blog-images/shurik/0f5e7c5c3a1b2d4e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6.png",
+          "alt": "Смета «Дом 120 м²» & \"ведомость\" <образец>",
+          "width": 1600,
+          "height": 900
+        },
+        "content": [
+          {
+            "type": "figcaption",
+            "content": [
+              {
+                "type": "text",
+                "text": "Ведомость объёмов, "
+              },
+              {
+                "type": "text",
+                "marks": [
+                  {
+                    "type": "italic"
+                  }
+                ],
+                "text": "пример"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "figure",
+        "attrs": {
+          "src": "https://aaycwobhdkrrgfxwcfxg.supabase.co/storage/v1/object/public/blog-images/shurik/9a8b7c6d5e4f30211203f4e5d6c7b8a9908172635445362718090a1b2c3d4e5f.webp",
+          "alt": "Фасад после штукатурки",
+          "width": null,
+          "height": null
+        },
+        "content": [
+          {
+            "type": "figcaption"
+          }
+        ]
+      },
+      {
+        "type": "faqItem",
+        "content": [
+          {
+            "type": "faqQuestion",
+            "content": [
+              {
+                "type": "text",
+                "text": "Нужна ли смета для ИЖС?"
+              }
+            ]
+          },
+          {
+            "type": "faqAnswer",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Да, если работы ведёт подрядчик."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "faqItem",
+        "content": [
+          {
+            "type": "faqQuestion",
+            "content": [
+              {
+                "type": "text",
+                "text": "Сколько стоит «смета под ключ»?"
+              }
+            ]
+          },
+          {
+            "type": "faqAnswer",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "От 15 000 ₽ в Москве (октябрь 2026)."
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Зависит от площади & сложности."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "table",
+        "content": [
+          {
+            "type": "tableRow",
+            "content": [
+              {
+                "type": "tableHeader",
+                "attrs": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "colwidth": null,
+                  "align": null
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Работа"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableHeader",
+                "attrs": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "colwidth": null,
+                  "align": null
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Ед."
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableHeader",
+                "attrs": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "colwidth": null,
+                  "align": null
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Цена, ₽ (Москва, октябрь 2026)"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "tableRow",
+            "content": [
+              {
+                "type": "tableCell",
+                "attrs": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "colwidth": null,
+                  "align": null
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Штукатурка стен"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableCell",
+                "attrs": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "colwidth": null,
+                  "align": null
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "м²"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableCell",
+                "attrs": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "colwidth": null,
+                  "align": null
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "650"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "tableRow",
+            "content": [
+              {
+                "type": "tableCell",
+                "attrs": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "colwidth": null,
+                  "align": null
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Стяжка пола"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableCell",
+                "attrs": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "colwidth": null,
+                  "align": null
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "м²"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableCell",
+                "attrs": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "colwidth": null,
+                  "align": null
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "marks": [
+                          {
+                            "type": "bold"
+                          }
+                        ],
+                        "text": "от 700 < 900"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "Проверено: 16.10.2026"
+          }
+        ]
+      }
+    ]
+  },
+  "content_html": "<p>Смета «под ключ» для дома 120&nbsp;м² — это <strong>жирный</strong>, <em>курсив</em>, <u>подчёркнутый</u>, <s>зачёркнутый</s> и код <code>НДС &lt; 22% &amp; ФСНБ-2022</code>. Норма в <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://minstroyrf.gov.ru/docs/421/?from=blog&amp;page=2\">приказе Минстроя</a>, подробности в <a href=\"https://rovno.ai/blog/gid-po-stroitelnoy-smete/\">гиде по <strong><em>строительной смете</em></strong></a>: цены &gt; 0 &amp; без «воды».</p><h2>Сколько стоит смета в 2026 году &amp; почему &lt;дорого&gt;</h2><h3>Что входит в цену</h3><ul><li><p>Обмерный план</p></li><li><p><strong>Ведомость</strong> объёмов работ</p></li><li><p>Расчёт по <em><u>ФСНБ-2022</u></em></p></li></ul><ol><li><p>Собрать исходные данные</p></li><li><p>Посчитать объёмы</p></li><li><p>Сверить цены с регионом</p></li></ol><blockquote><p>Смета без обмеров — это гадание.</p><p>— прораб, <s>20 лет</s>&nbsp;на объектах</p></blockquote><hr><figure data-rv-figure=\"\"><img src=\"https://aaycwobhdkrrgfxwcfxg.supabase.co/storage/v1/object/public/blog-images/shurik/0f5e7c5c3a1b2d4e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6.png\" loading=\"lazy\" decoding=\"async\" alt=\"Смета «Дом 120&nbsp;м²» &amp; &quot;ведомость&quot; <образец>\" width=\"1600\" height=\"900\"><figcaption>Ведомость объёмов, <em>пример</em></figcaption></figure><figure data-rv-figure=\"\"><img src=\"https://aaycwobhdkrrgfxwcfxg.supabase.co/storage/v1/object/public/blog-images/shurik/9a8b7c6d5e4f30211203f4e5d6c7b8a9908172635445362718090a1b2c3d4e5f.webp\" loading=\"lazy\" decoding=\"async\" alt=\"Фасад после штукатурки\"><figcaption></figcaption></figure><div data-rv-faq-item=\"\"><h3 data-rv-faq-q=\"\">Нужна ли смета для ИЖС?</h3><div data-rv-faq-a=\"\"><p>Да, если работы ведёт подрядчик.</p></div></div><div data-rv-faq-item=\"\"><h3 data-rv-faq-q=\"\">Сколько стоит «смета под ключ»?</h3><div data-rv-faq-a=\"\"><p>От 15&nbsp;000 ₽ в Москве (октябрь 2026).</p><p>Зависит от площади &amp; сложности.</p></div></div><table style=\"min-width: 75px;\"><colgroup><col style=\"min-width: 25px;\"><col style=\"min-width: 25px;\"><col style=\"min-width: 25px;\"></colgroup><tbody><tr><th colspan=\"1\" rowspan=\"1\"><p>Работа</p></th><th colspan=\"1\" rowspan=\"1\"><p>Ед.</p></th><th colspan=\"1\" rowspan=\"1\"><p>Цена, ₽ (Москва, октябрь 2026)</p></th></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>Штукатурка стен</p></td><td colspan=\"1\" rowspan=\"1\"><p>м²</p></td><td colspan=\"1\" rowspan=\"1\"><p>650</p></td></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>Стяжка пола</p></td><td colspan=\"1\" rowspan=\"1\"><p>м²</p></td><td colspan=\"1\" rowspan=\"1\"><p><strong>от 700 &lt; 900</strong></p></td></tr></tbody></table><p>Проверено: 16.10.2026</p>"
+}
