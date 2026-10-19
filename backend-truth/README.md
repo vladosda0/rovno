@@ -188,6 +188,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261016110000_blog_system_authors.sql`
 - `supabase/migrations/20261019010000_pin_invite_invited_by.sql`
 - `supabase/migrations/20261019010100_share_approval_requires_session.sql`
+- `supabase/migrations/20261020020000_org_profile_requisites_and_project_client_info.sql`
 
 ## Exclusions
 

@@ -631,6 +631,10 @@
     {
       "path": "supabase/migrations/20261019010100_share_approval_requires_session.sql",
       "sha256": "82512427da08fdb546c1c2022fe19d1a43db8c84b228cb3ccba9a60b1ae2cf60"
+    },
+    {
+      "path": "supabase/migrations/20261020020000_org_profile_requisites_and_project_client_info.sql",
+      "sha256": "7123196f2b946f07398e06a0db85c7034396188bc292858ab8635200fde6daae"
     }
   ],
   "generated_artifacts": [

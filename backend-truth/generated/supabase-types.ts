@@ -2640,6 +2640,174 @@ export type Database = {
           }
           Relationships: []
         }
+        "org_requisites": {
+          Row: {
+          "org_id": string
+          "legal_name": string | null
+          "inn": string | null
+          "kpp": string | null
+          "ogrn": string | null
+          "legal_address": string | null
+          "postal_address": string | null
+          "bank_name": string | null
+          "bank_account": string | null
+          "correspondent_account": string | null
+          "bik": string | null
+          "phone": string | null
+          "email": string | null
+          "signatory_name": string | null
+          "signatory_position": string | null
+          "updated_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "org_id"?: string
+          "legal_name"?: string | null
+          "inn"?: string | null
+          "kpp"?: string | null
+          "ogrn"?: string | null
+          "legal_address"?: string | null
+          "postal_address"?: string | null
+          "bank_name"?: string | null
+          "bank_account"?: string | null
+          "correspondent_account"?: string | null
+          "bik"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "signatory_position"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "org_id"?: string
+          "legal_name"?: string | null
+          "inn"?: string | null
+          "kpp"?: string | null
+          "ogrn"?: string | null
+          "legal_address"?: string | null
+          "postal_address"?: string | null
+          "bank_name"?: string | null
+          "bank_account"?: string | null
+          "correspondent_account"?: string | null
+          "bik"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "signatory_position"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "profile_requisites": {
+          Row: {
+          "profile_id": string
+          "legal_name": string | null
+          "inn": string | null
+          "kpp": string | null
+          "ogrn": string | null
+          "legal_address": string | null
+          "postal_address": string | null
+          "bank_name": string | null
+          "bank_account": string | null
+          "correspondent_account": string | null
+          "bik": string | null
+          "phone": string | null
+          "email": string | null
+          "signatory_name": string | null
+          "signatory_position": string | null
+          "updated_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "profile_id"?: string
+          "legal_name"?: string | null
+          "inn"?: string | null
+          "kpp"?: string | null
+          "ogrn"?: string | null
+          "legal_address"?: string | null
+          "postal_address"?: string | null
+          "bank_name"?: string | null
+          "bank_account"?: string | null
+          "correspondent_account"?: string | null
+          "bik"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "signatory_position"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "profile_id"?: string
+          "legal_name"?: string | null
+          "inn"?: string | null
+          "kpp"?: string | null
+          "ogrn"?: string | null
+          "legal_address"?: string | null
+          "postal_address"?: string | null
+          "bank_name"?: string | null
+          "bank_account"?: string | null
+          "correspondent_account"?: string | null
+          "bik"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "signatory_position"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "project_client_info": {
+          Row: {
+          "project_id": string
+          "name": string | null
+          "is_legal_entity": boolean
+          "inn": string | null
+          "address": string | null
+          "phone": string | null
+          "email": string | null
+          "signatory_name": string | null
+          "updated_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "project_id"?: string
+          "name"?: string | null
+          "is_legal_entity"?: boolean
+          "inn"?: string | null
+          "address"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "project_id"?: string
+          "name"?: string | null
+          "is_legal_entity"?: boolean
+          "inn"?: string | null
+          "address"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
