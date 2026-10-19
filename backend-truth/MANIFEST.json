@@ -623,6 +623,14 @@
     {
       "path": "supabase/migrations/20261016110000_blog_system_authors.sql",
       "sha256": "dfc4d0067f02c404a83fe2d5482a0ea8c629e779e3b872d2feef8550494d44f4"
+    },
+    {
+      "path": "supabase/migrations/20261019010000_pin_invite_invited_by.sql",
+      "sha256": "091dff4af0d89838899018fb7cb68286ab650634c72463ac5c2a09cf0742f297"
+    },
+    {
+      "path": "supabase/migrations/20261019010100_share_approval_requires_session.sql",
+      "sha256": "82512427da08fdb546c1c2022fe19d1a43db8c84b228cb3ccba9a60b1ae2cf60"
     }
   ],
   "generated_artifacts": [
