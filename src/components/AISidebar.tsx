@@ -92,6 +92,7 @@ import {
 } from "@/lib/ai-project-context";
 import {
   invokeLiveTextAssistant,
+  isRetryableAiInferenceFailure,
   pickInferenceMode,
   resolveAiAssistantUiLanguage,
   shouldUseHostedLiveTextAssistantPath,
@@ -342,8 +343,8 @@ function buildPriorTurnsForInference(
   messages: readonly AIMessage[],
   currentUserMessageId: string,
 ): AiInferencePriorTurn[] {
-  return messages
-    .filter((message) => message.id !== currentUserMessageId)
+  const currentIndex = messages.findIndex((message) => message.id === currentUserMessageId);
+  return (currentIndex >= 0 ? messages.slice(0, currentIndex) : messages)
     .filter((message): message is AIMessage & { role: "user" | "assistant" } =>
       message.role === "user" || message.role === "assistant"
     )
@@ -1784,6 +1785,9 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               ),
               timestamp: new Date().toISOString(),
               mode: responseMode,
+              ...(isRetryableAiInferenceFailure(err)
+                ? { retry: { userMessageId, projectId: targetProjectId } }
+                : {}),
             },
           ]);
         } finally {
@@ -1860,6 +1864,29 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     if (activeWindow !== "none" || proposalQueue) return;
   }
 
+  function aiSendBlockedByAccessOrQuota(): boolean {
+    if (!isGuest && resolvedPermissionProjectId && !permResult.can("ai.generate")) {
+      toast({ title: t("ai.sidebar.toast.accessDenied.title"), description: t("ai.sidebar.toast.accessDenied.generationDescription"), variant: "destructive" });
+      return true;
+    }
+
+    // Tier-limit short-circuit: surface the paywall toast and don't POST to
+    // ai-inference if the AI quota for `currentUsageType` is exhausted. Also
+    // closes the keyboard bypass on AIQuotaGate (which is visual only).
+    if (tierQuota) {
+      const { used, limit } = selectAiUsage(tierQuota, currentUsageType);
+      if (limit > 0 && used >= limit) {
+        const periodEnd = new Date(tierQuota.period_end).toLocaleDateString(i18n.language);
+        toast({
+          title: t(`quota.gate.${currentUsageType}.title`),
+          description: t(`quota.gate.${currentUsageType}.body`, { periodEnd }),
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+
   function handleSend(text?: string) {
     if (activeWindow !== "none" || proposalQueue) return;
     const content = (text ?? inputValue).trim();
@@ -1882,25 +1909,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       setPhotoConsult(null);
     }
 
-    if (!isGuest && resolvedPermissionProjectId && !permResult.can("ai.generate")) {
-      toast({ title: t("ai.sidebar.toast.accessDenied.title"), description: t("ai.sidebar.toast.accessDenied.generationDescription"), variant: "destructive" });
-      return;
-    }
-
-    // Tier-limit short-circuit: surface the paywall toast and don't POST to
-    // ai-inference if the AI quota for `currentUsageType` is exhausted. Also
-    // closes the keyboard bypass on AIQuotaGate (which is visual only).
-    if (tierQuota) {
-      const { used, limit } = selectAiUsage(tierQuota, currentUsageType);
-      if (limit > 0 && used >= limit) {
-        const periodEnd = new Date(tierQuota.period_end).toLocaleDateString(i18n.language);
-        toast({
-          title: t(`quota.gate.${currentUsageType}.title`),
-          description: t(`quota.gate.${currentUsageType}.body`, { periodEnd }),
-        });
-        return;
-      }
-    }
+    if (aiSendBlockedByAccessOrQuota()) return;
 
     if (!isProjectContext && isHomeContext && homeProjectMode === GENERAL_MODE_VALUE && shouldAskProjectBeforeProposal(content)) {
       const userMsg: AIMessage = {
@@ -3035,6 +3044,35 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     }
   }
 
+  function handleRetryFailedTurn(message: AIMessage) {
+    if (activeWindow !== "none" || proposalQueue) {
+      toast({ title: t("ai.sidebar.toast.aiBusy.title"), description: t("ai.sidebar.toast.aiBusy.description"), variant: "destructive" });
+      return;
+    }
+    const sourceUserMessage = retrySourceMessage(message);
+    if (!message.retry || !sourceUserMessage) return;
+    if (aiSendBlockedByAccessOrQuota()) return;
+
+    setMessages((prev) => prev.filter((item) => item.id !== message.id));
+    runAssistantForContent(
+      sourceUserMessage.content,
+      sourceUserMessage.id,
+      message.retry.projectId,
+      sourceUserMessage.mode ?? "default",
+    );
+  }
+
+  // Only while the failed turn is the last one, its question is still in the thread and its
+  // project is still in scope, so the new answer lands right under its question.
+  function retrySourceMessage(message: AIMessage): AIMessage | undefined {
+    if (messages[messages.length - 1]?.id !== message.id) return undefined;
+    const currentTargetProjectId = isProjectContext
+      ? projectId
+      : (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE ? homeProjectMode : "");
+    if (!message.retry || message.retry.projectId !== currentTargetProjectId) return undefined;
+    return messages.find((item) => item.id === message.retry?.userMessageId && item.role === "user");
+  }
+
   function handleRegenerateLearnMessage(message: AIMessage) {
     if (activeWindow !== "none" || proposalQueue) {
       toast({ title: t("ai.sidebar.toast.aiBusy.title"), description: t("ai.sidebar.toast.aiBusy.description"), variant: "destructive" });
@@ -3107,6 +3145,18 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
           <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words [overflow-wrap:anywhere] max-w-full">
             {message.content}
           </p>
+          {!isUserMessage && retrySourceMessage(message) ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-1.5 h-7 gap-1.5 px-2 text-caption"
+              onClick={() => handleRetryFailedTurn(message)}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {t("ai.sidebar.chat.actions.retry")}
+            </Button>
+          ) : null}
           {!isUserMessage && message.liveTextAssistantV1 && message.liveTextProjectId ? (
             <>
               <GroundingCallout
@@ -3144,7 +3194,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               ) : null}
             </>
           ) : null}
-          {!isUserMessage && isLearnContext && (
+          {!isUserMessage && isLearnContext && !message.retry && (
             <div className="mt-1.5 flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity">
               <button
                 type="button"
@@ -3223,20 +3273,22 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     "bg-success/10", "bg-destructive/10",
   ];
 
-  // In a project chat the empty composer greets the person by the time of day and by name.
-  const composerPlaceholder = learnMode
+  const composerModeHint = learnMode
     ? t("ai.sidebar.composer.placeholderLearn")
     : photoConsult
       ? t("ai.sidebar.composer.placeholderConsult")
-      : isProjectContext
-        ? shurikGreeting(t, new Date(), profileFullName(user))
-        : t("ai.sidebar.composer.placeholderDefault");
+      : null;
+  // In a project chat the empty composer greets the person by the time of day and by name.
+  // The greeting is not an instruction, so the accessible name keeps the default there.
+  const composerPlaceholder = composerModeHint ?? (isProjectContext
+    ? shurikGreeting(t, new Date(), profileFullName(user))
+    : t("ai.sidebar.composer.placeholderDefault"));
 
   const composerTextarea = (
     <Textarea
       ref={composerTextareaRef}
       placeholder={composerPlaceholder}
-      aria-label={t("ai.sidebar.composer.placeholderDefault")}
+      aria-label={composerModeHint ?? t("ai.sidebar.composer.placeholderDefault")}
       className={cn(
         /* block + min-h-0: default Textarea uses flex; avoids flex row preventing autosized height growth */
         "block min-h-[38px] max-h-[220px] w-full resize-none border-0 bg-transparent px-1 py-2 text-body-sm shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-50",

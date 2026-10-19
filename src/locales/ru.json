@@ -2889,6 +2889,7 @@
   "ai.sidebar.chat.actions.rateBad": "Оценить плохо",
   "ai.sidebar.chat.actions.saveToDocuments": "Сохранить в документы",
   "ai.sidebar.chat.actions.regenerate": "Сгенерировать заново",
+  "ai.sidebar.chat.actions.retry": "Попробовать ещё раз",
   "ai.sidebar.chat.actions.regenerating": "Генерирую...",
   "ai.sidebar.consult.suggestedActions": "Предложенные действия",
   "ai.sidebar.consult.standalonePhoto": "отдельное фото",

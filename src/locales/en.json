@@ -2837,6 +2837,7 @@
   "ai.sidebar.chat.actions.rateBad": "Rate bad",
   "ai.sidebar.chat.actions.saveToDocuments": "Save to Documents",
   "ai.sidebar.chat.actions.regenerate": "Regenerate",
+  "ai.sidebar.chat.actions.retry": "Try again",
   "ai.sidebar.chat.actions.regenerating": "Regenerating...",
   "ai.sidebar.consult.suggestedActions": "Suggested actions",
   "ai.sidebar.consult.standalonePhoto": "standalone photo",

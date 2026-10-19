@@ -55,6 +55,26 @@ describe("Login", () => {
     });
   });
 
+  it("keeps a safe next on the create-account link and drops an unsafe one", () => {
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/auth/login?next=%2Finvite%2Faccept%3Ftoken%3Dabc"]}>
+        <Login />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "Create account" })).toHaveAttribute(
+      "href",
+      "/auth/signup?next=%2Finvite%2Faccept%3Ftoken%3Dabc",
+    );
+    unmount();
+
+    render(
+      <MemoryRouter initialEntries={["/auth/login?next=https%3A%2F%2Fevil.example"]}>
+        <Login />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "Create account" })).toHaveAttribute("href", "/auth/signup");
+  });
+
   it("redirects to next param after successful sign in", async () => {
     setAuthRole("guest");
     signInWithPasswordMock.mockResolvedValue({

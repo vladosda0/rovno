@@ -95,7 +95,7 @@ export default function Login() {
       footer={
         <div className="flex items-center justify-between text-body-sm">
           <Link to="/auth/forgot" className="text-accent hover:underline">{t("auth.login.forgotPassword")}</Link>
-          <Link to="/auth/signup" className="text-accent hover:underline">{t("auth.login.createAccount")}</Link>
+          <Link to={safeNext ? `/auth/signup?next=${encodeURIComponent(safeNext)}` : "/auth/signup"} className="text-accent hover:underline">{t("auth.login.createAccount")}</Link>
         </div>
       }
     >

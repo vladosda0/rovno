@@ -61,4 +61,6 @@ export interface AIMessage {
   liveTextAssistantV1?: AIMessageLiveTextAssistantV1;
   /** Project id the live text turn used (handoff to `/project/:id/estimate`). */
   liveTextProjectId?: string;
+  /** Failed turn that may be re-sent unchanged: the user message it answered and its project. */
+  retry?: { userMessageId: string; projectId: string };
 }

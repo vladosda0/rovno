@@ -456,6 +456,30 @@ function parseEdgeFunctionErrorBody(data: unknown): string | null {
   return null;
 }
 
+/** `body.error` from ai-inference when a project evidence read failed (rovno-db#61). */
+export const AI_EVIDENCE_UNAVAILABLE = "evidence_unavailable";
+
+/** A failed ai-inference turn: the user-visible message plus the backend error code it came from. */
+export class AiInferenceFailure extends Error {
+  readonly code: string | null;
+
+  constructor(message: string, code: string | null) {
+    super(message);
+    this.name = "AiInferenceFailure";
+    this.code = code;
+  }
+}
+
+export function aiInferenceFailureFrom(raw: string, lang: AiAssistantUiLanguage): AiInferenceFailure {
+  const code = raw.trim().toLowerCase() === AI_EVIDENCE_UNAVAILABLE ? AI_EVIDENCE_UNAVAILABLE : null;
+  return new AiInferenceFailure(sanitizeAiInferenceUserMessage(raw, lang), code);
+}
+
+/** Only a failed evidence read is worth re-sending unchanged. */
+export function isRetryableAiInferenceFailure(err: unknown): boolean {
+  return err instanceof AiInferenceFailure && err.code === AI_EVIDENCE_UNAVAILABLE;
+}
+
 /** User-visible copy for known provider / schema failures logged server-side. */
 export function sanitizeAiInferenceUserMessage(
   raw: string,
@@ -467,6 +491,11 @@ export function sanitizeAiInferenceUserMessage(
     : "The assistant could not complete this request. Please try again.";
   if (!t) return fallback;
   const lower = t.toLowerCase();
+  if (lower === AI_EVIDENCE_UNAVAILABLE) {
+    return lang === "ru"
+      ? "Не удалось загрузить данные проекта, поэтому ассистент не ответил. Попробуйте ещё раз."
+      : "The project data could not be loaded, so the assistant did not answer. Please try again.";
+  }
   if (lower === "quota_exceeded" || lower.includes("quota_exceeded")) {
     // ai-inference returns body.error = "quota_exceeded" with status 402 when a
     // usage credit can't be consumed. The visual paywall (AIQuotaGate) normally
@@ -489,13 +518,13 @@ export function sanitizeAiInferenceUserMessage(
   return t;
 }
 
-async function resolveAiInferenceInvokeFailureMessage(
+async function resolveAiInferenceInvokeFailure(
   error: unknown,
   data: unknown,
   lang: AiAssistantUiLanguage,
-): Promise<string> {
+): Promise<AiInferenceFailure> {
   const fromData = parseEdgeFunctionErrorBody(data);
-  if (fromData) return sanitizeAiInferenceUserMessage(fromData, lang);
+  if (fromData) return aiInferenceFailureFrom(fromData, lang);
 
   if (error && typeof error === "object" && "context" in error) {
     const ctx = (error as { context?: unknown }).context;
@@ -506,36 +535,42 @@ async function resolveAiInferenceInvokeFailureMessage(
       if (trimmed) {
         try {
           const j = JSON.parse(trimmed) as Record<string, unknown>;
-          if (typeof j.error === "string") return sanitizeAiInferenceUserMessage(j.error, lang);
+          if (typeof j.error === "string") return aiInferenceFailureFrom(j.error, lang);
           if (j.error && typeof j.error === "object" && j.error !== null && "message" in j.error) {
             const m = (j.error as { message?: unknown }).message;
-            if (typeof m === "string") return sanitizeAiInferenceUserMessage(m, lang);
+            if (typeof m === "string") return aiInferenceFailureFrom(m, lang);
           }
-          if (typeof j.message === "string") return sanitizeAiInferenceUserMessage(j.message, lang);
+          if (typeof j.message === "string") return aiInferenceFailureFrom(j.message, lang);
         } catch {
           /* not JSON */
         }
         const clipped = trimmed.length <= 400 ? trimmed : `${trimmed.slice(0, 400)}…`;
-        return sanitizeAiInferenceUserMessage(clipped, lang);
+        return aiInferenceFailureFrom(clipped, lang);
       }
       const statusText = ctx.statusText?.trim();
       if (lang === "ru") {
-        return statusText
-          ? `Запрос не выполнен (${status} ${statusText}). Попробуйте снова.`
-          : `Запрос не выполнен (HTTP ${status}). Попробуйте снова.`;
+        return new AiInferenceFailure(
+          statusText
+            ? `Запрос не выполнен (${status} ${statusText}). Попробуйте снова.`
+            : `Запрос не выполнен (HTTP ${status}). Попробуйте снова.`,
+          null,
+        );
       }
-      return statusText
-        ? `Request failed (${status} ${statusText}). Please try again.`
-        : `Request failed (HTTP ${status}). Please try again.`;
+      return new AiInferenceFailure(
+        statusText
+          ? `Request failed (${status} ${statusText}). Please try again.`
+          : `Request failed (HTTP ${status}). Please try again.`,
+        null,
+      );
     }
   }
 
   if (error && typeof error === "object" && "message" in error) {
     const m = (error as { message?: unknown }).message;
-    if (typeof m === "string" && m.trim()) return sanitizeAiInferenceUserMessage(m, lang);
+    if (typeof m === "string" && m.trim()) return aiInferenceFailureFrom(m, lang);
   }
 
-  return sanitizeAiInferenceUserMessage("", lang);
+  return aiInferenceFailureFrom("", lang);
 }
 
 /** Safe message to show in the assistant bubble when `invokeLiveTextAssistant` throws. */
@@ -586,12 +621,11 @@ async function invokeHosted(
   const bodyError = parseEdgeFunctionErrorBody(data);
 
   if (bodyError) {
-    throw new Error(sanitizeAiInferenceUserMessage(bodyError, assistantUiLanguage));
+    throw aiInferenceFailureFrom(bodyError, assistantUiLanguage);
   }
 
   if (error) {
-    const msg = await resolveAiInferenceInvokeFailureMessage(error, data, assistantUiLanguage);
-    throw new Error(msg);
+    throw await resolveAiInferenceInvokeFailure(error, data, assistantUiLanguage);
   }
 
   const responseBody = data as AIInferenceResponseBody | null;

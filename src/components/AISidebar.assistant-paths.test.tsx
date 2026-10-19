@@ -166,6 +166,109 @@ describe("AISidebar assistant paths", () => {
       expect(stored).toBe(first.chatId);
     });
 
+    it("offers Try again on an evidence_unavailable failure and re-sends the same message once", async () => {
+      const { aiInferenceFailureFrom } = await import("@/lib/ai-assistant-client");
+      invokeLiveTextAssistantMock.mockRejectedValueOnce(aiInferenceFailureFrom("evidence_unavailable", "en"));
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "what is left on stage 2?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+
+      expect(
+        await screen.findByText(
+          "The project data could not be loaded, so the assistant did not answer. Please try again.",
+        ),
+      ).toBeInTheDocument();
+      const userTextCount = screen.getAllByText("what is left on stage 2?").length;
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+      expect((await screen.findAllByText("LIVE_ASSISTANT_EXPLANATION_BODY")).length).toBeGreaterThan(0);
+      expect(invokeLiveTextAssistantMock).toHaveBeenCalledTimes(2);
+      const second = invokeLiveTextAssistantMock.mock.calls[1]?.[0] as {
+        userMessage: string;
+        projectId: string;
+        priorTurns: Array<{ role: string; text: string }>;
+      };
+      expect(second.userMessage).toBe("what is left on stage 2?");
+      expect(second.projectId).toBe("project-a");
+      const first = invokeLiveTextAssistantMock.mock.calls[0]?.[0] as { priorTurns: unknown };
+      expect(second.priorTurns).toEqual(first.priorTurns);
+      expect(screen.getAllByText("what is left on stage 2?")).toHaveLength(userTextCount);
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    });
+
+    it("withdraws Try again once another turn follows the failed one", async () => {
+      const { aiInferenceFailureFrom } = await import("@/lib/ai-assistant-client");
+      invokeLiveTextAssistantMock.mockRejectedValueOnce(aiInferenceFailureFrom("evidence_unavailable", "en"));
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "what is left on stage 2?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+      expect(await screen.findByRole("button", { name: "Try again" })).toBeInTheDocument();
+
+      await waitFor(() => {
+        fireEvent.change(screen.getByLabelText("Ask Shurik..."), { target: { value: "and on stage 3?" } });
+        fireEvent.keyDown(screen.getByLabelText("Ask Shurik..."), { key: "Enter" });
+        expect(invokeLiveTextAssistantMock).toHaveBeenCalledTimes(2);
+      }, { timeout: 4000 });
+      expect((await screen.findAllByText("LIVE_ASSISTANT_EXPLANATION_BODY")).length).toBeGreaterThan(0);
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    });
+
+    it("offers no Try again for any other failure", async () => {
+      invokeLiveTextAssistantMock.mockRejectedValueOnce(new Error("Not allowed for this project."));
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "what is left on stage 2?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+
+      expect(await screen.findByText("Not allowed for this project.")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    });
+
+    it("names the composer after the learn-mode hint while learn mode is on", () => {
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      expect(screen.getByRole("textbox", { name: "Ask Shurik..." })).toBeInTheDocument();
+
+      const composerMenu = document.querySelector("button[aria-haspopup='menu'] svg.lucide-plus")?.closest("button");
+      if (!composerMenu) throw new Error("composer menu trigger not found");
+      fireEvent.keyDown(composerMenu, { key: "Enter" });
+      fireEvent.click(screen.getByRole("menuitem", { name: "Learn mode" }));
+
+      expect(
+        screen.getByRole("textbox", { name: "Ask Shurik to explain decisions and tradeoffs..." }),
+      ).toBeInTheDocument();
+    });
+
     it("uses answer-focused work log copy for hosted consult turns", async () => {
       // The contract result type, not the mock's inferred return: the test
       // resolves a minimal result without sources/workProposal.
