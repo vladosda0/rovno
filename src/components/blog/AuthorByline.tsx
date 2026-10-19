@@ -3,10 +3,25 @@
 // the same article chrome, so the byline lives in one place. The prerenderer
 // (scripts/prerender-blog.mjs) emits the same "Об авторе" markup as a string.
 
+import {
+  isStickerAvatar,
+  stickerWidth,
+  STICKER_BIO_HEIGHT,
+  STICKER_LINE_HEIGHT,
+} from "@/lib/blog/authorAvatarConfig.mjs";
+
 export function AuthorLine({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      {avatarUrl ? (
+      {avatarUrl && isStickerAvatar(avatarUrl) ? (
+        <img
+          src={avatarUrl}
+          alt={name}
+          width={stickerWidth(STICKER_LINE_HEIGHT)}
+          height={STICKER_LINE_HEIGHT}
+          style={{ width: "auto", height: STICKER_LINE_HEIGHT, objectFit: "contain" }}
+        />
+      ) : avatarUrl ? (
         <img src={avatarUrl} alt={name} style={{ width: 36, height: 36, borderRadius: 999, objectFit: "cover" }} />
       ) : (
         <span
@@ -32,7 +47,17 @@ export function AuthorBio({ name, bio, avatarUrl }: { name: string; bio: string 
   if (!bio) return null;
   return (
     <aside className="rv-author-bio">
-      {avatarUrl ? (
+      {avatarUrl && isStickerAvatar(avatarUrl) ? (
+        <img
+          className="rv-author-bio__sticker"
+          src={avatarUrl}
+          alt=""
+          width={stickerWidth(STICKER_BIO_HEIGHT)}
+          height={STICKER_BIO_HEIGHT}
+          loading="lazy"
+          decoding="async"
+        />
+      ) : avatarUrl ? (
         <img src={avatarUrl} alt="" width={56} height={56} loading="lazy" decoding="async" />
       ) : (
         <span className="rv-author-bio__initial" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>

@@ -178,6 +178,22 @@
   object-fit: cover;
 }
 
+/* Shurik's poses are full-figure stickers: whole, no round crop, larger
+   (authorAvatarConfig.mjs). */
+.rv-landing .rv-author-bio img.rv-author-bio__sticker {
+  width: auto;
+  height: 88px;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+/* The text column next to a wide avatar must shrink on a 320px phone instead
+   of running into the card's padding. */
+.rv-landing .rv-author-bio > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .rv-landing .rv-author-bio .rv-author-bio__initial {
   display: inline-flex;
   align-items: center;

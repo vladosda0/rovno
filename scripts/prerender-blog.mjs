@@ -40,6 +40,7 @@ import { sanitizeArticleHtmlWith } from "../src/lib/blog/sanitizeConfig.mjs";
 import { annotateArticleHtml } from "../src/lib/blog/anchorsConfig.mjs";
 import { faqJsonLdFromDoc } from "../src/lib/blog/faqConfig.mjs";
 import { dzenArticleHtml, dzenFeedXml } from "../src/lib/blog/dzenFeedConfig.mjs";
+import { isStickerAvatar, stickerWidth, STICKER_BIO_HEIGHT } from "../src/lib/blog/authorAvatarConfig.mjs";
 import { collectTagHubs, isIndexableTag, pluralizeRu, postsForTagSlug, tagNamesForSlug, tagSlug } from "../src/lib/blog/tagsConfig.mjs";
 
 // fileURLToPath (not new URL().pathname) so a build path containing a space or
@@ -458,7 +459,9 @@ function breadcrumbsHtml(post) {
 function authorBioHtml(post) {
   const author = post.author;
   if (!author?.bio) return "";
-  const avatar = author.avatar_url
+  const avatar = author.avatar_url && isStickerAvatar(author.avatar_url)
+    ? `<img class="rv-author-bio__sticker" src="${escapeHtml(author.avatar_url)}" alt="" width="${stickerWidth(STICKER_BIO_HEIGHT)}" height="${STICKER_BIO_HEIGHT}" loading="lazy" decoding="async" />`
+    : author.avatar_url
     ? `<img src="${escapeHtml(author.avatar_url)}" alt="" width="56" height="56" loading="lazy" decoding="async" />`
     : `<span class="rv-author-bio__initial" aria-hidden="true">${escapeHtml(author.display_name.slice(0, 1).toUpperCase())}</span>`;
   return (
