@@ -705,3 +705,31 @@
   .rv-landing .rv-article table:has(tr > :nth-child(3)) > tbody { min-width: 520px; }
   .rv-landing .rv-preview-banner-wrap { margin-bottom: 24px; }
 }
+
+/* Knowledge-base document page (/baza/<slug>/, docs-library 1.5). Lives here so the
+   prerendered page picks it up with the blog CSS chunk (prerender-kb.mjs). */
+.rv-landing .rv-kb-facts {
+  margin: 32px 0 0;
+  max-width: 760px;
+  display: grid;
+  gap: 12px;
+  font-family: var(--font-body);
+  color: var(--rv-blue);
+}
+.rv-landing .rv-kb-facts__row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px;
+}
+.rv-landing .rv-kb-facts dt { font-size: 14px; opacity: 0.64; }
+.rv-landing .rv-kb-facts dd { margin: 0; font-size: 16px; line-height: 24px; overflow-wrap: anywhere; }
+.rv-landing .rv-kb-actions {
+  margin-top: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+@media (max-width: 640px) {
+  .rv-landing .rv-kb-facts__row { grid-template-columns: 1fr; gap: 2px; }
+  .rv-landing .rv-kb-actions { flex-direction: column; align-items: stretch; }
+}

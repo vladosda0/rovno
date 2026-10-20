@@ -5,7 +5,7 @@ import type { ComponentType, ReactNode } from "react";
 interface EmptyStateProps {
   icon: LucideIcon | ComponentType<{ className?: string }>;
   title: string;
-  body: string;
+  body?: string;
   cta?: ReactNode;
 }
 
@@ -17,9 +17,11 @@ export function EmptyState({ icon: Icon, title, body, cta }: EmptyStateProps) {
           <Icon className="h-8 w-8" aria-hidden="true" />
         </div>
         <h3 className="text-h3 text-foreground">{title}</h3>
-        <p className="max-w-prose text-body-sm text-muted-foreground whitespace-pre-line">
-          {body}
-        </p>
+        {body ? (
+          <p className="max-w-prose text-body-sm text-muted-foreground whitespace-pre-line">
+            {body}
+          </p>
+        ) : null}
         {cta && <div className="mt-1">{cta}</div>}
       </CardContent>
     </Card>

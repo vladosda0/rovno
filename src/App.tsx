@@ -50,6 +50,7 @@ const ThemeDemo = lazy(() => import("@/pages/ThemeDemo"));
 const BlogIndex = lazy(() => import("@/pages/blog/BlogIndex"));
 const BlogPostPage = lazy(() => import("@/pages/blog/BlogPostPage"));
 const BlogTagPage = lazy(() => import("@/pages/blog/BlogTagPage"));
+const KbDocumentPage = lazy(() => import("@/pages/knowledge-base/KbDocumentPage"));
 const BlogAdminList = lazy(() => import("@/pages/blog/admin/BlogAdminList"));
 const BlogEditorPage = lazy(() => import("@/pages/blog/admin/BlogEditorPage"));
 const Offer = lazy(() => import("@/pages/legal/Offer"));
@@ -98,6 +99,9 @@ const App = () => (
               (and "tag" is a reserved post slug anyway). */}
           <Route path="/blog/tag/:tag" element={routeElement(<BlogTagPage />)} />
           <Route path="/blog/:slug" element={routeElement(<BlogPostPage />)} />
+
+          {/* Public knowledge-base documents (no login; static prerender covers them) */}
+          <Route path="/baza/:slug" element={routeElement(<KbDocumentPage />)} />
 
           {/* Legal / compliance pages (required by T-Bank acquirer) */}
           <Route path="/offer" element={routeElement(<Offer />)} />

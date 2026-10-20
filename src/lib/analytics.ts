@@ -335,6 +335,7 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/blog" },
   { pattern: "/blog/tag/:tag" },
   { pattern: "/blog/:slug" },
+  { pattern: "/baza/:slug" },
   { pattern: "/offer" },
   { pattern: "/privacy" },
   { pattern: "/refund" },

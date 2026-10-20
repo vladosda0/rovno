@@ -1,0 +1,116 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { KbDocument } from "@/lib/knowledge-base/api";
+
+const fetchKbDocumentBySlug = vi.fn();
+
+vi.mock("@/lib/knowledge-base/api", () => ({
+  fetchKbFolderCounts: vi.fn(),
+  fetchKbDocumentPage: vi.fn(),
+  fetchKbDocumentBySlug: (slug: string) => fetchKbDocumentBySlug(slug),
+  normalizeKbDocument: (row: unknown) => row,
+}));
+
+let authStatus: "loading" | "authenticated" | "guest" = "guest";
+vi.mock("@/hooks/use-runtime-auth", () => ({
+  useRuntimeAuth: () => ({ status: authStatus }),
+}));
+
+// The landing chrome is not under test here; keep the page shell inert.
+vi.mock("@/components/blog/BlogShell", () => ({
+  BlogShell: ({ children }: { children: React.ReactNode }) => <div data-testid="shell">{children}</div>,
+  useLandingCta: () => ({ startPath: "/auth/signup", onDemo: () => {}, authStatus: "guest" }),
+}));
+
+import KbDocumentPage from "@/pages/knowledge-base/KbDocumentPage";
+
+const SP71: KbDocument = {
+  docId: "SP-71",
+  slug: "sp-71-13330",
+  designation: "СП 71.13330",
+  title: "Изоляционные и отделочные покрытия",
+  category: "Свод правил",
+  folder: "sp",
+  displayMode: "full_text",
+  objectTypes: [],
+  domains: [],
+  applicabilityNote: null,
+  publisher: null,
+  country: null,
+  edition: "2017 с изменениями 1-4",
+  effectiveFrom: null,
+  lastCheckedAt: "2026-10-13",
+  sourceLinks: [{ url: "https://minstroyrf.gov.ru/docs/14844/", kind: "official" }],
+  fullTextAvailable: false,
+};
+
+function renderAt(path: string) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/baza/:slug" element={<KbDocumentPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+beforeEach(() => {
+  fetchKbDocumentBySlug.mockReset().mockResolvedValue(SP71);
+  document.title = "";
+  authStatus = "guest";
+});
+
+describe("KbDocumentPage (/baza/:slug)", () => {
+  it("shows the document with breadcrumb, facts and source buttons for a guest", async () => {
+    renderAt("/baza/sp-71-13330/");
+    expect(await screen.findByRole("heading", { level: 1, name: "СП 71.13330 · Изоляционные и отделочные покрытия" }))
+      .toBeInTheDocument();
+    expect(fetchKbDocumentBySlug).toHaveBeenCalledWith("sp-71-13330");
+    const crumbs = screen.getByRole("navigation", { name: "Навигация по разделам" });
+    expect(crumbs).toHaveTextContent("Knowledge base");
+    expect(crumbs).toHaveTextContent("Codes of practice (SP)");
+    expect(screen.getByText("Свод правил")).toBeInTheDocument();
+    expect(screen.getByText("2017 с изменениями 1-4")).toBeInTheDocument();
+    expect(screen.getByText("13.10.2026")).toBeInTheDocument();
+    const source = screen.getByRole("link", { name: "Open on the Ministry of Construction site" });
+    expect(source).toHaveAttribute("href", "https://minstroyrf.gov.ru/docs/14844/");
+    expect(source).toHaveAttribute("rel", "noopener noreferrer");
+    expect(document.title).toContain("СП 71.13330");
+    const canonical = document.head.querySelector('link[rel="canonical"]');
+    expect(canonical?.getAttribute("href")).toBe("https://rovno.ai/baza/sp-71-13330/");
+  });
+
+  it("shows not-found for an unknown slug", async () => {
+    fetchKbDocumentBySlug.mockResolvedValue(null);
+    renderAt("/baza/nope");
+    expect(await screen.findByRole("heading", { name: "Document not found" })).toBeInTheDocument();
+  });
+
+  it("offers a guest «Спросить Шурика» that leads to sign-up", async () => {
+    renderAt("/baza/sp-71-13330/");
+    const ask = await screen.findByRole("link", { name: "Ask Shurik" });
+    expect(ask).toHaveAttribute("href", "/auth/signup");
+  });
+
+  it("does not offer «Спросить Шурика» to a signed-in user", async () => {
+    authStatus = "authenticated";
+    renderAt("/baza/sp-71-13330/");
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByRole("link", { name: "Ask Shurik" })).not.toBeInTheDocument();
+  });
+
+  it("shows a load error with retry, not not-found, when the query fails", async () => {
+    fetchKbDocumentBySlug.mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce(SP71);
+    renderAt("/baza/sp-71-13330/");
+    expect(await screen.findByText("Could not load the knowledge base. Try reloading the page.")).toBeInTheDocument();
+    expect(screen.queryByText("Document not found")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "СП 71.13330 · Изоляционные и отделочные покрытия" }))
+      .toBeInTheDocument();
+  });
+});

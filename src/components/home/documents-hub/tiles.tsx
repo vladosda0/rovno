@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Folder, MoreHorizontal, Edit2, Trash2, Plus, Download, Eye, FileText } from "lucide-react";
+import { Folder, MoreHorizontal, Edit2, Trash2, Plus, Download, Eye, FileText, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type IconComponent = ComponentType<{ className?: string; strokeWidth?: number | string }>;
@@ -157,6 +157,9 @@ interface FileTileProps {
   onClick?: () => void;
   onDownload?: () => void;
   onView?: () => void;
+  /** Opens an external source in a new tab (arrow icon). */
+  onOpenExternal?: () => void;
+  openExternalLabel?: string;
   downloadLabel: string;
   viewLabel: string;
   draggable?: boolean;
@@ -173,6 +176,8 @@ export function FileTile({
   onClick,
   onDownload,
   onView,
+  onOpenExternal,
+  openExternalLabel,
   downloadLabel,
   viewLabel,
   draggable,
@@ -228,6 +233,21 @@ export function FileTile({
                 title={viewLabel}
               >
                 <Eye className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onOpenExternal && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenExternal();
+                }}
+                aria-label={openExternalLabel}
+                title={openExternalLabel}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
               </Button>
             )}
             {onDownload && (
