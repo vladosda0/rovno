@@ -77,6 +77,20 @@ describe("SubscriptionSection resume link", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it("tells a free subscription nothing about auto-renewal or an end date", () => {
+    subscription = cancelledSub("free");
+    renderSection();
+
+    expect(screen.queryByText(/Auto-renewal is off/)).toBeNull();
+  });
+
+  it.each(["promo", "tbank"])("keeps the auto-renewal note for a %s subscription", (provider) => {
+    subscription = cancelledSub(provider);
+    renderSection();
+
+    expect(screen.getByText(/Auto-renewal is off\. Access stays until/)).toBeTruthy();
+  });
+
   it("keeps the resume link for a cancelled T-Bank subscription", async () => {
     subscription = cancelledSub("tbank");
     renderSection();

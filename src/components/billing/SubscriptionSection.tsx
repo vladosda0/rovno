@@ -187,34 +187,37 @@ export function SubscriptionSection() {
 
       {/* Cancel / resume sits at the very bottom as quiet inline text, not a
           bright button (per design pass): cancelling is rare and should not
-          compete with the rest of the panel. */}
-      <div className="flex flex-wrap items-center gap-sp-2 border-t border-border pt-sp-2">
-        {subscription.auto_renew ? (
-          <CancelSubscriptionDialog
-            subscriptionId={subscription.id}
-            activeUntilLabel={endsAt}
-            onCancelled={refetch}
-          />
-        ) : (
-          <>
-            {endsAt ? (
-              <p className="text-caption text-muted-foreground">
-                {t("settings.billing.autoRenewOffNote", { date: endsAt })}
-              </p>
-            ) : null}
-            {subscription.provider === "tbank" ? (
-              <button
-                type="button"
-                onClick={reactivate}
-                disabled={reactivating}
-                className="text-caption font-medium text-accent underline underline-offset-2 hover:text-accent/80 disabled:opacity-50"
-              >
-                {t("settings.billing.reactivate")}
-              </button>
-            ) : null}
-          </>
-        )}
-      </div>
+          compete with the rest of the panel. The free plan never ends and
+          has nothing to renew, so it gets no row at all. */}
+      {subscription.provider === "free" ? null : (
+        <div className="flex flex-wrap items-center gap-sp-2 border-t border-border pt-sp-2">
+          {subscription.auto_renew ? (
+            <CancelSubscriptionDialog
+              subscriptionId={subscription.id}
+              activeUntilLabel={endsAt}
+              onCancelled={refetch}
+            />
+          ) : (
+            <>
+              {endsAt ? (
+                <p className="text-caption text-muted-foreground">
+                  {t("settings.billing.autoRenewOffNote", { date: endsAt })}
+                </p>
+              ) : null}
+              {subscription.provider === "tbank" ? (
+                <button
+                  type="button"
+                  onClick={reactivate}
+                  disabled={reactivating}
+                  className="text-caption font-medium text-accent underline underline-offset-2 hover:text-accent/80 disabled:opacity-50"
+                >
+                  {t("settings.billing.reactivate")}
+                </button>
+              ) : null}
+            </>
+          )}
+        </div>
+      )}
     </SettingsSection>
   );
 }
