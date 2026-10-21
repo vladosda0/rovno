@@ -211,7 +211,7 @@ describe("Checkout", () => {
   });
 
   it("upgrade: charges the catalogue difference today and names the full price for later", async () => {
-    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+    mutateAsync.mockResolvedValue({ ...PAYMENT_URL_RESPONSE, amount_kopecks: 200000 });
     activeSubReturn = {
       ...noSubscription(),
       status: "active",
@@ -252,6 +252,116 @@ describe("Checkout", () => {
     });
     expect(screen.getByRole("switch").parentElement).toHaveTextContent(/2\s000\s₽/);
     expect(screen.getByRole("switch").parentElement).not.toHaveTextContent(/2\s990\s₽/);
+  });
+
+  it("upgrade during a prepaid renewal: credits the month that has not started", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+    const startsSoon = new Date(Date.now() + 12 * 60 * 60 * 1000);
+    activeSubReturn = {
+      ...noSubscription(),
+      status: "active",
+      subscription: {
+        id: "s2",
+        profile_id: "pid-1",
+        provider: "tbank",
+        plan_code: "master",
+        status: "active",
+        is_current: true,
+        currency: "RUB",
+        amount_cents: 99000,
+        auto_renew: true,
+        current_period_starts_at: startsSoon.toISOString(),
+        current_period_ends_at: new Date(startsSoon.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        canceled_at: null,
+        grace_until: null,
+        created_at: "2026-05-15T00:00:00Z",
+        pending_plan_code: null,
+      },
+    };
+
+    renderCheckout("brigade");
+
+    // 2 990 (Бригада) - 990 (Мастер) - 990 already paid for the month ahead = 1 010 today.
+    expect(screen.getByText(/^1\s010\s₽$/)).toBeInTheDocument();
+    expect(screen.queryByText(/^2\s000\s₽$/)).not.toBeInTheDocument();
+    expect(screen.getByText(/prepaid month of «Мастер» \(990\s₽\) is credited/i)).toBeInTheDocument();
+  });
+
+  it.each([
+    { provider: "promo", startsInHours: 12 },
+    { provider: "tbank", startsInHours: -24 },
+  ])("upgrade from a $provider row starting in $startsInHours h: no credit", ({ provider, startsInHours }) => {
+    const starts = new Date(Date.now() + startsInHours * 60 * 60 * 1000);
+    activeSubReturn = {
+      ...noSubscription(),
+      status: "active",
+      subscription: {
+        id: "s3",
+        profile_id: "pid-1",
+        provider,
+        plan_code: "master",
+        status: "active",
+        is_current: true,
+        currency: "RUB",
+        amount_cents: 99000,
+        auto_renew: true,
+        current_period_starts_at: starts.toISOString(),
+        current_period_ends_at: new Date(starts.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        canceled_at: null,
+        grace_until: null,
+        created_at: "2026-05-15T00:00:00Z",
+        pending_plan_code: null,
+      },
+    };
+
+    renderCheckout("brigade");
+
+    expect(screen.getByText(/^2\s000\s₽$/)).toBeInTheDocument();
+    expect(screen.queryByText(/is credited/i)).not.toBeInTheDocument();
+  });
+
+  it("after Init the page shows the amount the server will charge, not its own estimate", async () => {
+    // The renewal was refunded meanwhile: the server credits nothing and charges 2 000.
+    mutateAsync.mockResolvedValue({ ...PAYMENT_URL_RESPONSE, amount_kopecks: 200000 });
+    const startsSoon = new Date(Date.now() + 12 * 60 * 60 * 1000);
+    activeSubReturn = {
+      ...noSubscription(),
+      status: "active",
+      subscription: {
+        id: "s4",
+        profile_id: "pid-1",
+        provider: "tbank",
+        plan_code: "master",
+        status: "active",
+        is_current: true,
+        currency: "RUB",
+        amount_cents: 99000,
+        auto_renew: true,
+        current_period_starts_at: startsSoon.toISOString(),
+        current_period_ends_at: new Date(startsSoon.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        canceled_at: null,
+        grace_until: null,
+        created_at: "2026-05-15T00:00:00Z",
+        pending_plan_code: null,
+      },
+    };
+
+    renderCheckout("brigade");
+    expect(screen.getByText(/^1\s010\s₽$/)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox"));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/^2\s000\s₽$/)).toBeInTheDocument();
+    expect(screen.queryByText(/^1\s010\s₽$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/is credited/i)).not.toBeInTheDocument();
   });
 
   it("first purchase from the free plan reads as a subscription, not an upgrade surcharge", async () => {

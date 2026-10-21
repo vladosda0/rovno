@@ -53,8 +53,17 @@ export default function Checkout() {
   const currentCatalogueKopecks = currentPlanCode
     ? getPlan(currentPlanCode)?.amount_kopecks ?? 0
     : 0;
-  const chargeKopecks = isUpgrade && plan
-    ? Math.max(plan.amount_kopecks - currentCatalogueKopecks, 0)
+  // A renewal confirmed up to 24h early starts in the future; the upgrade replaces it,
+  // so its paid amount is credited, as tbank-init-payment does (rovno-db#26).
+  const renewalStartsMs = subscription?.current_period_starts_at
+    ? new Date(subscription.current_period_starts_at).getTime()
+    : NaN;
+  const prepaidCreditKopecks =
+    isUpgrade && subscription?.provider === "tbank" && renewalStartsMs > Date.now()
+      ? subscription.amount_cents ?? 0
+      : 0;
+  const estimatedChargeKopecks = isUpgrade && plan
+    ? Math.max(plan.amount_kopecks - currentCatalogueKopecks - prepaidCreditKopecks, 0)
     : plan?.amount_kopecks ?? 0;
   const currentPlanName = currentPlanCode
     ? PLANS[currentPlanCode]?.display_name ?? currentPlanCode
@@ -63,6 +72,12 @@ export default function Checkout() {
   const showAsUpgrade = isUpgrade && currentCatalogueKopecks > 0;
 
   const [retryNonce, setRetryNonce] = useState(0);
+  // Once Init answers, the amount the bank will charge is the server's, not this page's estimate.
+  const [serverChargeKopecks, setServerChargeKopecks] = useState<number | null>(null);
+  const chargeKopecks = serverChargeKopecks ?? estimatedChargeKopecks;
+  const shownCreditKopecks = serverChargeKopecks !== null && isUpgrade && plan
+    ? Math.max(plan.amount_kopecks - currentCatalogueKopecks - serverChargeKopecks, 0)
+    : prepaidCreditKopecks;
   const [intentId, setIntentId] = useState<string | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [widgetReady, setWidgetReady] = useState(false);
@@ -149,6 +164,7 @@ export default function Checkout() {
     let cancelled = false;
     setIntentId(null);
     setPaymentUrl(null);
+    setServerChargeKopecks(null);
     setWidgetReady(false);
     setWidgetFailed(false);
     void initPayment
@@ -166,6 +182,7 @@ export default function Checkout() {
         if (cancelled) return;
         setIntentId(res.intent_id);
         setPaymentUrl(res.payment_url);
+        if (typeof res.amount_kopecks === "number") setServerChargeKopecks(res.amount_kopecks);
         trackEvent("billing_init_payment_succeeded", { plan: planCode });
       })
       .catch((error: unknown) => {
@@ -291,6 +308,14 @@ export default function Checkout() {
                 : t("billing.checkout.oneTimeNote")}
             </p>
           )}
+          {showAsUpgrade && currentPlanName && shownCreditKopecks > 0 ? (
+            <p className="text-caption text-muted-foreground">
+              {t("billing.checkout.upgradePrepaidCreditNote", {
+                plan: currentPlanName,
+                credit: formatRubFromKopecks(shownCreditKopecks),
+              })}
+            </p>
+          ) : null}
           {user?.email ? (
             <p className="text-caption text-muted-foreground">
               {t("billing.checkout.receiptTo", { email: user.email })}

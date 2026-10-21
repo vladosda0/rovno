@@ -1168,6 +1168,7 @@
   "billing.checkout.oneTimeNote": "Разовый платёж за 1 месяц, без автопродления.",
   "billing.checkout.upgradeRecurringNote": "Доплата при переходе с «{{plan}}». Далее — {{full}} в месяц.",
   "billing.checkout.upgradeOneTimeNote": "Доплата при переходе с «{{plan}}», разовый платёж.",
+  "billing.checkout.upgradePrepaidCreditNote": "Оплаченный вперёд месяц «{{plan}}» ({{credit}}) засчитан в доплату.",
   "billing.checkout.oneTimeToggleConsent": "Оплачу {{amount}} за «{{plan}}» один раз, без автопродления, и принимаю <offer>оферту</offer> и <refund>условия возврата</refund>.",
   "billing.checkout.footerNote": "Оплата защищена Т-Банк. Возврат и отмена подписки — в настройках или на vlad@rovno.ai.",
   "billing.checkout.refundCancelNote": "Возврат средств и отмена подписки — по <refund>политике возврата</refund> или через поддержку выше.",
