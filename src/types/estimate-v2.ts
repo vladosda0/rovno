@@ -54,6 +54,11 @@ export interface EstimateV2Work {
   discountBps: number;
   plannedStart: string | null;
   plannedEnd: string | null;
+  /**
+   * True while the planned dates were picked by the app at «В работу» (rovno#235,
+   * estimate_works.dates_auto_scheduled). Cleared when a person sets the dates of this work.
+   */
+  datesAutoScheduled?: boolean;
   taskId: string | null;
   status: EstimateV2WorkStatus;
   /** Canonical-library link (system_work_article_id). Set when this work came from the rovno.ai library. */

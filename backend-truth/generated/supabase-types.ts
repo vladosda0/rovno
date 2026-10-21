@@ -691,6 +691,7 @@ export type Database = {
           "planned_start": string | null
           "planned_end": string | null
           "system_work_article_id": string | null
+          "dates_auto_scheduled": boolean
           }
           Insert: {
           "id"?: string
@@ -704,6 +705,7 @@ export type Database = {
           "planned_start"?: string | null
           "planned_end"?: string | null
           "system_work_article_id"?: string | null
+          "dates_auto_scheduled"?: boolean
           }
           Update: {
           "id"?: string
@@ -717,6 +719,7 @@ export type Database = {
           "planned_start"?: string | null
           "planned_end"?: string | null
           "system_work_article_id"?: string | null
+          "dates_auto_scheduled"?: boolean
           }
           Relationships: []
         }

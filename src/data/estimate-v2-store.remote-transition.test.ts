@@ -45,7 +45,9 @@ import {
   getEstimateV2ProjectState,
   setProjectEstimateStatus,
   transitionEstimateV2ProjectToInWork,
+  updateWorkDates,
 } from "@/data/estimate-v2-store";
+import { toDayIndex } from "@/lib/estimate-v2/schedule";
 import { __unsafeResetStoreForTests, getTasks } from "@/data/store";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 
@@ -295,5 +297,82 @@ describe("estimate-v2 remote hero transition", () => {
     expect(result.ok).toBe(false);
     expect(result.reason).toBe("transition_failed");
     expect(result.blocking).toBe(false);
+  });
+});
+
+describe("dates picked at «В работу» (rovno#235)", () => {
+  function mockSuccess(projectId: string) {
+    const before = getEstimateV2ProjectState(projectId);
+    persistEstimateV2HeroTransitionMock.mockResolvedValue({
+      fingerprint: "fingerprint-235",
+      profileId: "profile-1",
+      ids: {
+        estimateId: "estimate-235",
+        versionId: "version-235",
+        eventId: "event-235",
+        stageIdByLocalStageId: {},
+        workIdByLocalWorkId: {},
+        lineIdByLocalLineId: {},
+        taskIdByLocalWorkId: Object.fromEntries(before.works.map((work, index) => [work.id, `task-235-${index}`])),
+        checklistItemIdByLocalLineId: {},
+        procurementItemIdByLocalLineId: {},
+        hrItemIdByLocalLineId: {},
+      },
+    });
+  }
+
+  it("marks only the picked works, gives them 7 days from today and keeps an entered work in place", async () => {
+    const projectId = "project-2";
+    const [entered, ...rest] = getEstimateV2ProjectState(projectId).works;
+    expect(entered).toBeDefined();
+    if (!entered) return;
+    const typed = updateWorkDates(projectId, entered.id, "2026-12-01T00:00:00.000Z", "2026-12-03T00:00:00.000Z", { source: "gantt" });
+    expect(typed.ok).toBe(true);
+    mockSuccess(projectId);
+
+    const result = await transitionEstimateV2ProjectToInWork(projectId, { skipSetup: true });
+    expect(result.ok).toBe(true);
+    expect(result.autoScheduled).toBe(true);
+
+    const after = getEstimateV2ProjectState(projectId);
+    const enteredAfter = after.works.find((work) => work.id === entered.id);
+    expect(enteredAfter?.datesAutoScheduled).toBeFalsy();
+    expect(toDayIndex(enteredAfter?.plannedStart)).toBe(toDayIndex("2026-12-01T00:00:00.000Z"));
+
+    const picked = after.works.filter((work) => rest.some((other) => other.id === work.id) && work.datesAutoScheduled);
+    expect(picked.length).toBeGreaterThan(0);
+    const today = toDayIndex(new Date()) ?? 0;
+    picked.forEach((work) => {
+      const start = toDayIndex(work.plannedStart) ?? 0;
+      const end = toDayIndex(work.plannedEnd) ?? 0;
+      expect(start).toBeGreaterThanOrEqual(today);
+      expect(end - start + 1).toBe(7);
+    });
+  });
+
+  it("clears the mark of a work whose bar the person moved, and only of that work", async () => {
+    const projectId = "project-2";
+    mockSuccess(projectId);
+    await transitionEstimateV2ProjectToInWork(projectId, { skipSetup: true });
+
+    const picked = getEstimateV2ProjectState(projectId).works.filter((work) => work.datesAutoScheduled);
+    expect(picked.length).toBeGreaterThan(1);
+    const [moved, untouched] = picked;
+    if (!moved || !untouched) return;
+
+    const result = updateWorkDates(projectId, moved.id, "2030-01-10T00:00:00.000Z", "2030-01-12T00:00:00.000Z", { source: "gantt" });
+    expect(result.ok).toBe(true);
+
+    const after = getEstimateV2ProjectState(projectId);
+    expect(after.works.find((work) => work.id === moved.id)?.datesAutoScheduled).toBe(false);
+    expect(after.works.find((work) => work.id === untouched.id)?.datesAutoScheduled).toBe(true);
+  });
+
+  it("marks the works picked by the local path too", () => {
+    const projectId = "project-2";
+    const result = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(result.ok).toBe(true);
+    expect(result.autoScheduled).toBe(true);
+    expect(getEstimateV2ProjectState(projectId).works.some((work) => work.datesAutoScheduled)).toBe(true);
   });
 });

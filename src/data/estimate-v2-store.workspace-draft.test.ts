@@ -950,6 +950,37 @@ describe("estimate-v2 workspace drafts", () => {
     }
   });
 
+  it("saves dates entered right before a transition even when the transition fails (rovno#235)", async () => {
+    vi.useFakeTimers();
+    const projectId = "project-remote-1";
+    persistEstimateV2HeroTransitionMock.mockRejectedValue(new Error("network"));
+
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+      registerEstimateV2ProjectAccessContext(projectId, {
+        mode: "supabase",
+        profileId: "profile-1",
+        projectOwnerProfileId: "profile-1",
+        membershipRole: "owner",
+      });
+      const stage = createStage(projectId, { title: "Shell" });
+      const work = createWork(projectId, { stageId: stage?.id ?? "", title: "Framing" });
+      expect(work).not.toBeNull();
+      if (!work) return;
+      await vi.advanceTimersByTimeAsync(500);
+      saveCurrentEstimateDraftMock.mockClear();
+
+      updateWorkDates(projectId, work.id, "2026-12-01T00:00:00.000Z", "2026-12-03T00:00:00.000Z", { source: "missing_dates_dialog" });
+      const result = await transitionEstimateV2ProjectToInWork(projectId, { skipSetup: true });
+      expect(result.ok).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(500);
+      expect(saveCurrentEstimateDraftMock).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("defers the background draft sync until the hero transition finishes", async () => {
     vi.useFakeTimers();
     const projectId = "project-remote-1";
@@ -2027,6 +2058,50 @@ describe("estimate-v2 workspace drafts", () => {
         plannedStart: "2026-04-10T00:00:00.000Z",
         plannedEnd: "2026-04-15T00:00:00.000Z",
       });
+    });
+
+    it("hydrates the «picked by the app» mark from the server work row (rovno#235)", async () => {
+      const projectId = "project-remote-1";
+      loadCurrentEstimateDraftMock.mockResolvedValue({
+        estimate: baseEstimate,
+        currentVersion: baseVersion,
+        stages: [baseStage],
+        works: [
+          {
+            id: "work-1",
+            estimate_version_id: "version-1",
+            project_stage_id: "stage-1",
+            title: "Framing",
+            description: null,
+            sort_order: 1,
+            planned_cost_cents: 30000,
+            planned_start: "2026-04-10T00:00:00.000Z",
+            planned_end: "2026-04-16T00:00:00.000Z",
+            dates_auto_scheduled: true,
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+          {
+            id: "work-2",
+            estimate_version_id: "version-1",
+            project_stage_id: "stage-1",
+            title: "Plaster",
+            description: null,
+            sort_order: 2,
+            planned_cost_cents: 0,
+            planned_start: "2026-04-17T00:00:00.000Z",
+            planned_end: "2026-04-18T00:00:00.000Z",
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+        ],
+        lines: [],
+        dependencies: [],
+      });
+
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+      const state = getEstimateV2ProjectState(projectId);
+
+      expect(state.works.find((work) => work.id === "work-1")?.datesAutoScheduled).toBe(true);
+      expect(state.works.find((work) => work.id === "work-2")?.datesAutoScheduled).toBe(false);
     });
 
     it("hydrates lag_days from the server dependency row", async () => {

@@ -17,7 +17,6 @@ import {
   updateWorkDates,
 } from "@/data/estimate-v2-store";
 import {
-  clampWorkDates,
   computeTimelineRange,
   computeVisibleWindow,
   fromDayIndex,
@@ -68,26 +67,6 @@ interface DragState {
   rafId: number | null;
 }
 
-function normalizedDraftWork(work: EstimateV2Work): EstimateV2Work {
-  const start = toDayIndex(work.plannedStart);
-  const end = toDayIndex(work.plannedEnd);
-  if (start != null && end != null) return work;
-
-  const clamped = clampWorkDates(
-    {
-      plannedStart: work.plannedStart,
-      plannedEnd: work.plannedEnd,
-    },
-    1,
-  );
-
-  return {
-    ...work,
-    plannedStart: clamped.plannedStart,
-    plannedEnd: clamped.plannedEnd,
-  };
-}
-
 export function EstimateGantt({
   projectId,
   stages,
@@ -121,8 +100,10 @@ export function EstimateGantt({
     return map;
   }, [works]);
 
+  // A work without dates stays without them (rovno#235): its row says «Плановых дат нет» and the
+  // owner gets a pale placeholder bar to drag, instead of a made-up one-day range on today.
   const baseWorksById = useMemo(
-    () => Object.fromEntries(works.map((work) => [work.id, normalizedDraftWork(work)])),
+    () => Object.fromEntries(works.map((work) => [work.id, work])),
     [works],
   );
 
@@ -159,7 +140,7 @@ export function EstimateGantt({
       stageWorks.forEach((work) => {
         const draft = draftWorksById[work.id] ?? work;
         const subtitle = draft.plannedStart && draft.plannedEnd
-          ? t("estimate.gantt.row.dateRange", {
+          ? t(draft.datesAutoScheduled ? "estimate.gantt.row.dateRangeAutoScheduled" : "estimate.gantt.row.dateRange", {
               start: dayRangeLabel.format(new Date(draft.plannedStart)),
               end: dayRangeLabel.format(new Date(draft.plannedEnd)),
             })
@@ -638,6 +619,8 @@ export function EstimateGantt({
                         timelineStartDay={timelineStartDay}
                         pxPerDay={pxPerDay}
                         isOwner={isOwner}
+                        autoScheduled={Boolean(draft.datesAutoScheduled)}
+                        autoScheduledHint={t("estimate.gantt.autoScheduledHint")}
                         onDragStart={handleBarDragStart}
                       />
                     );

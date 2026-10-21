@@ -51,7 +51,7 @@ type ProjectStageInsert = Database["public"]["Tables"]["project_stages"]["Insert
 const PROJECT_ESTIMATE_SELECT = "id, project_id, title, description, status, created_by, created_at, updated_at, execution_status";
 const ESTIMATE_VERSION_SELECT = "id, estimate_id, version_number, is_current, created_by, created_at, client_vat_bps";
 const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status, discount_bps, system_stage_article_id, created_at, updated_at";
-const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, planned_start, planned_end, system_work_article_id, created_at";
+const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, planned_start, planned_end, dates_auto_scheduled, system_work_article_id, created_at";
 const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, markup_bps, discount_bps_override, assignee_profile_id, assignee_label, system_resource_article_id, created_at";
 const ESTIMATE_DEPENDENCY_SELECT = "id, estimate_version_id, from_work_id, to_work_id, dependency_type, lag_days, created_at";
 
@@ -748,6 +748,10 @@ export interface EstimateOperationalSummaryWorkRow {
   title: string;
   description: string | null;
   sort_order: number;
+  /** Work dates and the «picked by the app» mark (rovno#235); absent from an older database. */
+  planned_start?: string | null;
+  planned_end?: string | null;
+  dates_auto_scheduled?: boolean;
   created_at: string;
 }
 
@@ -823,6 +827,9 @@ function parseEstimateOperationalWork(value: unknown): EstimateOperationalSummar
     title: typeof row.title === "string" ? row.title : "",
     description: typeof row.description === "string" ? row.description : null,
     sort_order: sortOrder,
+    planned_start: typeof row.planned_start === "string" ? row.planned_start : null,
+    planned_end: typeof row.planned_end === "string" ? row.planned_end : null,
+    dates_auto_scheduled: row.dates_auto_scheduled === true,
     created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
   };
 }
@@ -1220,6 +1227,7 @@ export async function saveCurrentEstimateDraft(
     ),
     planned_start: work.plannedStart ?? null,
     planned_end: work.plannedEnd ?? null,
+    dates_auto_scheduled: work.datesAutoScheduled ?? false,
   }));
 
   if (shouldAbortCurrentEstimateDraftSave(actor)) {

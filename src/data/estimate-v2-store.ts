@@ -44,7 +44,7 @@ import {
 } from "@/lib/estimate-v2/pricing";
 import {
   applyFSConstraints,
-  autoScheduleSequential,
+  autoScheduleMissingWorks,
   clampWorkDates,
   detectCycle,
   toDayIndex,
@@ -2322,8 +2322,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
         const taskInfo = taskInfoByWorkId.get(work.estimate_work_id);
         // Server row is the source of truth for planned dates. Cache/taskInfo
         // are only consulted when the server row hasn't recorded a value yet.
-        const serverPlannedStart = (work as { planned_start?: string | null }).planned_start ?? null;
-        const serverPlannedEnd = (work as { planned_end?: string | null }).planned_end ?? null;
+        const serverPlannedStart = work.planned_start ?? null;
+        const serverPlannedEnd = work.planned_end ?? null;
         return {
           id: work.estimate_work_id,
           projectId,
@@ -2334,6 +2334,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           discountBps: cachedWork?.discountBps ?? 0,
           plannedStart: serverPlannedStart ?? taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? null,
           plannedEnd: serverPlannedEnd ?? taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? null,
+          // rovno#235: the server row decides; an older database without the key reads false.
+          datesAutoScheduled: work.dates_auto_scheduled === true,
           taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? null,
           status: taskInfo?.status ?? cachedWork?.status ?? "not_started",
           createdAt: cachedWork?.createdAt ?? work.created_at,
@@ -2383,6 +2385,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             discountBps: cachedWork?.discountBps ?? 0,
             plannedStart: work.planned_start ?? taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? null,
             plannedEnd: work.planned_end ?? taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? null,
+            datesAutoScheduled: work.dates_auto_scheduled === true,
             taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? null,
             status: taskInfo?.status ?? cachedWork?.status ?? "not_started",
             createdAt: cachedWork?.createdAt ?? work.created_at,
@@ -2803,14 +2806,6 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
   return state;
 }
 
-function projectScheduleAnchor(projectId: string): string {
-  const tasks = getTasks(projectId)
-    .map((task) => normalizeIsoDate(task.created_at))
-    .filter((value): value is string => Boolean(value))
-    .sort((a, b) => a.localeCompare(b));
-  return tasks[0] ?? isoStartOfToday();
-}
-
 function captureScheduleBaseline(state: EstimateV2ProjectState, capturedAt: string): ScheduleBaseline {
   const works = sortWorksByStageAndOrder(state);
   const baselineWorks = works.map((work) => ({
@@ -2867,8 +2862,8 @@ function buildPlanningToInWorkDraft(
   let nextWorks = draftWorks;
   if (missingWorks.length > 0 && options.skipSetup) {
     const stageOrderById = new Map(state.stages.map((stage) => [stage.id, stage.order]));
-    const anchor = projectScheduleAnchor(projectId);
-    let scheduled = autoScheduleSequential(nextWorks, anchor, stageOrderById);
+    // rovno#235: only dateless works get dates, 7 days each in a chain from the day of the move.
+    let scheduled = autoScheduleMissingWorks(nextWorks, isoStartOfToday(), stageOrderById);
     const cycleValidation = validateNoCycles(state.dependencies);
     if (cycleValidation.valid) {
       const constrainedById = applyFSConstraints(
@@ -2917,6 +2912,7 @@ function applySupabaseInWorkTransitionSuccess(
       ...work,
       plannedStart: nextDraft.plannedStart,
       plannedEnd: nextDraft.plannedEnd,
+      datesAutoScheduled: nextDraft.datesAutoScheduled ?? false,
       taskId: taskIdByWorkId[work.id] ?? work.taskId,
       status: "not_started",
       updatedAt: draft.appliedAt,
@@ -3005,6 +3001,11 @@ function shallowEqualExcludingUpdatedAt(a: Record<string, unknown>, b: Record<st
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   keys.delete("updatedAt");
   for (const key of keys) {
+    // rovno#235: snapshots cached before the mark existed have no key; it means false.
+    if (key === "datesAutoScheduled") {
+      if (Boolean(a[key]) !== Boolean(b[key])) return false;
+      continue;
+    }
     if (a[key] !== b[key]) return false;
   }
   return true;
@@ -3301,7 +3302,7 @@ export function updateWorkDates(
   workId: string,
   plannedStart: string,
   plannedEnd: string,
-  _options: { source: "gantt" },
+  options: { source: "gantt" | "missing_dates_dialog" },
 ): { ok: true; shiftedWorkIds: string[] } | { ok: false; reason: "forbidden" | "invalid_work" | "invalid_date" } {
   const state = ensureProjectState(projectId);
   if (!canEditEstimateState(projectId, state)) return { ok: false, reason: "forbidden" };
@@ -3326,12 +3327,29 @@ export function updateWorkDates(
     plannedEnd: normalized.plannedEnd,
   };
 
-  const constrainedById = applyFSConstraints(worksById, state.dependencies);
+  const fsConstrainedById = applyFSConstraints(worksById, state.dependencies);
+  // From the missing-dates dialog, dependencies move only this work and works that already have
+  // dates: a dateless successor stays dateless, so that «В работу» picks its 7 days (rovno#235).
+  const constrainedById = options.source === "missing_dates_dialog"
+    ? Object.fromEntries(Object.entries(fsConstrainedById).filter(([id]) => {
+      if (id === workId) return true;
+      const before = state.works.find((work) => work.id === id);
+      return Boolean(before?.plannedStart && before?.plannedEnd);
+    }))
+    : fsConstrainedById;
   const now = nowIso();
   const changedWorkIds = applyScheduledDatesFromMap(state, constrainedById, now);
 
   if (changedWorkIds.length === 0) {
     return { ok: true, shiftedWorkIds: [] };
+  }
+
+  // rovno#235: the person set the dates of this work, so they are no longer the app's pick.
+  // Works shifted by dependencies keep their mark: the app still chose their dates.
+  if (changedWorkIds.includes(workId)) {
+    state.works = state.works.map((work) => (
+      work.id === workId && work.datesAutoScheduled ? { ...work, datesAutoScheduled: false } : work
+    ));
   }
 
   if (state.project.estimateStatus === "in_work") {
@@ -3504,8 +3522,7 @@ export function setProjectEstimateStatus(
 
     if (missingWorks.length > 0 && options.skipSetup) {
       const stageOrderById = new Map(state.stages.map((stage) => [stage.id, stage.order]));
-      const anchor = projectScheduleAnchor(projectId);
-      let scheduled = autoScheduleSequential(state.works, anchor, stageOrderById);
+      let scheduled = autoScheduleMissingWorks(state.works, isoStartOfToday(), stageOrderById);
       const cycleValidation = validateNoCycles(state.dependencies);
       if (cycleValidation.valid) {
         const constrainedById = applyFSConstraints(
@@ -3627,12 +3644,15 @@ export async function transitionEstimateV2ProjectToInWork(
   });
 
   heroTransitionInFlightByProjectId.add(projectId);
-  deferredDraftSyncByProjectId.delete(projectId);
+  const hadDeferredDraftSync = deferredDraftSyncByProjectId.delete(projectId);
   const existingTimer = remoteDraftSyncTimers.get(projectId);
   if (existingTimer) {
     clearTimeout(existingTimer);
     remoteDraftSyncTimers.delete(projectId);
   }
+  // A save cancelled here (e.g. dates just entered in the missing-dates dialog) must still run
+  // after the transition, also when the transition fails.
+  const cancelledDraftSync = hadDeferredDraftSync || Boolean(existingTimer);
 
   try {
     const persisted = await persistEstimateV2HeroTransition({
@@ -3734,7 +3754,7 @@ export async function transitionEstimateV2ProjectToInWork(
     };
   } finally {
     heroTransitionInFlightByProjectId.delete(projectId);
-    if (deferredDraftSyncByProjectId.delete(projectId)) {
+    if (deferredDraftSyncByProjectId.delete(projectId) || cancelledDraftSync) {
       queueProjectDraftSync(projectId);
     }
   }

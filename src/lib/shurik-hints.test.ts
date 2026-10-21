@@ -18,8 +18,9 @@ vi.mock("@/data/messenger-links", () => ({ TELEGRAM_BOT_USERNAME: "rovno_test_bo
 const ru = ruLocale as Record<string, string>;
 const en = enLocale as Record<string, string>;
 
+// T21 joined with rovno#235 (the mark «даты подобраны автоматически»); T05 is still not built.
 const FIRST_RELEASE = Array.from({ length: 40 }, (_, i) => `T${String(i + 1).padStart(2, "0")}`).filter(
-  (key) => key !== "T05" && key !== "T21",
+  (key) => key !== "T05",
 );
 
 // What shurik_hint_candidates_t41_t84() and shurik_hint_candidates_k_n() of rovno-db emit (8.4, 8.5).
@@ -80,8 +81,8 @@ describe("button address by hint key", () => {
     });
   });
 
-  it("knows nothing about T05, T21 or an unknown key, so no card can be drawn for them", () => {
-    for (const key of ["T05", "T21", "Z99"]) {
+  it("knows nothing about T05 or an unknown key, so no card can be drawn for them", () => {
+    for (const key of ["T05", "Z99"]) {
       expect(resolveShurikHintAction({ hint_key: key, params: {} }, "p1")).toBeNull();
     }
   });
@@ -95,7 +96,15 @@ describe("button address by hint key", () => {
       }
     }
     expect(ru["shurikHints.T05.text"]).toBeUndefined();
-    expect(ru["shurikHints.T21.text"]).toBeUndefined();
+  });
+
+  it("opens «График работ» from T21 and T22 (rovno#235)", () => {
+    for (const key of ["T21", "T22"]) {
+      expect(resolveShurikHintAction({ hint_key: key, params: { estimate_id: "e-1" } }, "p1")).toEqual({
+        kind: "navigate",
+        href: "/project/p1/estimate?tab=work_schedule",
+      });
+    }
   });
 
   it("knows the hints the database can pick (and T10, not built yet), each with words in both languages", () => {

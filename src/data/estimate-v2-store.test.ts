@@ -805,3 +805,86 @@ describe("estimate-v2 execution foundation", () => {
     expect(registeredStored?.shareApprovalDisabledReason).toBeNull();
   });
 });
+
+describe("picked-dates mark (rovno#235)", () => {
+  afterEach(() => {
+    setAuthRole("owner");
+  });
+
+  it("does not count a missing mark against an explicit false as a change of the work", () => {
+    const projectId = "project-2";
+    setAuthRole("owner");
+    const state = getEstimateV2ProjectState(projectId);
+    const [first] = state.works;
+    expect(first).toBeDefined();
+    if (!first) return;
+    const base = {
+      id: "v",
+      projectId,
+      number: 1,
+      status: "approved",
+      shareId: "s",
+      shareApprovalPolicy: "sms",
+      shareApprovalDisabledReason: null,
+      approvalStamp: null,
+      archived: false,
+      submitted: true,
+      createdBy: "u",
+      createdAt: "2026-10-01T00:00:00.000Z",
+      updatedAt: "2026-10-01T00:00:00.000Z",
+    };
+    const { datesAutoScheduled: _omit, ...keyless } = first;
+    const prev = { ...base, snapshot: { ...state, works: [keyless] } } as unknown as Parameters<typeof computeVersionDiff>[0];
+    const next = { ...base, id: "v2", number: 2, snapshot: { ...state, works: [{ ...keyless, datesAutoScheduled: false }] } } as unknown as Parameters<typeof computeVersionDiff>[1];
+
+    expect(computeVersionDiff(prev, next).changedWorkIds).toEqual([]);
+  });
+
+  it("still counts a real change of the mark", () => {
+    const projectId = "project-2";
+    setAuthRole("owner");
+    const state = getEstimateV2ProjectState(projectId);
+    const [first] = state.works;
+    if (!first) return;
+    const base = { id: "v", projectId, number: 1, status: "approved", snapshot: state } as unknown as Parameters<typeof computeVersionDiff>[1];
+    const prev = { ...base, snapshot: { ...state, works: [{ ...first, datesAutoScheduled: true }] } } as unknown as Parameters<typeof computeVersionDiff>[0];
+    const next = { ...base, snapshot: { ...state, works: [{ ...first, datesAutoScheduled: false }] } } as unknown as Parameters<typeof computeVersionDiff>[1];
+
+    expect(computeVersionDiff(prev, next).changedWorkIds).toEqual([first.id]);
+  });
+
+  it("dates entered in the dialog still shift a dated successor by the dependency", () => {
+    const projectId = "project-2";
+    setAuthRole("owner");
+    const works = getEstimateV2ProjectState(projectId).works;
+    const dateless = works.find((work) => !work.plannedStart || !work.plannedEnd);
+    const other = works.find((work) => work.id !== dateless?.id);
+    expect(dateless && other).toBeTruthy();
+    if (!dateless || !other) return;
+    expect(updateWorkDates(projectId, other.id, "2026-11-01T00:00:00.000Z", "2026-11-05T00:00:00.000Z", { source: "gantt" }).ok).toBe(true);
+    expect(addDependency(projectId, dateless.id, other.id, 0).ok).toBe(true);
+
+    updateWorkDates(projectId, dateless.id, "2026-12-01T00:00:00.000Z", "2026-12-03T00:00:00.000Z", { source: "missing_dates_dialog" });
+
+    const after = getEstimateV2ProjectState(projectId).works.find((work) => work.id === other.id);
+    expect(toDayIndex(after?.plannedStart)).toBeGreaterThan(toDayIndex("2026-12-03T00:00:00.000Z") ?? 0);
+  });
+
+  it("dates entered for one work in the missing-dates dialog leave its dateless successor without dates", () => {
+    const projectId = "project-2";
+    setAuthRole("owner");
+    const dateless = getEstimateV2ProjectState(projectId).works.filter((work) => !work.plannedStart || !work.plannedEnd);
+    const [from, to] = dateless;
+    expect(from && to).toBeTruthy();
+    if (!from || !to) return;
+    const dep = addDependency(projectId, from.id, to.id, 0);
+    expect(dep.ok).toBe(true);
+
+    const result = updateWorkDates(projectId, from.id, "2026-12-01T00:00:00.000Z", "2026-12-03T00:00:00.000Z", { source: "missing_dates_dialog" });
+    expect(result.ok).toBe(true);
+
+    const after = getEstimateV2ProjectState(projectId).works.find((work) => work.id === to.id);
+    expect(after?.plannedStart ?? null).toBeNull();
+    expect(after?.plannedEnd ?? null).toBeNull();
+  });
+});

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProjectEstimate from "@/pages/project/ProjectEstimate";
 import { __unsafeResetStoreForTests, addMember, addProject, addTask, updateTask } from "@/data/store";
@@ -149,13 +149,13 @@ async function changeEstimateStatus(nextStatus: string) {
   await flushUi();
 }
 
-function renderProjectEstimate(projectId: string) {
+function renderProjectEstimate(projectId: string, search = "") {
   const queryClient = createQueryClient();
 
   return render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={0}>
-        <MemoryRouter initialEntries={[`/project/${projectId}/estimate`]}>
+        <MemoryRouter initialEntries={[`/project/${projectId}/estimate${search}`]}>
           <Routes>
             <Route path="/project/:id/estimate" element={<ProjectEstimate />} />
             <Route path="/project/:id/tasks" element={<div>Tasks page</div>} />
@@ -610,6 +610,118 @@ describe("ProjectEstimate", () => {
     });
     expect(getEstimateV2ProjectState(projectId).works[0]?.plannedStart).toBeTruthy();
     expect(getEstimateV2ProjectState(projectId).works[0]?.plannedEnd).toBeTruthy();
+  });
+
+  it("lets the owner enter dates for one work in the missing-dates dialog and picks the rest (rovno#235)", async () => {
+    const projectId = "project-estimate-missing-dates-entered";
+    setupLocalProject(projectId);
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+    const framing = createWork(projectId, { stageId: stage.id, title: "Framing" });
+    const roofing = createWork(projectId, { stageId: stage.id, title: "Roofing" });
+    expect(framing && roofing).toBeTruthy();
+    if (!framing || !roofing) return;
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+    await act(async () => {
+      await changeEstimateStatus("In work");
+    });
+
+    const dialog = screen.getByRole("alertdialog", { name: "Missing work dates" });
+    expect(within(dialog).getByText(
+      "Some works have no planned dates. Set them now or skip: works without dates get 7 days each, one after another.",
+    )).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Skip setup" })).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("button", { name: /^Dates: / })).toHaveLength(2);
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Dates: Roofing" }));
+      await flushUi();
+    });
+    const dayTen = screen.getAllByRole("gridcell", { name: "10" }).find((cell) => !cell.className.includes("day-outside"));
+    expect(dayTen).toBeDefined();
+    if (!dayTen) return;
+    await act(async () => {
+      fireEvent.click(dayTen);
+      await flushUi();
+    });
+
+    const save = within(dialog).getByRole("button", { name: "Save" });
+    await act(async () => {
+      fireEvent.click(save);
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(getEstimateV2ProjectState(projectId).project.estimateStatus).toBe("in_work");
+    });
+    const works = getEstimateV2ProjectState(projectId).works;
+    const roofingAfter = works.find((work) => work.id === roofing.id);
+    const framingAfter = works.find((work) => work.id === framing.id);
+    expect(new Date(roofingAfter?.plannedStart ?? "").getDate()).toBe(10);
+    expect(new Date(roofingAfter?.plannedEnd ?? "").getDate()).toBe(10);
+    expect(roofingAfter?.datesAutoScheduled).toBeFalsy();
+    expect(framingAfter?.datesAutoScheduled).toBe(true);
+  });
+
+  it("opens «Work schedule» from ?tab=work_schedule, the link of Shurik's T21 and T22 (rovno#235)", async () => {
+    const projectId = "project-estimate-tab-link";
+    setupLocalProject(projectId);
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+    createWork(projectId, { stageId: stage.id, title: "Framing" });
+
+    await act(async () => {
+      renderProjectEstimate(projectId, "?tab=work_schedule");
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Work schedule" })).toHaveAttribute("aria-selected", "true");
+    });
+  });
+
+  it("switches to «Work schedule» when the link is followed while the estimate is already open (rovno#235)", async () => {
+    const projectId = "project-estimate-tab-link-mounted";
+    setupLocalProject(projectId);
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+    createWork(projectId, { stageId: stage.id, title: "Framing" });
+
+    // useNavigate is mocked in this file; a real Link navigates inside the MemoryRouter.
+    const OpenScheduleLink = () => <Link to={`/project/${projectId}/estimate?tab=work_schedule`}>open schedule link</Link>;
+
+    await act(async () => {
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <TooltipProvider delayDuration={0}>
+            <MemoryRouter initialEntries={[`/project/${projectId}/estimate`]}>
+              <OpenScheduleLink />
+              <Routes>
+                <Route path="/project/:id/estimate" element={<ProjectEstimate />} />
+              </Routes>
+            </MemoryRouter>
+          </TooltipProvider>
+        </QueryClientProvider>,
+      );
+      await flushUi();
+    });
+    expect(screen.getByRole("tab", { name: "Work schedule" })).toHaveAttribute("aria-selected", "false");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("link", { name: "open schedule link" }));
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Work schedule" })).toHaveAttribute("aria-selected", "true");
+    });
   });
 
   it("opens tasks from Work log while estimate is still planning", async () => {

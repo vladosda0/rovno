@@ -301,6 +301,7 @@ describe("saveCurrentEstimateDraft", () => {
             planned_cost_cents: 0,
             planned_start: null,
             planned_end: null,
+            dates_auto_scheduled: false,
             system_work_article_id: null,
             created_at: "2026-03-01T00:00:00.000Z",
           },
@@ -1042,6 +1043,83 @@ describe("saveCurrentEstimateDraft", () => {
     expect(row?.assignee_profile_id).toBeNull();
     expect(row?.assignee_label).toBe("Володя");
   });
+
+  it("persists the «picked by the app» mark of a work (rovno#235)", async () => {
+    const snapshot: EstimateV2Snapshot = {
+      project: {
+        id: "project-remote-1",
+        projectId: "project-remote-1",
+        title: "Remote Project",
+        projectMode: "contractor",
+        currency: "RUB",
+        taxBps: 2000,
+        discountBps: 0,
+        markupBps: 0,
+        estimateStatus: "planning",
+        receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          projectId: "project-remote-1",
+          title: "Shell",
+          order: 1,
+          discountBps: 0,
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          title: "Framing",
+          order: 1,
+          discountBps: 0,
+          plannedStart: "2026-10-15T00:00:00.000Z",
+          plannedEnd: "2026-10-21T00:00:00.000Z",
+          datesAutoScheduled: true,
+          taskId: null,
+          status: "not_started",
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "88888888-8888-4888-8888-888888888888",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          workId: "44444444-4444-4444-8444-444444444444",
+          title: "Crew",
+          type: "labor",
+          unit: "day",
+          qtyMilli: 2000,
+          costUnitCents: 15000,
+          markupBps: 0,
+          discountBpsOverride: null,
+          assigneeId: null,
+          assigneeName: "Володя",
+          assigneeEmail: null,
+          receivedCents: 0,
+          pnlPlaceholderCents: 0,
+          createdAt: "2026-03-03T00:00:00.000Z",
+          updatedAt: "2026-03-03T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    };
+
+    await saveCurrentEstimateDraft("project-remote-1", snapshot, { profileId: "profile-1" });
+
+    const work = mockDatabaseRef.current?.tables.estimate_works[0] as Record<string, unknown> | undefined;
+    expect(work?.dates_auto_scheduled).toBe(true);
+    expect(work?.planned_start).toBe("2026-10-15T00:00:00.000Z");
+  });
 });
 
 describe("ensureProjectEstimateRoot creation race (23505)", () => {
@@ -1139,6 +1217,40 @@ describe("parseEstimateOperationalSummaryPayload", () => {
     expect(parsed?.resourceLines).toHaveLength(1);
     expect(parsed?.resourceLines[0]?.assignee_profile_id).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
     expect(parsed?.resourceLines[0]?.assignee_display_name).toBe("Shared assignee");
+  });
+
+  it("parses the work dates and the «picked by the app» mark (rovno#235)", () => {
+    const work = {
+      estimate_work_id: "44444444-4444-4444-8444-444444444444",
+      estimate_version_id: "77777777-7777-4777-8777-777777777777",
+      project_stage_id: "33333333-3333-4333-8333-333333333333",
+      title: "Framing",
+      description: null,
+      sort_order: 1,
+      created_at: "2026-03-01T00:00:00.000Z",
+    };
+    const parsed = parseEstimateOperationalSummaryPayload({
+      works: [
+        { ...work, planned_start: "2026-10-15T00:00:00.000Z", planned_end: "2026-10-21T00:00:00.000Z", dates_auto_scheduled: true },
+        { ...work, estimate_work_id: "55555555-5555-4555-8555-555555555555" },
+      ],
+      resource_lines: [],
+      upper_block: {
+        effective_finance_visibility: "none",
+        timing: {
+          estimate_version_id: "77777777-7777-4777-8777-777777777777",
+          estimate_version_number: 1,
+          estimate_version_created_at: "2026-03-01T00:00:00.000Z",
+        },
+      },
+    });
+
+    expect(parsed?.works[0]).toMatchObject({
+      planned_start: "2026-10-15T00:00:00.000Z",
+      planned_end: "2026-10-21T00:00:00.000Z",
+      dates_auto_scheduled: true,
+    });
+    expect(parsed?.works[1]).toMatchObject({ planned_start: null, planned_end: null, dates_auto_scheduled: false });
   });
 });
 

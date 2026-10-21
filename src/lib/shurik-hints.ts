@@ -54,9 +54,11 @@ const GALLERY: HintTarget = { kind: "page", path: "gallery" };
 const NOTIFICATION_SETTINGS: HintTarget = { kind: "app", href: "/settings?tab=notifications" };
 const PROFILE_SETTINGS: HintTarget = { kind: "app", href: "/settings?tab=profile" };
 const TELEGRAM: HintTarget = { kind: "telegram" };
+// «Открыть график»: the estimate on its «График работ» tab.
+const WORK_SCHEDULE: HintTarget = { kind: "page", path: "estimate?tab=work_schedule" };
 
 /**
- * One line per hint the server can pick: T01-T40 without T05 and T21, the built part of T41-T84,
+ * One line per hint the server can pick: T01-T40 without T05, the built part of T41-T84,
  * «Знаешь ли ты» (K) and «Для наблюдателя» (N). T81 («добавь коллег в организацию») is not built
  * on the server either: the app has no place to add people to an existing organization. A page without a deep link to the exact place
  * opens at its root. A hint key the server sends but this table does not know draws no card: a newer
@@ -82,7 +84,8 @@ const HINT_TARGETS: Record<string, HintTarget> = {
   T18: { kind: "home", query: "tab=documents&docTab=estimates" },
   T19: { kind: "tasks", taskParam: "task_id" },
   T20: { kind: "tasks", taskParam: "task_id" },
-  T22: { kind: "estimate" },
+  T21: WORK_SCHEDULE,
+  T22: WORK_SCHEDULE,
   T23: { kind: "tasks", taskParam: "task_id" },
   T24: { kind: "tasks", taskParam: "task_id" },
   T25: { kind: "tasks", taskParam: "task_id" },

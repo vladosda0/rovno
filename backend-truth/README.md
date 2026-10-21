@@ -191,6 +191,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261020020000_org_profile_requisites_and_project_client_info.sql`
 - `supabase/migrations/20261020030000_knowledge_base_storage.sql`
 - `supabase/migrations/20261021100000_payment_intents_upgrade_credit.sql`
+- `supabase/migrations/20261021120000_estimate_works_dates_auto_scheduled.sql`
 
 ## Exclusions
 

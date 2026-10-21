@@ -11,7 +11,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
@@ -113,7 +113,9 @@ import {
   updateLine,
   updateStage,
   updateWork,
+  updateWorkDates,
 } from "@/data/estimate-v2-store";
+import { MissingWorkDatesDialog, type MissingWorkDatesEntry } from "@/components/estimate-v2/MissingWorkDatesDialog";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import type { EstimateV2ProjectSyncState } from "@/data/estimate-v2-store";
 import { getPlanningSource } from "@/data/planning-source";
@@ -1052,6 +1054,7 @@ export default function ProjectEstimate() {
   const showEstimateInternalPricing = estimateFinanceMode === "detail";
   const showEstimateMarkup = estimateFinanceMode === "detail" && isContractorMode;
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -1855,6 +1858,16 @@ export default function ProjectEstimate() {
     hasProposedVersion: Boolean(latestProposed),
   });
   const showEstimateWorkspace = estimateEditorStarted || estimateHasSavedContent;
+
+  // `?tab=work_schedule` opens «График работ» (the button of Shurik's hints T21 and T22), also when
+  // the estimate is already open. The parameter is dropped once applied, so the next click works too.
+  useEffect(() => {
+    if (searchParams.get("tab") !== "work_schedule" || !showEstimateWorkspace) return;
+    setActiveTab("work_schedule");
+    const next = new URLSearchParams(searchParams);
+    next.delete("tab");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, showEstimateWorkspace]);
   const reviewExpandedByDefault = false;
   const approvedVersionWithStamp = latestApproved?.approvalStamp ? latestApproved : null;
   const latestVersionNumber = useMemo(
@@ -1972,7 +1985,11 @@ export default function ProjectEstimate() {
     toast({ title: t("estimate.toast.statusUpdated") });
   };
 
-  const handleSkipSetup = async () => {
+  const handleSkipSetup = async (entered: MissingWorkDatesEntry[] = []) => {
+    // rovno#235: dates entered in the dialog are the person's own; the rest get picked dates.
+    for (const entry of entered) {
+      updateWorkDates(pid, entry.workId, entry.plannedStart, entry.plannedEnd, { source: "missing_dates_dialog" });
+    }
     await handleEstimateStatusChange("in_work", { skipSetup: true });
   };
 
@@ -3771,31 +3788,14 @@ export default function ProjectEstimate() {
           )}
         </ConfirmModal>
 
-        <ConfirmModal
+        <MissingWorkDatesDialog
           open={missingDatesWorkIds.length > 0}
-          onOpenChange={(open) => {
-            if (!open) setMissingDatesWorkIds([]);
-          }}
-          title={t("estimate.missingDates.title")}
-          description={t("estimate.missingDates.description")}
-          confirmLabel={t("estimate.missingDates.skipSetup")}
-          cancelLabel={t("common.cancel")}
-          onConfirm={handleSkipSetup}
+          works={missingDatesWorkIds.map((workId) => ({ id: workId, title: workById.get(workId)?.title ?? workId }))}
           onCancel={() => setMissingDatesWorkIds([])}
-        >
-          <div className="max-h-48 overflow-auto rounded-md border border-border p-2">
-            <ul className="space-y-1">
-              {missingDatesWorkIds.map((workId) => {
-                const work = workById.get(workId);
-                return (
-                  <li key={workId} className="text-caption text-foreground">
-                    {work?.title ?? workId}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </ConfirmModal>
+          onConfirm={(entered) => {
+            void handleSkipSetup(entered);
+          }}
+        />
 
         <ConfirmModal
           open={incompleteTaskBlocks.length > 0}
