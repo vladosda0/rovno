@@ -2192,6 +2192,8 @@ export type Database = {
           "consent_accepted_at": string | null
           "consent_version": string | null
           "order_attempt": number
+          "credited_renewal_intent_id": string | null
+          "credited_kopecks": number
           }
           Insert: {
           "id"?: string
@@ -2221,6 +2223,8 @@ export type Database = {
           "consent_accepted_at"?: string | null
           "consent_version"?: string | null
           "order_attempt"?: number
+          "credited_renewal_intent_id"?: string | null
+          "credited_kopecks"?: number
           }
           Update: {
           "id"?: string
@@ -2250,6 +2254,8 @@ export type Database = {
           "consent_accepted_at"?: string | null
           "consent_version"?: string | null
           "order_attempt"?: number
+          "credited_renewal_intent_id"?: string | null
+          "credited_kopecks"?: number
           }
           Relationships: []
         }

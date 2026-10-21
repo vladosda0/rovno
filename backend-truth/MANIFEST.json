@@ -639,6 +639,10 @@
     {
       "path": "supabase/migrations/20261020030000_knowledge_base_storage.sql",
       "sha256": "91ff46999d308d14a87a2f91ee666ebe72e7e4b07cbecafffc479d14b5a4ab95"
+    },
+    {
+      "path": "supabase/migrations/20261021100000_payment_intents_upgrade_credit.sql",
+      "sha256": "d0f336112a029af84fc14d82774d08174a903b84fba96012faf7ffbfecc7a645"
     }
   ],
   "generated_artifacts": [
