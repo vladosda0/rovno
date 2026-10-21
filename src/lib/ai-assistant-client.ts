@@ -31,7 +31,7 @@ export interface InvokeLiveTextAssistantInput {
   chatId?: string;
   /** Optional bounded chat history fallback for hosted `ai-inference` when server continuity is empty. */
   priorTurns?: ReadonlyArray<AiInferencePriorTurn>;
-  /** Hosted `ai-inference` — GigaChat vs Qwen (DashScope). Omit to use Edge default / env. */
+  /** Hosted `ai-inference` backend. Omit to use Edge default / env. */
   llmProvider?: AiLlmProvider;
   /** Tier-limit usage slot: 'chat' (default), 'doc', or 'photo'. Selects which monthly limit the server consumes. */
   usageType?: "chat" | "doc" | "photo";
@@ -365,7 +365,7 @@ function pickAnswerText(body: AIInferenceResponseBody, lang: AiAssistantUiLangua
     : "The assistant could not prepare a reply.";
 }
 
-function mapEchoLlmProvider(raw: string | undefined): AiLlmProvider | undefined {
+function mapEchoLlmProvider(raw: string | undefined): LiveTextAssistantResult["llmProvider"] {
   if (raw === "gigachat" || raw === "qwen") return raw;
   return undefined;
 }

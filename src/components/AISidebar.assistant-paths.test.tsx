@@ -141,6 +141,49 @@ describe("AISidebar assistant paths", () => {
       expect(screen.queryByText("PREVIEW_TITLE")).toBeInTheDocument();
     });
 
+    it("sends GigaChat even when the browser remembers Qwen, and forgets that choice", async () => {
+      localStorage.setItem("ai-sidebar-chat-model", "qwen");
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "which model answers" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+
+      await waitFor(() => {
+        expect(invokeLiveTextAssistantMock).toHaveBeenCalledTimes(1);
+      });
+      const invokeArg = invokeLiveTextAssistantMock.mock.calls[0]?.[0] as { llmProvider?: string };
+      expect(invokeArg.llmProvider).toBe("gigachat");
+      expect(localStorage.getItem("ai-sidebar-chat-model")).toBeNull();
+    });
+
+    it("offers no model choice in the composer menu", () => {
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      // Icon-only trigger, opened from the keyboard (jsdom has no PointerEvent for Radix).
+      const composerMenu = document.querySelector("button[aria-haspopup='menu'] svg.lucide-plus")?.closest("button");
+      if (!composerMenu) throw new Error("composer menu trigger not found");
+      fireEvent.keyDown(composerMenu, { key: "Enter" });
+
+      expect(screen.getByRole("menuitem", { name: "Learn mode" })).toBeInTheDocument();
+      expect(screen.queryByRole("menuitem", { name: "Model" })).not.toBeInTheDocument();
+      expect(screen.queryByText("Qwen")).not.toBeInTheDocument();
+    });
+
     it("passes a UUID chatId on live assistant invoke (session continuity)", async () => {
       const queryClient = createQueryClient();
       render(
@@ -249,6 +292,34 @@ describe("AISidebar assistant paths", () => {
       expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
     });
 
+    it("shows no learn actions under a failure bubble", async () => {
+      invokeLiveTextAssistantMock.mockRejectedValueOnce(new Error("Not allowed for this project."));
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composerMenu = document.querySelector("button[aria-haspopup='menu'] svg.lucide-plus")?.closest("button");
+      if (!composerMenu) throw new Error("composer menu trigger not found");
+      fireEvent.keyDown(composerMenu, { key: "Enter" });
+      fireEvent.click(screen.getByRole("menuitem", { name: "Learn mode" }));
+
+      // The project's thread outlives a test, so earlier answers may already carry the row.
+      const titles = ["Copy", "Rate good", "Rate bad", "Save to Documents", "Regenerate"];
+      const before = titles.map((title) => screen.queryAllByTitle(title).length);
+
+      const composer = screen.getByLabelText("Ask Shurik to explain decisions and tradeoffs...");
+      fireEvent.change(composer, { target: { value: "why cure a slab?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+
+      expect(await screen.findByText("Not allowed for this project.")).toBeInTheDocument();
+      expect(titles.map((title) => screen.queryAllByTitle(title).length)).toEqual(before);
+    });
+
     it("names the composer after the learn-mode hint while learn mode is on", () => {
       render(
         <QueryClientProvider client={createQueryClient()}>
@@ -310,6 +381,45 @@ describe("AISidebar assistant paths", () => {
     });
   });
 
+  describe("learn actions under lines written before the assistant call", () => {
+    beforeEach(() => {
+      setupOwnerWithProjects();
+    });
+
+    it.each([
+      { readiness: { status: "blocked", gate: "unavailable" }, text: "Shurik can't use this project context right now (permissions unavailable)." },
+      { readiness: { status: "blocked", gate: "loading" }, text: "Still loading your permissions for this project. Try again in a moment." },
+      { readiness: { status: "no_project" }, text: "Project data is not available to Shurik yet. Try again shortly." },
+    ] as const)("shows none for $readiness.status $readiness.gate", async ({ readiness, text }) => {
+      liveFlag.current = true;
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composerMenu = document.querySelector("button[aria-haspopup='menu'] svg.lucide-plus")?.closest("button");
+      if (!composerMenu) throw new Error("composer menu trigger not found");
+      fireEvent.keyDown(composerMenu, { key: "Enter" });
+      fireEvent.click(screen.getByRole("menuitem", { name: "Learn mode" }));
+
+      const titles = ["Copy", "Rate good", "Rate bad", "Save to Documents", "Regenerate"];
+      const before = titles.map((title) => screen.queryAllByTitle(title).length);
+
+      vi.spyOn(AiProjectContext, "evaluateProjectTargetedSendReadiness").mockReturnValue(
+        readiness as ReturnType<typeof AiProjectContext.evaluateProjectTargetedSendReadiness>,
+      );
+      const composer = screen.getByLabelText("Ask Shurik to explain decisions and tradeoffs...");
+      fireEvent.change(composer, { target: { value: "why cure a slab?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+      expect((await screen.findAllByText(text, undefined, { timeout: 5000 })).length).toBeGreaterThan(0);
+      expect(titles.map((title) => screen.queryAllByTitle(title).length)).toEqual(before);
+      expect(invokeLiveTextAssistantMock).not.toHaveBeenCalled();
+    }, 10_000);
+  });
+
   describe("legacy proposal queue (flag off)", () => {
     beforeEach(() => {
       liveFlag.current = false;
@@ -347,4 +457,5 @@ describe("AISidebar assistant paths", () => {
       expect(invokeLiveTextAssistantMock).not.toHaveBeenCalled();
     });
   });
+
 });

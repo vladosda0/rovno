@@ -63,4 +63,6 @@ export interface AIMessage {
   liveTextProjectId?: string;
   /** Failed turn that may be re-sent unchanged: the user message it answered and its project. */
   retry?: { userMessageId: string; projectId: string };
+  /** The bubble carries a failure text (access, quota, provider error), not an answer. */
+  failed?: true;
 }

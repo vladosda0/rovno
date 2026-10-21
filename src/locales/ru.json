@@ -2948,7 +2948,6 @@
   "ai.sidebar.composer.reference": "Ссылка",
   "ai.sidebar.composer.tag": "Отметить",
   "ai.sidebar.composer.learnMode": "Режим обучения",
-  "ai.sidebar.composer.model": "Модель",
   "ai.sidebar.composer.attach": "Прикрепить",
   "ai.sidebar.composer.newConversation": "Новый диалог",
   "ai.sidebar.composer.voiceInputAriaLabel": "Голосовой ввод (скоро)",

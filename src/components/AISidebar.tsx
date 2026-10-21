@@ -33,7 +33,6 @@ import {
   ThumbsDown,
   BookmarkPlus,
   RefreshCw,
-  Sparkles,
   FileText,
 } from "lucide-react";
 import { TutorialModal } from "@/components/onboarding/TutorialModal";
@@ -64,11 +63,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -148,9 +142,8 @@ import {
   openClientReportDialog,
 } from "@/lib/client-report-dialog";
 import {
-  type AiLlmProvider,
-  readStoredAiLlmProvider,
-  writeStoredAiLlmProvider,
+  AI_LLM_PROVIDER,
+  clearStoredAiLlmProvider,
 } from "@/lib/ai-llm-provider";
 
 const PROJECT_SUGGESTION_KEYS = [
@@ -851,7 +844,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   const [learnMode, setLearnMode] = useState(false);
   const [automationMode, setAutomationMode] = useState<AutomationMode>("manual");
   const [pendingGeneralProposalInput, setPendingGeneralProposalInput] = useState<string | null>(null);
-  const [aiChatModel, setAiChatModel] = useState<AiLlmProvider>(readStoredAiLlmProvider);
   const [tagPersonCursor, setTagPersonCursor] = useState(0);
   const [referenceTaskCursor, setReferenceTaskCursor] = useState(0);
   const [width, setWidth] = useState(() => {
@@ -1129,8 +1121,8 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   }, [width]);
 
   useEffect(() => {
-    writeStoredAiLlmProvider(aiChatModel);
-  }, [aiChatModel]);
+    clearStoredAiLlmProvider();
+  }, []);
 
   useEffect(() => {
     const legacyProposalTimers = legacyProposalTimersRef.current;
@@ -1513,6 +1505,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                 content: denied,
                 timestamp: new Date().toISOString(),
                 mode: responseMode,
+                failed: true,
               },
             ]);
             return;
@@ -1531,6 +1524,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                 content: liveAssistantNoProjectDataLine(profileAssistantLang, t),
                 timestamp: new Date().toISOString(),
                 mode: responseMode,
+                failed: true,
               },
             ]);
             return;
@@ -1628,6 +1622,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               content: denied,
               timestamp: new Date().toISOString(),
               mode: responseMode,
+              failed: true,
             },
           ]);
           return;
@@ -1646,6 +1641,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               content: liveAssistantNoProjectDataLine(profileAssistantLang, t),
               timestamp: new Date().toISOString(),
               mode: responseMode,
+              failed: true,
             },
           ]);
           return;
@@ -1666,6 +1662,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               content: liveAssistantPermissionsLine("unavailable", profileAssistantLang, t),
               timestamp: new Date().toISOString(),
               mode: responseMode,
+              failed: true,
             },
           ]);
           return;
@@ -1727,7 +1724,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
             aiOutputLanguage: workspaceProfilePreferences?.aiOutputLanguage,
             priorTurns,
             chatId,
-            llmProvider: aiChatModel,
+            llmProvider: AI_LLM_PROVIDER,
             usageType: sendUsageType,
           });
           setWorkLogs((prev) => {
@@ -1785,6 +1782,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               ),
               timestamp: new Date().toISOString(),
               mode: responseMode,
+              failed: true,
               ...(isRetryableAiInferenceFailure(err)
                 ? { retry: { userMessageId, projectId: targetProjectId } }
                 : {}),
@@ -3194,7 +3192,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               ) : null}
             </>
           ) : null}
-          {!isUserMessage && isLearnContext && !message.retry && (
+          {!isUserMessage && isLearnContext && !message.failed && !message.retry && (
             <div className="mt-1.5 flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity">
               <button
                 type="button"
@@ -3335,21 +3333,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
             <span className="flex-1 text-left">{t("ai.sidebar.composer.learnMode")}</span>
             {learnMode ? <Check className="ml-auto h-4 w-4 shrink-0" /> : null}
           </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="gap-2">
-              <Sparkles className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">{t("ai.sidebar.composer.model")}</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="p-1">
-              <DropdownMenuRadioGroup
-                value={aiChatModel}
-                onValueChange={(v) => setAiChatModel(v as AiLlmProvider)}
-              >
-                <DropdownMenuRadioItem value="gigachat">GigaChat</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="qwen">Qwen</DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
           <DropdownMenuItem className="gap-2" onSelect={() => handleAttachFilePhoto()}>
             <Paperclip className="h-4 w-4 shrink-0" />
             {t("ai.sidebar.composer.attach")}
