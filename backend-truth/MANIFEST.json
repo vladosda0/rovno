@@ -651,6 +651,10 @@
     {
       "path": "supabase/migrations/20261022010000_task_delete_clears_final_media.sql",
       "sha256": "4bc0ef2cf064460e2ecb370169f584a93016f506179ec53b1a7103a21d8f11c9"
+    },
+    {
+      "path": "supabase/migrations/20261022030000_knowledge_base_full_text.sql",
+      "sha256": "b1a02d980083213c8852565b8b15007b84eb2ddf003661777d2097d29ce1cc80"
     }
   ],
   "generated_artifacts": [

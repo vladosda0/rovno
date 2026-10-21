@@ -2840,6 +2840,18 @@ export type Database = {
           "full_text_available": boolean
           "created_at": string
           "updated_at": string
+          "doc_status": "active" | "replaced" | "cancelled"
+          "doc_status_since": unknown | null
+          "replaced_by": string | null
+          "edition_date": unknown | null
+          "text_checked_at": unknown | null
+          "text_source_url": string | null
+          "text_pdf_url": string | null
+          "text_label": "verified" | "checking" | null
+          "pending_amendments": Json
+          "applied_amendments": unknown
+          "text_base_year": number | null
+          "recognized_from_scan": boolean
           }
           Insert: {
           "doc_id"?: string
@@ -2863,6 +2875,18 @@ export type Database = {
           "full_text_available"?: boolean
           "created_at"?: string
           "updated_at"?: string
+          "doc_status"?: "active" | "replaced" | "cancelled"
+          "doc_status_since"?: unknown | null
+          "replaced_by"?: string | null
+          "edition_date"?: unknown | null
+          "text_checked_at"?: unknown | null
+          "text_source_url"?: string | null
+          "text_pdf_url"?: string | null
+          "text_label"?: "verified" | "checking" | null
+          "pending_amendments"?: Json
+          "applied_amendments"?: unknown
+          "text_base_year"?: number | null
+          "recognized_from_scan"?: boolean
           }
           Update: {
           "doc_id"?: string
@@ -2886,6 +2910,18 @@ export type Database = {
           "full_text_available"?: boolean
           "created_at"?: string
           "updated_at"?: string
+          "doc_status"?: "active" | "replaced" | "cancelled"
+          "doc_status_since"?: unknown | null
+          "replaced_by"?: string | null
+          "edition_date"?: unknown | null
+          "text_checked_at"?: unknown | null
+          "text_source_url"?: string | null
+          "text_pdf_url"?: string | null
+          "text_label"?: "verified" | "checking" | null
+          "pending_amendments"?: Json
+          "applied_amendments"?: unknown
+          "text_base_year"?: number | null
+          "recognized_from_scan"?: boolean
           }
           Relationships: []
         }
@@ -2900,6 +2936,9 @@ export type Database = {
           "is_published": boolean
           "created_at": string
           "updated_at": string
+          "number": string | null
+          "level": number
+          "amendments": unknown
           }
           Insert: {
           "id"?: string
@@ -2911,6 +2950,9 @@ export type Database = {
           "is_published"?: boolean
           "created_at"?: string
           "updated_at"?: string
+          "number"?: string | null
+          "level"?: number
+          "amendments"?: unknown
           }
           Update: {
           "id"?: string
@@ -2922,6 +2964,9 @@ export type Database = {
           "is_published"?: boolean
           "created_at"?: string
           "updated_at"?: string
+          "number"?: string | null
+          "level"?: number
+          "amendments"?: unknown
           }
           Relationships: []
         }
@@ -3009,6 +3054,24 @@ export type Database = {
           "question"?: string
           "context"?: Json
           "created_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_settings": {
+          Row: {
+          "key": string
+          "value": Json
+          "updated_at": string
+          }
+          Insert: {
+          "key"?: string
+          "value": Json
+          "updated_at"?: string
+          }
+          Update: {
+          "key"?: string
+          "value"?: Json
+          "updated_at"?: string
           }
           Relationships: []
         }
@@ -3438,9 +3501,17 @@ export type Database = {
           }
           Returns: boolean
         }
+        "kb_assistant_clauses": {
+          Args: Record<PropertyKey, never>
+          Returns: unknown
+        }
         "kb_folder_counts": {
           Args: Record<PropertyKey, never>
           Returns: unknown
+        }
+        "kb_sp_full_text_enabled": {
+          Args: Record<PropertyKey, never>
+          Returns: boolean
         }
         "list_canonical_stages_with_works": {
           Args: {
