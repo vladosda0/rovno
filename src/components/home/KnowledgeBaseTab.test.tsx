@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { normalizeKbFullTextFields } from "@/lib/knowledge-base/kbFullText.mjs";
 import type { KbDocument, KbDocumentPageParams } from "@/lib/knowledge-base/api";
 
 const fetchKbFolderCounts = vi.fn();
@@ -11,6 +12,9 @@ vi.mock("@/lib/knowledge-base/api", () => ({
   fetchKbFolderCounts: () => fetchKbFolderCounts(),
   fetchKbDocumentPage: (params: KbDocumentPageParams) => fetchKbDocumentPage(params),
   fetchKbDocumentBySlug: vi.fn(),
+  fetchKbSpFullTextEnabled: () => Promise.resolve(true),
+  fetchKbClauses: vi.fn(),
+  fetchKbDocumentById: vi.fn(),
 }));
 
 import { KnowledgeBaseTab } from "@/components/home/KnowledgeBaseTab";
@@ -37,6 +41,7 @@ function doc(overrides: Partial<KbDocument> = {}): KbDocument {
       { url: "https://www.consultant.ru/document/cons_doc_LAW_1/", kind: "copy" },
     ],
     fullTextAvailable: false,
+    ...normalizeKbFullTextFields({}),
     ...overrides,
   };
 }

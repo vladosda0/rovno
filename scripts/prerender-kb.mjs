@@ -27,13 +27,28 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
+  KB_RESERVED_SLUGS,
   createTranslator,
   fallbackShellWithoutKbPages,
   isSafeSlug,
+  kbFolderPageHtml,
+  kbHubSitemapUrls,
+  kbIndexPageHtml,
   kbPageHtml,
   kbSitemapUrls,
   mergeIntoSitemap,
+  sortKbRows,
 } from "../src/lib/knowledge-base/kbPrerenderConfig.mjs";
+import {
+  KB_FOLDER_PAGE_SIZE,
+  KB_INDEX_PATH,
+  STAGING_ROBOTS_TXT,
+  isStagingBackend,
+  kbFolderPageCount,
+  kbFolderPath,
+  kbLlmsSection,
+} from "../src/lib/knowledge-base/kbSeo.mjs";
+import { KB_FOLDERS, normalizeKbRow } from "../src/lib/knowledge-base/kbConfig.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = path.join(ROOT, "dist");
@@ -43,7 +58,8 @@ const MAX_PAGES = 100; // 100k rows: a runaway guard, the registry is ~7k
 const COLUMNS =
   "doc_id,slug,designation,title,category,folder,display_mode,object_types,domains," +
   "applicability_note,publisher,country,edition,effective_from,last_checked_at,source_links," +
-  "full_text_available,updated_at";
+  "full_text_available,updated_at,doc_status,doc_status_since,replaced_by,edition_date,text_checked_at," +
+  "text_source_url,text_pdf_url,text_label,text_base_year,applied_amendments,pending_amendments,recognized_from_scan";
 
 function log(message) {
   console.log(`[prerender-kb] ${message}`);
@@ -101,6 +117,60 @@ async function fetchPublishedDocuments(env) {
   return rows;
 }
 
+/**
+ * Clauses of one document and the SP switch, read as anon like the rows: RLS
+ * returns no clauses while the switch is off, so a switched-off build renders
+ * the slice-1 page.
+ */
+async function fetchAnon(env, pathAndQuery, range) {
+  const base = env.VITE_SUPABASE_URL.replace(/\/$/, "");
+  const key = env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const response = await fetch(`${base}/rest/v1/${pathAndQuery}`, {
+    headers: { apikey: key, authorization: `Bearer ${key}`, ...(range ? { "Range-Unit": "items", Range: range } : {}) },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (response.status === 404 || response.status === 400) return null;
+  if (!response.ok) throw new Error(`PostgREST ${response.status}: ${(await response.text()).slice(0, 300)}`);
+  return response.json();
+}
+
+async function fetchSpFullText(env) {
+  try {
+    const rows = await fetchAnon(env, "kb_settings?select=value&key=eq.sp_full_text");
+    return Array.isArray(rows) && rows[0]?.value === true;
+  } catch (error) {
+    log(`WARN: SP switch fetch failed, SP pages without text (${error?.message ?? error})`);
+    return false;
+  }
+}
+
+async function fetchClausesOrNone(env, docId) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await fetchClauses(env, docId);
+    } catch (error) {
+      if (attempt >= 2) {
+        log(`WARN: clauses of ${docId} failed twice, page without text (${error?.message ?? error})`);
+        return null;
+      }
+    }
+  }
+}
+
+async function fetchClauses(env, docId) {
+  const out = [];
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const batch = await fetchAnon(
+      env,
+      `kb_clauses?select=anchor,number,level,heading,body,position,amendments&doc_id=eq.${encodeURIComponent(docId)}&order=position.asc`,
+      `${from}-${from + PAGE_ROWS - 1}`,
+    );
+    if (!Array.isArray(batch)) return out;
+    out.push(...batch);
+    if (batch.length < PAGE_ROWS) return out;
+  }
+}
+
 /** CSS chunks carrying the landing/blog styles (code-split out of the entry CSS). */
 async function findLandingCssAssets() {
   const assetsDir = path.join(DIST, "assets");
@@ -140,7 +210,7 @@ async function writePages(outcome) {
     return 0;
   }
 
-  const rows_ = rows.filter((row) => isSafeSlug(row?.slug));
+  const rows_ = rows.filter((row) => isSafeSlug(row?.slug) && !KB_RESERVED_SLUGS.has(row.slug));
   if (rows_.length !== rows.length) log(`WARN: skipped ${rows.length - rows_.length} row(s) with an unusable slug`);
   if (rows_.length === 0) {
     log("WARN: no publishable knowledge base documents — writing 0 pages");
@@ -153,25 +223,92 @@ async function writePages(outcome) {
   const cssAssets = await findLandingCssAssets();
 
   outcome.fetchFailed = true;
+  const env = await loadEnv();
+  const spFullText = await fetchSpFullText(env);
+  let withText = 0;
+  let degraded = 0;
   for (const row of rows_) {
     const dir = path.join(DIST, "baza", row.slug);
     await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, "index.html"), kbPageHtml(template, row, t, cssAssets), "utf8");
+    let clauses = [];
+    if (row.full_text_available === true && (row.folder !== "sp" || spFullText)) {
+      clauses = await fetchClausesOrNone(env, row.doc_id);
+      if (clauses === null) { degraded += 1; clauses = []; }
+    }
+    if (clauses.length) withText += 1;
+    await writeFile(path.join(dir, "index.html"), kbPageHtml(template, row, t, cssAssets, { clauses, spFullText }), "utf8");
+  }
+  log(`full text in ${withText} page(s)${spFullText ? "" : " (SP switch off)"}${degraded ? `, ${degraded} without text after fetch errors` : ""}`);
+
+  // Public hubs: /baza/ and one page per folder (split by KB_FOLDER_PAGE_SIZE),
+  // so every document is two links from the index, not only in the sitemap.
+  const byFolder = new Map(KB_FOLDERS.map((f) => [f, []]));
+  for (const row of rows_) {
+    const folder = byFolder.has(row.folder) ? row.folder : "other";
+    byFolder.get(folder).push(row);
+  }
+  const counts = Object.fromEntries([...byFolder].map(([f, list]) => [f, list.length]));
+  await mkdir(path.join(DIST, "baza"), { recursive: true });
+  await writeFile(path.join(DIST, "baza", "index.html"), kbIndexPageHtml(template, counts, t, cssAssets), "utf8");
+  const hubPaths = [KB_INDEX_PATH];
+  for (const [folder, list] of byFolder) {
+    if (!list.length) continue;
+    const sorted = sortKbRows(list);
+    const pages = kbFolderPageCount(sorted.length);
+    for (let page = 1; page <= pages; page++) {
+      const slice = sorted.slice((page - 1) * KB_FOLDER_PAGE_SIZE, page * KB_FOLDER_PAGE_SIZE);
+      const rel = kbFolderPath(folder, page);
+      const dir = path.join(DIST, ...rel.split("/").filter(Boolean));
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        path.join(dir, "index.html"),
+        kbFolderPageHtml(template, folder, slice, t, { page, pages, total: sorted.length, spFullText, cssAssets }),
+        "utf8",
+      );
+      hubPaths.push(rel);
+    }
+  }
+  log(`wrote ${hubPaths.length} hub page(s) under baza/`);
+
+  // /llms.txt is written by prerender-blog; the base adds its own section.
+  const llmsPath = path.join(DIST, "llms.txt");
+  if (existsSync(llmsPath)) {
+    const fullTextDocs = rows_
+      .filter((r) => r.full_text_available === true && (r.folder !== "sp" || spFullText))
+      .map(normalizeKbRow);
+    const llms = (await readFile(llmsPath, "utf8")).replace(/\n## База знаний Ровно[\s\S]*$/, "\n");
+    await writeFile(llmsPath, llms.trimEnd() + "\n" + kbLlmsSection(counts, t, fullTextDocs), "utf8");
   }
   log(`wrote ${rows_.length} page(s) under baza/`);
 
   const sitemapPath = path.join(DIST, "sitemap.xml");
   const existing = existsSync(sitemapPath) ? await readFile(sitemapPath, "utf8") : null;
   const today = new Date().toISOString().slice(0, 10);
-  await writeFile(sitemapPath, mergeIntoSitemap(existing, kbSitemapUrls(rows_, today)), "utf8");
-  log(`added ${rows_.length} url(s) to sitemap.xml`);
+  await writeFile(
+    sitemapPath,
+    mergeIntoSitemap(existing, [...kbHubSitemapUrls(hubPaths, today), ...kbSitemapUrls(rows_, today)]),
+    "utf8",
+  );
+  log(`added ${hubPaths.length + rows_.length} url(s) to sitemap.xml`);
   outcome.fetchFailed = false;
   return rows_.length;
+}
+
+/**
+ * A staging build serves the same pages as rovno.ai: keep it out of search
+ * whatever happens with the knowledge base fetch.
+ */
+async function closeStagingToCrawlers() {
+  if (!existsSync(DIST)) return;
+  if (!isStagingBackend((await loadEnv()).VITE_SUPABASE_URL)) return;
+  await writeFile(path.join(DIST, "robots.txt"), STAGING_ROBOTS_TXT, "utf8");
+  log("staging backend: robots.txt closes the whole site to crawlers");
 }
 
 async function main() {
   let written = 0;
   const outcome = { fetchFailed: false };
+  await closeStagingToCrawlers();
   try {
     written = await writePages(outcome);
   } finally {

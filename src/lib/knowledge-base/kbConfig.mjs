@@ -4,6 +4,8 @@
 // run the SAME rules: which links are shown, what the source button says, how a
 // title and a date read. Types live in kbConfig.d.mts.
 
+import { kbEditionLine, kbFullTextReadable, kbTextLabel, normalizeKbFullTextFields } from "./kbFullText.mjs";
+
 /** Folder ids in the approved display order (mockup v3, frame 1). */
 export const KB_FOLDERS = [
   "sp",
@@ -163,6 +165,7 @@ export function normalizeKbRow(row) {
     lastCheckedAt: stringOrNull(r.last_checked_at),
     sourceLinks: safeSourceLinks(r.source_links),
     fullTextAvailable: r.full_text_available === true,
+    ...normalizeKbFullTextFields(r),
   };
 }
 
@@ -207,12 +210,19 @@ export function kbPageDescription(doc) {
  * Rows, source buttons and the «full text later» note for one document, shared by
  * the in-app window, the public page and the prerenderer. `t(key, vars)` resolves
  * `home.knowledgeBase.*` locale keys. Empty rows are left out.
+ *
+ * A document with its full text (slice 2) reads its edition from the collected
+ * text («Текст 2017 года, без изменений № 1-4») and carries a «Статус» row with
+ * the label instead of «Проверено» (label v2, frame 3). `spFullText` is the SP
+ * switch (R-10): off, an SP reads exactly as after slice 1.
  */
-export function buildKbDocumentView(doc, t) {
+export function buildKbDocumentView(doc, t, { spFullText = true } = {}) {
+  const readable = kbFullTextReadable(doc, spFullText);
+  const label = readable ? kbTextLabel(doc, t) : null;
   const rows = [];
-  const push = (key, value) => {
+  const push = (key, value, badge) => {
     if (typeof value === "string" && value.trim()) {
-      rows.push({ key, label: t(`home.knowledgeBase.fields.${key}`), value });
+      rows.push({ key, label: t(`home.knowledgeBase.fields.${key}`), value, ...(badge ? { badge } : {}) });
     }
   };
   push("applicability", doc.applicabilityNote);
@@ -220,9 +230,10 @@ export function buildKbDocumentView(doc, t) {
   push("domains", doc.domains.join(", "));
   push("publisher", doc.publisher);
   push("country", doc.country);
-  push("edition", doc.edition);
+  push("edition", (readable && kbEditionLine(doc, t)) || doc.edition);
   push("effectiveFrom", formatKbDate(doc.effectiveFrom));
-  push("checked", formatKbDate(doc.lastCheckedAt));
+  if (label) push("status", label.text, label.kind);
+  else push("checked", formatKbDate(doc.lastCheckedAt));
   const first = doc.sourceLinks[0];
   push("source", first ? sourceRowValue(first.url, t) : t("home.knowledgeBase.noSource"));
 
@@ -235,6 +246,8 @@ export function buildKbDocumentView(doc, t) {
     heading: kbHeading(doc),
     rows,
     buttons,
-    showFullTextLater: doc.displayMode === "full_text" && !doc.fullTextAvailable,
+    readable,
+    label,
+    showFullTextLater: doc.displayMode === "full_text" && !readable,
   };
 }

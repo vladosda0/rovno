@@ -119,6 +119,7 @@ export function DocumentsHubTab() {
       setActiveLeaf(slug);
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
+        next.delete("kbDoc");
         if (slug === DEFAULT_LEAF) next.delete(SUB_TAB_PARAM);
         else next.set(SUB_TAB_PARAM, slug);
         return next;
@@ -189,7 +190,8 @@ export function DocumentsHubTab() {
           if (leaf && VALID_LEAVES.has(leaf)) handleSelect(leaf as LeafSlug);
         }}
       />
-      {ctaFabMobile}
+      {/* Nothing to add on the knowledge-base reading page (slice 2, frame 7). */}
+      {!(activeLeaf === "knowledge-base" && searchParams.has("kbDoc")) && ctaFabMobile}
     </div>
   );
 }

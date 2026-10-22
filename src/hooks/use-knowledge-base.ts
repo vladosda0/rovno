@@ -3,7 +3,10 @@
 
 import { useQuery, type QueryKey } from "@tanstack/react-query";
 import {
+  fetchKbClauses,
+  fetchKbDocumentById,
   fetchKbDocumentBySlug,
+  fetchKbSpFullTextEnabled,
   fetchKbDocumentPage,
   fetchKbFolderCounts,
   type KbDocument,
@@ -18,6 +21,9 @@ export const kbKeys = {
   page: (params: KbDocumentPageParams) =>
     [...kbKeys.all, "page", params.folder ?? "all", params.search.trim(), params.page, params.pageSize ?? "default"] as const,
   doc: (slug: string) => [...kbKeys.all, "doc", slug] as const,
+  docById: (docId: string) => [...kbKeys.all, "doc-id", docId] as const,
+  clauses: (docId: string) => [...kbKeys.all, "clauses", docId] as const,
+  spFullText: () => [...kbKeys.all, "sp-full-text"] as const,
 };
 
 export function useKbFolderCounts() {
@@ -58,5 +64,33 @@ export function useKbDocument(slug: string | undefined, initialData?: KbDocument
     staleTime: STALE,
     // Prerendered /baza/<slug>/ inlines the row (lib/knowledge-base/prerendered-data).
     initialData,
+  });
+}
+
+/** The SP switch (R-10). Until it loads, the full text counts as on: RLS still guards the clauses. */
+export function useKbSpFullText() {
+  return useQuery({
+    queryKey: kbKeys.spFullText(),
+    queryFn: fetchKbSpFullTextEnabled,
+    staleTime: STALE,
+  });
+}
+
+export function useKbClauses(docId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: kbKeys.clauses(docId ?? ""),
+    queryFn: () => fetchKbClauses(docId!),
+    enabled: !!docId && enabled,
+    staleTime: STALE,
+  });
+}
+
+/** The document that replaced this one («Вместо него: …»). */
+export function useKbDocumentById(docId: string | null | undefined) {
+  return useQuery({
+    queryKey: kbKeys.docById(docId ?? ""),
+    queryFn: () => fetchKbDocumentById(docId!),
+    enabled: !!docId,
+    staleTime: STALE,
   });
 }

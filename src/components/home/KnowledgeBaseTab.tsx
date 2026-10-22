@@ -8,6 +8,7 @@
 // document has no file, so the tile carries a source arrow instead of «Скачать».
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookOpen, ChevronLeft, FileText, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,11 +16,17 @@ import { SectionChrome } from "@/components/home/documents-hub/SectionChrome";
 import { FileTile, FolderTile, TileGrid } from "@/components/home/documents-hub/tiles";
 import { EmptyState } from "@/components/home/documents-hub/EmptyState";
 import { KbDocumentDialog } from "@/components/knowledge-base/KbDocumentDialog";
+import { KbReadingPage } from "@/components/knowledge-base/KbReadingPage";
+import { KbLabelBadge } from "@/components/knowledge-base/KbTextLabel";
 import { kbSourceButtons, openKbSource } from "@/components/knowledge-base/kb-view";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useKbDocumentPage, useKbFolderCounts } from "@/hooks/use-knowledge-base";
+import { useKbDocumentPage, useKbFolderCounts, useKbSpFullText } from "@/hooks/use-knowledge-base";
 import type { KbDocument } from "@/lib/knowledge-base/api";
 import { KB_FOLDERS, KB_PAGE_SIZE, displayTitle, formatKbDate, type KbFolder } from "@/lib/knowledge-base/kbConfig.mjs";
+import { kbFullTextReadable, kbTextLabel } from "@/lib/knowledge-base/kbFullText.mjs";
+
+/** The reading page's address inside «Документы» (slice 2). */
+export const KB_READ_PARAM = "kbDoc";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -29,6 +36,18 @@ export function KnowledgeBaseTab() {
   const [search, setSearchState] = useState("");
   const [page, setPage] = useState(0);
   const [openDoc, setOpenDoc] = useState<KbDocument | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const readingSlug = searchParams.get(KB_READ_PARAM);
+  const sp = useKbSpFullText();
+
+  function setReading(slug: string | null) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (slug) next.set(KB_READ_PARAM, slug);
+      else next.delete(KB_READ_PARAM);
+      return next;
+    });
+  }
 
   const debouncedSearch = useDebounce(search.trim(), SEARCH_DEBOUNCE_MS);
   const searching = debouncedSearch !== "";
@@ -71,8 +90,18 @@ export function KnowledgeBaseTab() {
     setSearch("");
   }
 
+  function tileMeta(doc: KbDocument) {
+    if (!kbFullTextReadable(doc, sp.data)) return null;
+    const label = kbTextLabel(doc, (key, vars) => t(key, vars) as string);
+    return label ? <KbLabelBadge kind={label.kind} text={label.text} /> : null;
+  }
+
   const loadFailed = listing ? docs.isError : counts.isError;
   const loading = listing ? docs.isLoading : counts.isLoading;
+
+  if (readingSlug) {
+    return <KbReadingPage slug={readingSlug} onBack={() => setReading(null)} />;
+  }
 
   return (
     <>
@@ -130,6 +159,7 @@ export function KnowledgeBaseTab() {
                   description={tileSecondLine(doc)}
                   icon={FileText}
                   dateAdded={checked ? t("home.knowledgeBase.checkedOn", { date: checked }) : null}
+                  meta={tileMeta(doc)}
                   onClick={() => setOpenDoc(doc)}
                   onView={() => setOpenDoc(doc)}
                   viewLabel={t("home.knowledgeBase.viewDocument")}
@@ -149,6 +179,10 @@ export function KnowledgeBaseTab() {
           if (!open) setOpenDoc(null);
         }}
         doc={openDoc}
+        onRead={(doc) => {
+          setOpenDoc(null);
+          setReading(doc.slug);
+        }}
       />
     </>
   );

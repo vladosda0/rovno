@@ -13,17 +13,17 @@ import {
 
 export type { KbDocumentView, KbSourceButton };
 
-export function buildKbDocumentView(doc: KbDocument, t: TFunction): KbDocumentView {
-  return buildView(doc, (key, vars) => t(key, vars) as string);
+export function buildKbDocumentView(doc: KbDocument, t: TFunction, options?: { spFullText?: boolean }): KbDocumentView {
+  return buildView(doc, (key, vars) => t(key, vars) as string, options);
 }
 
 export function kbSourceButtons(doc: KbDocument, t: TFunction): KbSourceButton[] {
   return buildKbDocumentView(doc, t).buttons;
 }
 
-export function useKbDocumentView(doc: KbDocument | null): KbDocumentView | null {
+export function useKbDocumentView(doc: KbDocument | null, options?: { spFullText?: boolean }): KbDocumentView | null {
   const { t } = useTranslation();
-  return doc ? buildKbDocumentView(doc, t) : null;
+  return doc ? buildKbDocumentView(doc, t, options) : null;
 }
 
 /** Opens a vetted source link in a new tab without handing it our window. */

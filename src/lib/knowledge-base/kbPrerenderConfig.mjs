@@ -4,7 +4,25 @@
 // buildKbDocumentView the SPA renders, so the static snapshot and the hydrated
 // page say the same thing.
 
-import { buildKbDocumentView, kbDocPath, kbPageDescription, kbPageTitle, normalizeKbRow } from "./kbConfig.mjs";
+import { buildKbDocumentView, kbDocPath, normalizeKbRow } from "./kbConfig.mjs";
+import { kbEditionLine, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
+import {
+  KB_INDEX_PATH,
+  kbBreadcrumbTrail,
+  kbCollectionJsonLd,
+  kbDocumentDescription,
+  kbDocumentJsonLd,
+  kbDocumentTitle,
+  kbFirstText,
+  kbFolderDescription,
+  kbFolderItem,
+  kbFolderPath,
+  kbFolderTitle,
+  kbIndexDescription,
+  kbIndexItems,
+  kbIndexTitle,
+  documentsCountText,
+} from "./kbSeo.mjs";
 
 export const SITE_ORIGIN = "https://rovno.ai";
 export const KB_DOC_DATA_ID = "__KB_DOC_DATA__";
@@ -45,13 +63,55 @@ function chromeStart() {
 }
 
 function chromeEnd() {
-  return `<footer style="padding:48px;background:var(--rv-ink);color:var(--rv-cream);font-family:var(--font-body);font-size:13px"><a href="/" style="color:var(--rv-cream)">rovno.ai</a> — ИИ-супервайзер стройки</footer></div>`;
+  return `<footer style="padding:48px;background:var(--rv-ink);color:var(--rv-cream);font-family:var(--font-body);font-size:13px"><a href="/" style="color:var(--rv-cream)">rovno.ai</a> — ИИ-супервайзер стройки · <a href="/baza/" style="color:var(--rv-cream)">База знаний</a> · <a href="/blog/" style="color:var(--rv-cream)">Блог</a></footer></div>`;
+}
+
+/**
+ * The full text in the static page (slice 2, step 2.6): label, edition line and
+ * every clause with its anchor, so a search engine finds the document by a
+ * phrase from a clause and `#p-7-2` lands on the clause before the SPA loads.
+ */
+export function kbFullTextHtml(doc, clauses, t) {
+  if (!clauses.length) return "";
+  const label = kbTextLabel(doc, t);
+  const edition = kbEditionLine(doc, t);
+  const head = [
+    label ? `<span class="rv-kb-label rv-kb-label--${label.kind}">${escapeHtml(label.text)}</span>` : "",
+    edition ? `<span class="rv-kb-edition">${escapeHtml(edition)}</span>` : "",
+  ].join(" ");
+  const number = (c) => (c.number && /^\d/.test(c.number) ? `${escapeHtml(c.number)} ` : "");
+  const body = clauses
+    .map((c) => {
+      const id = escapeHtml(c.anchor);
+      if (c.heading && !c.body) {
+        const tag = c.level === 1 || !/^\d/.test(c.number ?? "") ? "h2" : "h3";
+        return `<${tag} id="${id}">${number(c)}${escapeHtml(c.heading)}</${tag}>`;
+      }
+      const heading = c.heading ? `<strong>${number(c)}${escapeHtml(c.heading)}</strong> ` : `<strong>${number(c)}</strong>`;
+      return `<p id="${id}">${heading}${escapeHtml(c.body)}</p>`;
+    })
+    .join("");
+  return `<section class="rv-kb-text"><p>${head}</p>${body}</section>`;
+}
+
+/** The visible trail; the last entry is the current page and not a link. */
+export function kbBreadcrumbsHtml(trail) {
+  const last = trail.length - 1;
+  const items = trail
+    .map((entry, i) =>
+      i === last
+        ? `<li><span aria-current="page">${escapeHtml(entry.name)}</span></li>`
+        : `<li><a href="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}</a></li>`,
+    )
+    .join("");
+  return `<nav class="rv-breadcrumbs" aria-label="Навигация по разделам"><ol>${items}</ol></nav>`;
 }
 
 /** Markup for #root, mirroring KbDocumentPage's classes so the blog CSS styles it. */
-export function kbDocumentRootHtml(row, t) {
+export function kbDocumentRootHtml(row, t, { clauses = [], spFullText = true } = {}) {
   const doc = normalizeKbRow(row);
-  const view = buildKbDocumentView(doc, t);
+  const view = buildKbDocumentView(doc, t, { spFullText });
+  const fullText = view.readable ? kbFullTextHtml(doc, clauses.map(normalizeKbClause), t) : "";
   const facts = view.rows.length
     ? `<dl class="rv-kb-facts">${view.rows
         .map((r) => `<div class="rv-kb-facts__row"><dt>${escapeHtml(r.label)}</dt><dd>${escapeHtml(r.value)}</dd></div>`)
@@ -72,10 +132,11 @@ export function kbDocumentRootHtml(row, t) {
   const category = doc.category ? `<p class="rv-article-subtitle">${escapeHtml(doc.category)}</p>` : "";
   return `${chromeStart()}
   <main><article class="rv-kb-doc"><section class="rv-section" style="padding:64px 48px 96px">
-    <nav class="rv-breadcrumbs" aria-label="Навигация по разделам"><ol><li><span>${escapeHtml(t("home.knowledgeBase.title"))}</span></li><li><span aria-current="page">${escapeHtml(t(`home.knowledgeBase.folders.${doc.folder}.title`))}</span></li></ol></nav>
+    ${kbBreadcrumbsHtml(kbBreadcrumbTrail(t, { doc }))}
     <header class="rv-article-header"><h1 class="rv-article-title">${escapeHtml(view.heading)}</h1>${category}</header>
     ${facts}${fullTextNote}
     <div class="rv-kb-actions">${buttons}${askShurik}</div>
+    ${fullText}
   </section></article></main>
   ${chromeEnd()}`;
 }
@@ -87,16 +148,19 @@ export function stripCanonicalTags(html) {
     .replace(/[ \t]*<meta property="og:url"[^>]*>\n?/g, "");
 }
 
-/**
- * The full static page from the app-shell template. FUNCTION replacements only:
- * a `$&`-style sequence in a title must not splice template fragments in.
- */
-export function kbPageHtml(template, row, t, cssAssets = []) {
-  const doc = normalizeKbRow(row);
-  const title = kbPageTitle(doc);
-  const description = kbPageDescription(doc);
-  const canonical = `${SITE_ORIGIN}${kbDocPath(doc.slug)}`;
+export { documentsCountText };
 
+function jsonLdTag(jsonLd) {
+  return `<script type="application/ld+json" id="rv-jsonld">${jsonForScriptTag(jsonLd)}</script>`;
+}
+
+/**
+ * The app-shell template with this page's head: title, description, a single
+ * canonical, og/twitter tags, JSON-LD, optional robots. FUNCTION replacements
+ * only: a `$&`-style sequence in a title must not splice template fragments in.
+ */
+export function withKbHead(template, { title, description, canonicalPath, ogType = "article", jsonLd = null, robots = null, cssAssets = [] }) {
+  const canonical = `${SITE_ORIGIN}${canonicalPath}`;
   let html = stripCanonicalTags(template);
   html = html.replace(/<title>[\s\S]*?<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
   html = html.replace(/<meta name="description"[^>]*\/>/, () => `<meta name="description" content="${escapeHtml(description)}" />`);
@@ -106,20 +170,125 @@ export function kbPageHtml(template, row, t, cssAssets = []) {
     () => `<meta property="og:description" content="${escapeHtml(description)}" />`,
   );
   html = html.replace(/<meta name="twitter:title"[^>]*\/>/, () => `<meta name="twitter:title" content="${escapeHtml(title)}" />`);
-  html = html.replace(/<meta property="og:type"[^>]*\/>/, () => `<meta property="og:type" content="article" />`);
+  html = html.replace(/<meta property="og:type"[^>]*\/>/, () => `<meta property="og:type" content="${ogType}" />`);
 
   const head = [
     `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
     `<meta property="og:url" content="${escapeHtml(canonical)}" />`,
     `<meta property="og:site_name" content="${escapeHtml(SITE_NAME)}" />`,
-    ...(/<meta property="og:type"/.test(html) ? [] : [`<meta property="og:type" content="article" />`]),
+    ...(/<meta property="og:type"/.test(html) ? [] : [`<meta property="og:type" content="${ogType}" />`]),
+    ...(robots ? [`<meta name="robots" content="${escapeHtml(robots)}" />`] : []),
+    ...(jsonLd ? [jsonLdTag(jsonLd)] : []),
     ...cssAssets.map((href) => `<link rel="stylesheet" href="${escapeHtml(href)}" />`),
   ].join("\n    ");
-  html = html.replace("</head>", () => `    ${head}\n  </head>`);
+  return html.replace("</head>", () => `    ${head}\n  </head>`);
+}
 
+/** The full static document page from the app-shell template. */
+export function kbPageHtml(template, row, t, cssAssets = [], fullText = {}) {
+  const doc = normalizeKbRow(row);
+  const spFullText = fullText.spFullText ?? true;
+  const clauses = (fullText.clauses ?? []).map(normalizeKbClause);
+  const description = kbDocumentDescription(doc, t, { spFullText, firstText: kbFirstText(clauses) });
+  let html = withKbHead(template, {
+    title: kbDocumentTitle(doc, { spFullText }),
+    description,
+    canonicalPath: kbDocPath(doc.slug),
+    jsonLd: kbDocumentJsonLd(doc, t, { clauses, spFullText, description }),
+    cssAssets,
+  });
   const data = `<script type="application/json" id="${KB_DOC_DATA_ID}">${jsonForScriptTag(row)}</script>`;
-  html = html.replace(/<div id="root"><\/div>/, () => `<div id="root">${kbDocumentRootHtml(row, t)}</div>\n    ${data}`);
+  html = html.replace(/<div id="root"><\/div>/, () => `<div id="root">${kbDocumentRootHtml(row, t, fullText)}</div>\n    ${data}`);
   return html;
+}
+
+const H1 = 'style="font-family:var(--font-display);font-size:56px;line-height:1;letter-spacing:-0.03em;color:var(--rv-blue);margin:16px 0 0"';
+const LEAD = 'style="font-family:var(--font-body);font-size:18px;color:var(--rv-blue);opacity:.8;margin-top:12px"';
+
+/** /baza/: every folder with its count and description, each a link. */
+export function kbIndexRootHtml(counts, t) {
+  const items = kbIndexItems(counts, t);
+  const total = items.reduce((n, i) => n + i.count, 0);
+  const list = items
+    .map(
+      (i) =>
+        `<li class="rv-kb-folder"><a href="${escapeHtml(i.path)}"><strong>${escapeHtml(i.name)}</strong></a><span>${escapeHtml(i.description)} · ${escapeHtml(documentsCountText(t, i.count))}</span></li>`,
+    )
+    .join("");
+  return `${chromeStart()}
+  <main><section class="rv-section rv-kb-hub" style="padding:64px 48px 96px">
+    ${kbBreadcrumbsHtml(kbBreadcrumbTrail(t))}
+    <h1 ${H1}>${escapeHtml(t("home.knowledgeBase.title"))}</h1>
+    <p ${LEAD}>${escapeHtml(t("home.knowledgeBase.subtitle"))} ${escapeHtml(t("home.knowledgeBase.public.total", { count: total }))}</p>
+    <ul class="rv-kb-folders">${list}</ul>
+  </section></main>
+  ${chromeEnd()}`;
+}
+
+export function kbIndexPageHtml(template, counts, t, cssAssets = []) {
+  const items = kbIndexItems(counts, t);
+  const total = items.reduce((n, i) => n + i.count, 0);
+  const title = kbIndexTitle();
+  const description = kbIndexDescription(total);
+  const html = withKbHead(template, {
+    title,
+    description,
+    canonicalPath: KB_INDEX_PATH,
+    ogType: "website",
+    jsonLd: kbCollectionJsonLd(t, { items, name: title, description }),
+    cssAssets,
+  });
+  return html.replace(/<div id="root"><\/div>/, () => `<div id="root">${kbIndexRootHtml(counts, t)}</div>`);
+}
+
+function pagerHtml(folder, page, pages) {
+  if (pages <= 1) return "";
+  const links = [];
+  for (let p = 1; p <= pages; p++) {
+    links.push(p === page ? `<span aria-current="page">${p}</span>` : `<a href="${escapeHtml(kbFolderPath(folder, p))}">${p}</a>`);
+  }
+  return `<nav class="rv-kb-pager" aria-label="Страницы раздела">${links.join(" ")}</nav>`;
+}
+
+/** /baza/razdel/<folder>/[<page>/]: the folder's documents as links, with edition or label. */
+export function kbFolderRootHtml(folder, docs, t, { page = 1, pages = 1, total = docs.length, spFullText = true } = {}) {
+  const list = docs
+    .map((d) => {
+      const item = kbFolderItem(d, t, { spFullText });
+      const label = item.label ? `<span class="rv-kb-label rv-kb-label--${item.label.kind}">${escapeHtml(item.label.text)}</span> ` : "";
+      const note = item.note ? `<span>${label}${escapeHtml(item.note)}</span>` : label ? `<span>${label}</span>` : "";
+      return `<li class="rv-kb-doc-item"><a href="${escapeHtml(item.path)}">${escapeHtml(item.name)}</a>${note}</li>`;
+    })
+    .join("");
+  const name = t(`home.knowledgeBase.folders.${folder}.title`);
+  return `${chromeStart()}
+  <main><section class="rv-section rv-kb-hub" style="padding:64px 48px 96px">
+    ${kbBreadcrumbsHtml(kbBreadcrumbTrail(t, { folder }))}
+    <h1 ${H1}>${escapeHtml(name)}</h1>
+    <p ${LEAD}>${escapeHtml(t(`home.knowledgeBase.folders.${folder}.description`))} · ${escapeHtml(documentsCountText(t, total))}</p>
+    <ul class="rv-kb-doc-list">${list}</ul>
+    ${pagerHtml(folder, page, pages)}
+  </section></main>
+  ${chromeEnd()}`;
+}
+
+export function kbFolderPageHtml(template, folder, rows, t, { page = 1, pages = 1, total = rows.length, spFullText = true, cssAssets = [] } = {}) {
+  const docs = rows.map(normalizeKbRow);
+  const title = kbFolderTitle(folder, t, page);
+  const description = kbFolderDescription(folder, t, total);
+  const items = docs.map((d) => kbFolderItem(d, t, { spFullText }));
+  const html = withKbHead(template, {
+    title,
+    description,
+    canonicalPath: kbFolderPath(folder, page),
+    ogType: "website",
+    jsonLd: kbCollectionJsonLd(t, { folder, page, items, name: title, description }),
+    cssAssets,
+  });
+  return html.replace(
+    /<div id="root"><\/div>/,
+    () => `<div id="root">${kbFolderRootHtml(folder, docs, t, { page, pages, total, spFullText })}</div>`,
+  );
 }
 
 /** One sitemap <url> per publishable row; lastmod from updated_at, else today. */
@@ -134,6 +303,24 @@ export function kbSitemapUrls(rows, today) {
 }
 
 /** Append entries to the sitemap prerender-blog wrote (or start one if absent). */
+/** Sitemap lines for the index and folder pages (paths from kbFolderPath). */
+export function kbHubSitemapUrls(paths, today) {
+  return paths.map((p) => `  <url><loc>${escapeHtml(`${SITE_ORIGIN}${p}`)}</loc><lastmod>${today}</lastmod></url>`);
+}
+
+/** Slugs a document cannot take: they are the public folder pages' segment. */
+export const KB_RESERVED_SLUGS = new Set(["razdel"]);
+
+/** Sorted by designation, title, doc_id. */
+export function sortKbRows(rows) {
+  const key = (v) => (typeof v === "string" ? v : "");
+  return [...rows].sort((a, b) => {
+    const da = key(a.designation), db = key(b.designation);
+    if (!da !== !db) return da ? -1 : 1;
+    return da.localeCompare(db, "ru") || key(a.title).localeCompare(key(b.title), "ru") || key(a.doc_id).localeCompare(key(b.doc_id));
+  });
+}
+
 export function mergeIntoSitemap(xml, lines) {
   const body = lines.join("\n");
   if (typeof xml === "string" && xml.includes("</urlset>")) {

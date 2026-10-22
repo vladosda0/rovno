@@ -181,3 +181,41 @@ describe("fallbackShellWithoutKbPages (the landing-canonical guard)", () => {
     expect(fallbackShellWithoutKbPages(stripCanonicalTags(stamped), { pagesWritten: 0, fetchFailed: true })).toBeNull();
   });
 });
+
+describe("full text in the static page (docs-library slice 2, step 2.6)", () => {
+  const FULL = {
+    ...ROW,
+    full_text_available: true,
+    text_label: "checking",
+    text_base_year: 2017,
+    edition_date: "2017-08-28",
+    text_checked_at: "2026-10-22",
+    text_source_url: "https://minstroyrf.gov.ru/docs/14844/",
+    pending_amendments: [{ no: 1, url: "https://minstroyrf.gov.ru/docs/17946/" }],
+  };
+  const CLAUSES = [
+    { anchor: "p-4", number: "4", level: 1, heading: "Общие положения", body: "", position: 1 },
+    { anchor: "p-4-7", number: "4.7", level: 2, heading: null, body: "Учет работ <ведут> в журнале.", position: 2 },
+  ];
+
+  it("puts every clause with its anchor, the label and the edition line into the HTML", () => {
+    const html = kbDocumentRootHtml(FULL, t, { clauses: CLAUSES, spFullText: true });
+    expect(html).toContain('<h2 id="p-4">4 Общие положения</h2>');
+    expect(html).toContain('<p id="p-4-7"><strong>4.7 </strong>Учет работ &lt;ведут&gt; в журнале.</p>');
+    expect(html).toContain('class="rv-kb-label rv-kb-label--checking">Проверяется</span>');
+    expect(html).toContain("Текст 2017 года, без изменений № 1");
+    expect(html).not.toContain(t("home.knowledgeBase.fullTextLater"));
+  });
+
+  it("with the SP switch off renders the slice-1 page: no text, the «later» line", () => {
+    const html = kbDocumentRootHtml(FULL, t, { clauses: CLAUSES, spFullText: false });
+    expect(html).not.toContain('id="p-4-7"');
+    expect(html).not.toContain("rv-kb-label");
+    expect(html).toContain(t("home.knowledgeBase.fullTextLater"));
+  });
+
+  it("writes no text block for a document without clauses", () => {
+    expect(kbDocumentRootHtml(FULL, t, { clauses: [] })).not.toContain("rv-kb-text");
+    expect(kbPageHtml(TEMPLATE, FULL, t, [], { clauses: CLAUSES })).toContain('id="p-4-7"');
+  });
+});

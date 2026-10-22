@@ -125,4 +125,13 @@ describe("DocumentsHubTab", () => {
       expect(screen.getByTestId("stub-document-templates")).toBeInTheDocument();
     });
   });
+
+  it("leaves the knowledge base reading page when another section is picked", async () => {
+    renderHub("/home?docTab=knowledge-base&kbDoc=sp-71-13330");
+    const docTemplatesButton = await screen.findByRole("button", { name: /Document templates/i });
+    fireEvent.click(docTemplatesButton);
+    await waitFor(() => {
+      expect(screen.getByTestId("location-search").textContent).toBe("?docTab=document-templates");
+    });
+  });
 });

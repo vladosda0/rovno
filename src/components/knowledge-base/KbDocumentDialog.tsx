@@ -4,7 +4,7 @@
 // source link (official first) before «Закрыть».
 
 import { useTranslation } from "react-i18next";
-import { ExternalLink } from "lucide-react";
+import { BookOpen, ExternalLink } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,17 +15,23 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { KbDocument } from "@/lib/knowledge-base/api";
+import { useKbSpFullText } from "@/hooks/use-knowledge-base";
 import { useKbDocumentView } from "./kb-view";
+import { KbTextLabel } from "./KbTextLabel";
 
 interface KbDocumentDialogProps {
   doc: KbDocument | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Opens the reading page (slice 2). Without it the window has no «Читать полный текст». */
+  onRead?: (doc: KbDocument) => void;
 }
 
-export function KbDocumentDialog({ doc, open, onOpenChange }: KbDocumentDialogProps) {
+export function KbDocumentDialog({ doc, open, onOpenChange, onRead }: KbDocumentDialogProps) {
   const { t } = useTranslation();
-  const view = useKbDocumentView(doc);
+  const sp = useKbSpFullText();
+  const view = useKbDocumentView(doc, { spFullText: sp.data });
+  const canRead = !!doc && !!view?.readable && !!onRead;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -41,7 +47,9 @@ export function KbDocumentDialog({ doc, open, onOpenChange }: KbDocumentDialogPr
               {view.rows.map((row) => (
                 <div key={row.key} className="contents">
                   <dt className="text-caption text-muted-foreground">{row.label}</dt>
-                  <dd className="text-body-sm text-foreground break-words">{row.value}</dd>
+                  <dd className="text-body-sm text-foreground break-words">
+                    {row.badge && doc ? <KbTextLabel doc={doc} kind={row.badge} text={row.value} /> : row.value}
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -52,8 +60,14 @@ export function KbDocumentDialog({ doc, open, onOpenChange }: KbDocumentDialogPr
         </div>
 
         <DialogFooter className="border-t border-border px-5 py-4 gap-2 sm:gap-2 flex-col sm:flex-row">
+          {canRead && (
+            <Button onClick={() => onRead!(doc!)}>
+              <BookOpen className="h-4 w-4 mr-1.5" />
+              {t("home.knowledgeBase.reader.read")}
+            </Button>
+          )}
           {view?.buttons.map((button, index) => (
-            <Button key={button.href} asChild variant={index === 0 ? "default" : "outline"}>
+            <Button key={button.href} asChild variant={index === 0 && !canRead ? "default" : "outline"}>
               <a href={button.href} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4 mr-1.5" />
                 {button.label}

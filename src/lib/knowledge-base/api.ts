@@ -6,6 +6,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeKbClause, type KbClause } from "./kbFullText.mjs";
 import {
   KB_FOLDERS,
   KB_PAGE_SIZE,
@@ -18,10 +19,13 @@ import {
 const rawSupabase = supabase as unknown as SupabaseClient;
 
 export type KbDocument = KbDocumentShape;
+export type { KbClause };
 
 export const KB_DOCUMENT_COLUMNS =
   "doc_id, slug, designation, title, category, folder, display_mode, object_types, domains, " +
-  "applicability_note, publisher, country, edition, effective_from, last_checked_at, source_links, full_text_available";
+  "applicability_note, publisher, country, edition, effective_from, last_checked_at, source_links, full_text_available, " +
+  "doc_status, doc_status_since, replaced_by, edition_date, text_checked_at, text_source_url, text_pdf_url, " +
+  "text_label, text_base_year, applied_amendments, pending_amendments, recognized_from_scan";
 
 const FOLDER_SET: ReadonlySet<string> = new Set(KB_FOLDERS);
 
@@ -89,4 +93,49 @@ export async function fetchKbDocumentBySlug(slug: string): Promise<KbDocument | 
     .maybeSingle();
   if (error) throw error;
   return data ? normalizeKbDocument(data as unknown as Record<string, unknown>) : null;
+}
+
+export async function fetchKbDocumentById(docId: string): Promise<KbDocument | null> {
+  const { data, error } = await rawSupabase
+    .from("kb_documents")
+    .select(KB_DOCUMENT_COLUMNS)
+    .eq("doc_id", docId)
+    .eq("is_published", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? normalizeKbDocument(data as unknown as Record<string, unknown>) : null;
+}
+
+/** PostgREST caps one response at 1000 rows; a long СП (СП 30: 450 clauses) fits, a code may not. */
+const CLAUSE_PAGE = 1000;
+
+/**
+ * Published clauses of one document in reading order (slice 2). RLS returns
+ * none while the SP switch is off or the document has no full text.
+ */
+export async function fetchKbClauses(docId: string): Promise<KbClause[]> {
+  const out: KbClause[] = [];
+  for (let from = 0; ; from += CLAUSE_PAGE) {
+    const { data, error } = await rawSupabase
+      .from("kb_clauses")
+      .select("anchor, number, level, heading, body, position, amendments")
+      .eq("doc_id", docId)
+      .order("position", { ascending: true })
+      .range(from, from + CLAUSE_PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as unknown as Record<string, unknown>[];
+    out.push(...rows.map(normalizeKbClause));
+    if (rows.length < CLAUSE_PAGE) return out;
+  }
+}
+
+/** The SP full-text switch (R-10). Only JSON true is on, like kb_sp_full_text_enabled(). */
+export async function fetchKbSpFullTextEnabled(): Promise<boolean> {
+  const { data, error } = await rawSupabase
+    .from("kb_settings")
+    .select("value")
+    .eq("key", "sp_full_text")
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { value?: unknown } | null)?.value === true;
 }

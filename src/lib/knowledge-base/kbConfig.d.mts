@@ -1,5 +1,7 @@
 // Type surface for the shared plain-ESM knowledge-base helpers (kbConfig.mjs).
 
+import type { KbFullTextFields, KbLabelKind, KbTextLabel } from "./kbFullText.mjs";
+
 export type KbFolder =
   | "sp"
   | "gost"
@@ -42,7 +44,7 @@ export declare function sanitizeSearchTerm(input: unknown): string;
 export declare function searchOrFilter(input: unknown): string | null;
 export declare function kbDocPath(slug: string): string;
 
-export interface KbDocumentShape {
+export interface KbDocumentBaseShape {
   docId: string;
   slug: string;
   designation: string | null;
@@ -62,6 +64,8 @@ export interface KbDocumentShape {
   fullTextAvailable: boolean;
 }
 
+export type KbDocumentShape = KbDocumentBaseShape & KbFullTextFields;
+
 export declare function normalizeKbRow(row: unknown): KbDocumentShape;
 export declare function kbHeading(doc: { designation?: string | null; title: string }): string;
 export declare const KB_SITE_SECTION: string;
@@ -78,6 +82,8 @@ export interface KbFieldRow {
   key: string;
   label: string;
   value: string;
+  /** Set on the «Статус» row: the label colour. */
+  badge?: KbLabelKind;
 }
 
 export interface KbSourceButton {
@@ -89,11 +95,18 @@ export interface KbDocumentView {
   heading: string;
   rows: KbFieldRow[];
   buttons: KbSourceButton[];
+  /** The full text can be opened (collected, and not hidden by the SP switch). */
+  readable: boolean;
+  label: KbTextLabel | null;
   showFullTextLater: boolean;
 }
 
 export type KbTranslate = (key: string, vars?: Record<string, unknown>) => string;
 
-export declare function buildKbDocumentView(doc: KbDocumentShape, t: KbTranslate): KbDocumentView;
+export declare function buildKbDocumentView(
+  doc: KbDocumentShape,
+  t: KbTranslate,
+  options?: { spFullText?: boolean },
+): KbDocumentView;
 
 export declare function sourceRowValue(url: string, t: KbTranslate): string;

@@ -10,11 +10,20 @@ import { Link, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BlogShell } from "@/components/blog/BlogShell";
 import { useDocumentHead } from "@/lib/blog/seo";
-import { useKbDocument } from "@/hooks/use-knowledge-base";
+import { useKbClauses, useKbDocument, useKbSpFullText } from "@/hooks/use-knowledge-base";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useKbDocumentView } from "@/components/knowledge-base/kb-view";
 import { readPrerenderedKbDocument } from "@/lib/knowledge-base/prerendered-data";
-import { kbDocPath, kbPageDescription, kbPageTitle } from "@/lib/knowledge-base/kbConfig.mjs";
+import { KbReader } from "@/components/knowledge-base/KbReader";
+import { kbDocPath } from "@/lib/knowledge-base/kbConfig.mjs";
+import {
+  kbBreadcrumbTrail,
+  kbDocumentDescription,
+  kbDocumentJsonLd,
+  kbDocumentTitle,
+  kbFirstText,
+} from "@/lib/knowledge-base/kbSeo.mjs";
+import { Breadcrumbs } from "@/components/blog/Breadcrumbs";
 
 /** Sign-up, the same target as the landing and blog CTA for a guest (useLandingCta). */
 const SIGN_UP_PATH = "/auth/signup";
@@ -28,19 +37,29 @@ export default function KbDocumentPage() {
   // (same trap BlogPostPage documents).
   const initialDoc = useMemo(() => (slug ? readPrerenderedKbDocument(slug) : undefined), [slug]);
   const { data: doc, isLoading, isError, refetch, isFetching } = useKbDocument(slug, initialDoc);
-  const view = useKbDocumentView(doc ?? null);
+  const sp = useKbSpFullText();
+  const view = useKbDocumentView(doc ?? null, { spFullText: sp.data });
+  // Slice 2: the full text under the card (frame 6). The SP switch off reads as
+  // slice 1: no text, the «full text later» line, a #p-… link stays on the card.
+  const clauses = useKbClauses(doc?.docId, !!view?.readable);
   // «Спросить Шурика» is for guests only (step 1.6): a signed-in user gets it with
   // slice 4, when Shurik answers from the base. Hidden while auth is still loading.
   const { status: authStatus } = useRuntimeAuth();
   const showAskShurik = authStatus === "guest";
 
+  const tr = (key: string, vars?: Record<string, unknown>) => t(key, vars) as string;
+  const clauseList = clauses.data ?? [];
+  const description = doc
+    ? kbDocumentDescription(doc, tr, { spFullText: sp.data, firstText: kbFirstText(clauseList) })
+    : "";
   useDocumentHead(
     doc
       ? {
-          title: kbPageTitle(doc),
-          description: kbPageDescription(doc),
+          title: kbDocumentTitle(doc, { spFullText: sp.data }),
+          description,
           canonicalPath: kbDocPath(doc.slug),
           ogType: "article",
+          jsonLd: kbDocumentJsonLd(doc, tr, { clauses: clauseList, spFullText: sp.data, description }),
         }
       : null,
   );
@@ -92,16 +111,7 @@ export default function KbDocumentPage() {
     <BlogShell>
       <article className="rv-kb-doc">
         <section className="rv-section" style={{ padding: "64px 48px 96px" }}>
-          <nav className="rv-breadcrumbs" aria-label="Навигация по разделам">
-            <ol>
-              <li>
-                <span>{t("home.knowledgeBase.title")}</span>
-              </li>
-              <li>
-                <span aria-current="page">{t(`home.knowledgeBase.folders.${doc.folder}.title`)}</span>
-              </li>
-            </ol>
-          </nav>
+          <Breadcrumbs trail={kbBreadcrumbTrail(tr, { doc })} />
           <header className="rv-article-header">
             <h1 className="rv-article-title">{view.heading}</h1>
             {doc.category && <p className="rv-article-subtitle">{doc.category}</p>}
@@ -139,6 +149,12 @@ export default function KbDocumentPage() {
               </Link>
             )}
           </div>
+
+          {view.readable && clauses.data && clauses.data.length > 0 && (
+            <div className="rv-kb-reader">
+              <KbReader doc={doc} clauses={clauses.data} source={null} variant="guest" />
+            </div>
+          )}
         </section>
       </article>
     </BlogShell>

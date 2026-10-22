@@ -154,6 +154,8 @@ interface FileTileProps {
   iconColor?: string;
   /** ISO date string or pre-formatted "YYYY-MM-DD". Shown in the meta row. */
   dateAdded?: string | null;
+  /** Replaces the date in the meta row (the knowledge-base label). */
+  meta?: ReactNode;
   onClick?: () => void;
   onDownload?: () => void;
   onView?: () => void;
@@ -173,6 +175,7 @@ export function FileTile({
   icon: Icon = FileText,
   iconColor = "text-accent",
   dateAdded,
+  meta,
   onClick,
   onDownload,
   onView,
@@ -215,9 +218,11 @@ export function FileTile({
         {description && (
           <p className="line-clamp-2 text-caption text-muted-foreground">{description}</p>
         )}
-        {dateAdded && (
+        {meta ? (
+          <div className="text-caption">{meta}</div>
+        ) : dateAdded ? (
           <p className="text-caption text-muted-foreground">{dateAdded}</p>
-        )}
+        ) : null}
         <div className="mt-auto flex items-center justify-between gap-1 pt-1">
           <div className="flex gap-1">
             {onView && (
