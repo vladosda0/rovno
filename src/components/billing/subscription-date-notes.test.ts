@@ -6,7 +6,12 @@ import ruLocale from "@/locales/ru.json";
 // SubscriptionSection formats the period end with these options and passes it as
 // {{date}}; in ru-RU the result already ends in "г.".
 const DATE_OPTIONS: Intl.DateTimeFormatOptions = { day: "numeric", month: "long", year: "numeric" };
-const KEYS = ["settings.billing.autoRenewOffNote", "settings.billing.graceNote"] as const;
+const KEYS = [
+  "settings.billing.autoRenewOffNote",
+  "settings.billing.graceNote",
+  "plans.dialog.downgradeConfirmBody",
+  "billing.checkout.alreadySubscribed.description",
+] as const;
 
 async function render(lng: "ru" | "en", key: string) {
   const i18n = i18next.createInstance();
