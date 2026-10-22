@@ -104,7 +104,7 @@ export default function ProjectDashboard() {
 
   return (
     <div className="space-y-sp-2">
-      <div className="glass rounded-card p-sp-3">
+      <div className="glass relative z-10 rounded-card p-sp-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-sp-3">
           <div className="space-y-2">
             <div>

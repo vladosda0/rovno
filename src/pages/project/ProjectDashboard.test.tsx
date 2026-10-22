@@ -132,4 +132,11 @@ describe("ProjectDashboard", () => {
     renderProjectDashboard("project-1");
     expect(screen.getByText("AI Description")).toBeInTheDocument();
   });
+
+  it("rovno#236: the project card stacks above the cards after it, so the address hints are not covered", () => {
+    const { container } = renderProjectDashboard("project-1");
+    const card = container.querySelector(".glass.rounded-card");
+    expect(card?.className).toMatch(/\brelative\b/);
+    expect(card?.className).toMatch(/\bz-10\b/);
+  });
 });
