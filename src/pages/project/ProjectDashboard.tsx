@@ -7,6 +7,7 @@ import {
   useDocuments,
   useMedia,
   usePermission,
+  useCurrentUser,
 } from "@/hooks/use-mock-data";
 import {
   useEstimateV2FinanceProjectSummaryFromWorkspace,
@@ -22,7 +23,6 @@ import { QuickActions } from "@/components/dashboard/QuickActions";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useToast } from "@/hooks/use-toast";
 import {
   getProjectDomainAccess,
   projectDomainAllowsManage,
@@ -31,14 +31,15 @@ import {
 } from "@/lib/permissions";
 import { seamAllowsClientReport } from "@/lib/client-report-dialog";
 import { resolveActionState } from "@/lib/permission-contract-actions";
-import { Copy, Info, LayoutDashboard, MapPin } from "lucide-react";
+import { ProjectAddressRow } from "@/components/dashboard/ProjectAddressRow";
+import { useUpdateWorkspaceProjectAddress } from "@/hooks/use-workspace-source";
+import { Info, LayoutDashboard } from "lucide-react";
 
 export default function ProjectDashboard() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const projectId = id!;
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
@@ -85,15 +86,8 @@ export default function ProjectDashboard() {
   const canContributeGallery = resolveActionState(perm.role, "documents_media", "upload") === "enabled";
   const canManageProcurement = projectDomainAllowsManage(procurementAccess);
 
-  const handleCopyAddress = async () => {
-    if (!project?.address) return;
-    try {
-      await navigator.clipboard.writeText(project.address);
-      toast({ title: t("projectDashboard.copied") });
-    } catch {
-      toast({ title: t("projectDashboard.copyFailed"), variant: "destructive" });
-    }
-  };
+  const currentUser = useCurrentUser();
+  const updateAddress = useUpdateWorkspaceProjectAddress(projectId);
 
   if (!project) {
     return (
@@ -120,26 +114,18 @@ export default function ProjectDashboard() {
               </p>
             </div>
 
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("projectDashboard.aiDescription")}</p>
-              <p className="text-body-sm text-foreground/90 line-clamp-2">
-                {project.ai_description || t("projectDashboard.aiDescriptionPlaceholder")}
-              </p>
-            </div>
+            {project.ai_description ? (
+              <div className="space-y-1">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("projectDashboard.aiDescription")}</p>
+                <p className="text-body-sm text-foreground/90 line-clamp-2">{project.ai_description}</p>
+              </div>
+            ) : null}
 
-            <div className="flex items-center gap-2 rounded-panel bg-muted/40 px-2 py-1.5">
-              <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              {project.address ? (
-                <>
-                  <span className="text-caption text-foreground flex-1 truncate">{project.address}</span>
-                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleCopyAddress} aria-label={t("projectDashboard.copyAddress")}>
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </>
-              ) : (
-                <span className="text-caption text-muted-foreground">{t("projectDashboard.addAddress")}</span>
-              )}
-            </div>
+            <ProjectAddressRow
+              address={project.address}
+              canEdit={perm.role === "owner" && Boolean(currentUser?.id) && project.owner_id === currentUser?.id}
+              onSave={(address) => updateAddress.mutateAsync(address)}
+            />
           </div>
 
           <div className="rounded-panel bg-muted/30 p-3 flex flex-col justify-between gap-3 min-h-[128px]">

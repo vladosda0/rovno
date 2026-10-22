@@ -234,6 +234,26 @@ export function useUpdateWorkspaceProfileContactInfo() {
   });
 }
 
+export function useUpdateWorkspaceProjectAddress(projectId: string) {
+  const mode = useWorkspaceModeState();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (address: string | null) => {
+      if (mode.kind !== "local" && mode.kind !== "demo" && mode.kind !== "supabase") {
+        throw new Error("Project is not available yet.");
+      }
+      const source = await getWorkspaceSource(mode);
+      return source.updateProjectAddress(projectId, address);
+    },
+    onSuccess: (project) => {
+      if (mode.kind !== "supabase") return;
+      queryClient.setQueryData(workspaceQueryKeys.project(mode.profileId, projectId), project);
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.project(mode.profileId, projectId) });
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects(mode.profileId) });
+    },
+  });
+}
+
 export function useWorkspaceProjectsState(): { projects: Project[]; isLoading: boolean } {
   const mode = useWorkspaceModeState();
   const supabaseMode = mode.kind === "supabase" ? mode : null;

@@ -57,6 +57,8 @@ export interface WorkspaceSource {
   getProjectMembers: (projectId: string) => Promise<Member[]>;
   getProjectInvites: (projectId: string) => Promise<WorkspaceProjectInvite[]>;
   createProject: (input: CreateWorkspaceProjectInput) => Promise<Project>;
+  /** Owner only (projects_update policy); null removes the address. */
+  updateProjectAddress: (projectId: string, address: string | null) => Promise<Project>;
   deleteProject: (projectId: string) => Promise<void>;
 }
 
@@ -111,6 +113,22 @@ export interface CreateWorkspaceProjectInput {
   title: string;
   type: string;
   projectMode: NonNullable<Project["project_mode"]>;
+  address?: string | null;
+}
+
+export const PROJECT_ADDRESS_MAX_LENGTH = 300;
+
+/** Trimmed, at most PROJECT_ADDRESS_MAX_LENGTH characters; empty means no address. */
+export function normalizeProjectAddress(raw: string | null | undefined): string | null {
+  const value = (raw ?? "").trim().slice(0, PROJECT_ADDRESS_MAX_LENGTH).trim();
+  return value ? value : null;
+}
+
+export class ProjectUpdateNotPermittedError extends Error {
+  constructor(public readonly projectId: string) {
+    super(`Update affected 0 rows for project ${projectId}; the current user is likely not the owner.`);
+    this.name = "ProjectUpdateNotPermittedError";
+  }
 }
 
 export class ProjectDeleteNotPermittedError extends Error {
@@ -300,6 +318,8 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
         current_stage_id: "",
         progress_pct: 0,
       };
+      const address = normalizeProjectAddress(input.address);
+      if (address) project.address = address;
 
       store.addProject(project);
       store.addMember({
@@ -313,6 +333,16 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
       });
 
       return project;
+    },
+    async updateProjectAddress(projectId: string, address: string | null) {
+      const user = store.getCurrentUserForMode(mode);
+      const project = store.getProjectForMode(mode, projectId);
+      if (!project || project.owner_id !== user.id) {
+        throw new ProjectUpdateNotPermittedError(projectId);
+      }
+      const next = normalizeProjectAddress(address);
+      store.updateProject(projectId, { address: next ?? undefined }, mode);
+      return { ...project, address: next ?? undefined };
     },
     async deleteProject(projectId: string) {
       store.removeProject(projectId, mode);
@@ -895,6 +925,8 @@ function createSupabaseWorkspaceSource(
         automation_level: "manual",
         progress_pct: 0,
       };
+      const address = normalizeProjectAddress(input.address);
+      if (address) insert.address = address;
 
       const { data, error } = await supabase
         .from("projects")
@@ -912,6 +944,25 @@ function createSupabaseWorkspaceSource(
       });
 
       return mapProjectRowToProject(data);
+    },
+    async updateProjectAddress(projectId: string, address: string | null) {
+      const { data, error } = await supabase
+        .from("projects")
+        .update({ address: normalizeProjectAddress(address) })
+        .eq("id", projectId)
+        .eq("owner_profile_id", profileId)
+        .select("*");
+
+      if (error) {
+        throw error;
+      }
+
+      const row = data?.[0];
+      if (!row) {
+        throw new ProjectUpdateNotPermittedError(projectId);
+      }
+
+      return mapProjectRowToProject(row);
     },
     async deleteProject(projectId: string) {
       const { error, count } = await supabase

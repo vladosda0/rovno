@@ -35,6 +35,11 @@ export interface BankSuggestion {
   correspondentAccount: string | null;
 }
 
+export interface AddressSuggestion {
+  value: string;
+  postalCode: string | null;
+}
+
 export type LookupOutcome<T> = { status: "ok"; value: T } | { status: "unavailable" };
 
 export const LOOKUP_MIN_QUERY = 3;
@@ -65,4 +70,8 @@ export function lookupPartyDetails(inn: string, kpp: string | null, invoke: Look
 
 export function lookupBanks(query: string, invoke: LookupInvoke = defaultInvoke) {
   return call(invoke, { kind: "bank", query }, (data) => (data.suggestions as BankSuggestion[]) ?? []);
+}
+
+export function lookupAddresses(query: string, invoke: LookupInvoke = defaultInvoke) {
+  return call(invoke, { kind: "address", query }, (data) => (data.suggestions as AddressSuggestion[]) ?? []);
 }

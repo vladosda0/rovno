@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -20,13 +20,20 @@ interface RequisitesSuggestInputProps<T> {
   search: (query: string) => Promise<LookupOutcome<T[]>>;
   view: (item: T) => SuggestItemView;
   onPick: (item: T) => void;
-  listHint: string;
+  listHint?: string;
   notFoundText: string;
   unavailableText: string;
   disabled?: boolean;
+  readOnly?: boolean;
   className?: string;
   inputClassName?: string;
   inputMode?: "numeric" | "text";
+  placeholder?: string;
+  maxLength?: number;
+  autoFocus?: boolean;
+  ariaLabel?: string;
+  /** Keys the open list did not consume (Enter or Escape with no list shown). */
+  onInputKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
   children?: ReactNode;
 }
 
@@ -53,9 +60,15 @@ export function RequisitesSuggestInput<T>({
   notFoundText,
   unavailableText,
   disabled,
+  readOnly,
   className,
   inputClassName,
   inputMode,
+  placeholder,
+  maxLength,
+  autoFocus,
+  ariaLabel,
+  onInputKeyDown,
   children,
 }: RequisitesSuggestInputProps<T>) {
   const listId = useId();
@@ -63,6 +76,9 @@ export function RequisitesSuggestInput<T>({
   const [state, setState] = useState<State<T>>({ phase: "idle" });
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  // Results shown for an earlier query until the new search answers; Enter
+  // must not pick from them.
+  const [stale, setStale] = useState(false);
   const requestSeq = useRef(0);
 
   useEffect(() => {
@@ -84,6 +100,7 @@ export function RequisitesSuggestInput<T>({
           setActive(0);
           setState({ phase: "results", items: outcome.value });
         }
+        setStale(false);
       });
     }, SUGGEST_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
@@ -92,6 +109,7 @@ export function RequisitesSuggestInput<T>({
   const pick = (item: T) => {
     requestSeq.current += 1;
     setTyped(null);
+    setStale(false);
     setOpen(false);
     setState({ phase: "idle" });
     onPick(item);
@@ -107,7 +125,12 @@ export function RequisitesSuggestInput<T>({
           id={id}
           value={value}
           disabled={disabled}
+          readOnly={readOnly}
           inputMode={inputMode}
+          placeholder={placeholder}
+          maxLength={maxLength}
+          autoFocus={autoFocus}
+          aria-label={ariaLabel}
           autoComplete="off"
           role="combobox"
           aria-expanded={showList}
@@ -118,12 +141,16 @@ export function RequisitesSuggestInput<T>({
           onChange={(event) => {
             onChange(event.target.value);
             setTyped(event.target.value);
+            setStale(true);
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           onKeyDown={(event) => {
-            if (!showList) return;
+            if (!showList || (stale && (event.key === "ArrowDown" || event.key === "ArrowUp"))) {
+              onInputKeyDown?.(event);
+              return;
+            }
             if (event.key === "ArrowDown") {
               event.preventDefault();
               setActive((i) => Math.min(items.length - 1, i + 1));
@@ -131,10 +158,17 @@ export function RequisitesSuggestInput<T>({
               event.preventDefault();
               setActive((i) => Math.max(0, i - 1));
             } else if (event.key === "Enter") {
+              if (stale) {
+                onInputKeyDown?.(event);
+                return;
+              }
               event.preventDefault();
               pick(items[active]);
             } else if (event.key === "Escape") {
               setOpen(false);
+              onInputKeyDown?.(event);
+            } else {
+              onInputKeyDown?.(event);
             }
           }}
         />
@@ -178,7 +212,9 @@ export function RequisitesSuggestInput<T>({
               );
             })}
           </ul>
-          <div className="border-t border-border px-3 py-1.5 text-caption text-muted-foreground">{listHint}</div>
+          {listHint ? (
+            <div className="border-t border-border px-3 py-1.5 text-caption text-muted-foreground">{listHint}</div>
+          ) : null}
         </div>
       ) : null}
       {state.phase === "empty" ? <p className="mt-1 text-caption text-muted-foreground">{notFoundText}</p> : null}
