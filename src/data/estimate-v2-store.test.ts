@@ -662,6 +662,40 @@ describe("estimate-v2 execution foundation", () => {
     expect(discountEvents[0]?.payload.nextDiscountBps).toBe(initial.discountBps + 100);
   });
 
+  it("mints the share token as a random UUID, not from Math.random", () => {
+    const projectId = "project-1";
+    setAuthRole("owner");
+    const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    const originalRandom = Math.random;
+    Math.random = () => 0.5;
+    try {
+      const v1 = createVersionSnapshot(projectId, "user-1");
+      const v2 = createVersionSnapshot(projectId, "user-1");
+      expect(v1.shareId).toMatch(uuidV4);
+      expect(v2.shareId).toMatch(uuidV4);
+      expect(v1.shareId).not.toBe(v2.shareId);
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
+  it("mints a random UUID share token where crypto.randomUUID is unavailable", () => {
+    const projectId = "project-1";
+    setAuthRole("owner");
+    const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    const originalRandomUUID = crypto.randomUUID;
+    Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true, writable: true });
+    try {
+      const v1 = createVersionSnapshot(projectId, "user-1");
+      const v2 = createVersionSnapshot(projectId, "user-1");
+      expect(v1.shareId).toMatch(uuidV4);
+      expect(v2.shareId).toMatch(uuidV4);
+      expect(v1.shareId).not.toBe(v2.shareId);
+    } finally {
+      Object.defineProperty(crypto, "randomUUID", { value: originalRandomUUID, configurable: true, writable: true });
+    }
+  });
+
   it("keeps archived proposed versions out of latest proposed selector", () => {
     const projectId = "project-1";
     setAuthRole("owner");
