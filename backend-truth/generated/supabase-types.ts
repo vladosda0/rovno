@@ -3075,6 +3075,24 @@ export type Database = {
           }
           Relationships: []
         }
+        "kb_document_text_gaps": {
+          Row: {
+          "doc_id": string
+          "gaps": unknown
+          "updated_at": string
+          }
+          Insert: {
+          "doc_id"?: string
+          "gaps": unknown
+          "updated_at"?: string
+          }
+          Update: {
+          "doc_id"?: string
+          "gaps"?: unknown
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never

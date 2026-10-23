@@ -655,6 +655,10 @@
     {
       "path": "supabase/migrations/20261022030000_knowledge_base_full_text.sql",
       "sha256": "b1a02d980083213c8852565b8b15007b84eb2ddf003661777d2097d29ce1cc80"
+    },
+    {
+      "path": "supabase/migrations/20261023030000_knowledge_base_text_gaps.sql",
+      "sha256": "4d18ecbb61554943c2514ac370cd438eb9f1dbf516dab3e66eab0e6f8dfb9a86"
     }
   ],
   "generated_artifacts": [
