@@ -148,10 +148,10 @@ export function SubscriptionSection() {
               </span>
             </div>
           ) : null}
-          {status === "grace" && endsAt ? (
+          {subscription.provider !== "free" && status === "grace" && endsAt ? (
             <p className="text-caption text-warning">{t("settings.billing.graceNote", { date: endsAt })}</p>
           ) : null}
-          {readOnly ? (
+          {subscription.provider !== "free" && readOnly ? (
             <p className="text-caption text-destructive">{t("settings.billing.readOnlyNote")}</p>
           ) : null}
         </CardContent>
