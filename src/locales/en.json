@@ -3208,7 +3208,7 @@
   "promo.redeem.success.title": "Done!",
   "promo.redeem.success.description": "The “Master” plan is active for 90 days.",
   "promo.redeem.error.invalid": "Promo code not found",
-  "promo.redeem.error.alreadyRedeemed": "This promo code has already been used",
+  "promo.redeem.error.alreadyRedeemed": "Promo code not applied: only one promo code can be used per account, or this code has no activations left",
   "promo.redeem.error.expired": "This promo code has expired",
   "promo.redeem.error.alreadySubscribed": "You already have an active subscription",
   "promo.redeem.error.network": "Could not verify the promo code. Please try again later.",

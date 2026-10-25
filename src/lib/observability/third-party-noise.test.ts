@@ -34,6 +34,9 @@ const BOT = "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots) Ch
 const SAFARI = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
 const CHROME =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+const META_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 (compatible; meta-webindexer/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler))";
+const CSS_PRELOAD_FAILURE = new Error("Unable to preload CSS for /assets/landing-B4QZFVSA.css");
 const IMPORT_FAILURE = new TypeError(
   "Failed to fetch dynamically imported module: https://rovno.ai/assets/AppLayout-L1RNnNsT.js",
 );
@@ -41,6 +44,21 @@ const IMPORT_FAILURE = new TypeError(
 describe("isCrawlerAssetFetchFailure", () => {
   it("drops the lazy-import abort a crawler causes", () => {
     expect(isCrawlerAssetFetchFailure(IMPORT_FAILURE, BOT)).toBe(true);
+  });
+
+  it("drops the CSS preload failure the Meta web indexer causes", () => {
+    expect(isCrawlerAssetFetchFailure(CSS_PRELOAD_FAILURE, META_UA)).toBe(true);
+    expect(isCrawlerAssetFetchFailure(IMPORT_FAILURE, META_UA)).toBe(true);
+    expect(isCrawlerAssetFetchFailure(CSS_PRELOAD_FAILURE.message, META_UA)).toBe(true);
+  });
+
+  it("keeps a CSS preload failure from a real browser or an unmeasured crawler", () => {
+    expect(isCrawlerAssetFetchFailure(CSS_PRELOAD_FAILURE, CHROME)).toBe(false);
+    expect(isCrawlerAssetFetchFailure(CSS_PRELOAD_FAILURE, SAFARI)).toBe(false);
+    expect(isCrawlerAssetFetchFailure(CSS_PRELOAD_FAILURE, BOT)).toBe(false);
+    expect(isCrawlerAssetFetchFailure(new TypeError("boom"), META_UA)).toBe(false);
+    expect(isCrawlerAssetFetchFailure(new Error(`Render failed: ${CSS_PRELOAD_FAILURE.message}`), META_UA)).toBe(false);
+    expect(isCrawlerAssetFetchFailure(new TypeError("Importing a module script failed."), META_UA)).toBe(false);
   });
 
   it("keeps the same failure when a real browser hits it", () => {

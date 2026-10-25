@@ -29,21 +29,26 @@ export function isWalletProviderRejection(value: unknown): boolean {
   return (code >= JSONRPC_RESERVED_MIN && code <= JSONRPC_RESERVED_MAX) || EIP1193_CODES.has(code);
 }
 
-/** Crawlers abort a lazy route import mid-flight, which raises this TypeError in the
- * page. The message is Chromium's own dynamic-import failure string, so a real Chrome
- * user on a flaky network raises it verbatim too: the User-Agent gate is the ONLY thing
- * separating the two, and removing it would suppress every user's chunk failure.
- *
- * Scoped to the one crawler actually measured. The counts behind that live in the PR and
- * in dossier rovno#137, not here. */
-const CRAWLER_UA = /\bYandexBot\b/i;
-
 const LAZY_IMPORT_FAILURE = "Failed to fetch dynamically imported module";
+const CSS_PRELOAD_FAILURE = "Unable to preload CSS for";
+
+/** Crawlers abort asset fetches mid-flight, which raises these errors in the page. The
+ * messages are the browser's (dynamic import) and Vite's (CSS preload) own strings, so a
+ * real user on a flaky network raises them verbatim too: the User-Agent gate is the ONLY thing separating the two, and removing it
+ * would suppress every user's chunk failure.
+ *
+ * Scoped per crawler to the shapes actually measured. The counts behind that live in the
+ * PRs and in dossier rovno#137, not here. */
+const CRAWLER_ASSET_FAILURES: ReadonlyArray<{ ua: RegExp; messages: readonly string[] }> = [
+  { ua: /\bYandexBot\b/i, messages: [LAZY_IMPORT_FAILURE] },
+  { ua: /\bmeta-webindexer\b/i, messages: [LAZY_IMPORT_FAILURE, CSS_PRELOAD_FAILURE] },
+];
 
 export function isCrawlerAssetFetchFailure(value: unknown, userAgent: string): boolean {
-  if (!CRAWLER_UA.test(userAgent)) return false;
+  const crawler = CRAWLER_ASSET_FAILURES.find(({ ua }) => ua.test(userAgent));
+  if (!crawler) return false;
   // Never call a method on an unvalidated value: a throw here would be re-captured by the
   // SDK as an internal event, which skips beforeSend and therefore skips scrubEventSafe.
   const raw = value instanceof Error ? value.message : value;
-  return typeof raw === "string" && raw.startsWith(LAZY_IMPORT_FAILURE);
+  return typeof raw === "string" && crawler.messages.some((message) => raw.startsWith(message));
 }

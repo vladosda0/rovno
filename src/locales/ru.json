@@ -3266,7 +3266,7 @@
   "promo.redeem.success.title": "Готово!",
   "promo.redeem.success.description": "Тариф «Мастер» активирован на 90 дней.",
   "promo.redeem.error.invalid": "Промокод не найден",
-  "promo.redeem.error.alreadyRedeemed": "Этот промокод уже использован",
+  "promo.redeem.error.alreadyRedeemed": "Промокод не активирован: на одном аккаунте можно использовать только один промокод, или у этого кода закончились активации",
   "promo.redeem.error.expired": "Срок действия промокода истёк",
   "promo.redeem.error.alreadySubscribed": "У вас уже есть активная подписка",
   "promo.redeem.error.network": "Не удалось проверить промокод. Попробуйте позже.",
