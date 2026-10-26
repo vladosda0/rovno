@@ -19,6 +19,8 @@
   "common.retry": "Повторить",
   "common.loading": "Загрузка...",
   "common.error": "Ошибка",
+  "common.newBadge": "Новое",
+  "common.hasNew": "есть новое",
   "auth.login.title": "С возвращением",
   "auth.login.subtitle": "Войдите в аккаунт",
   "auth.login.forgotPassword": "Забыли пароль?",

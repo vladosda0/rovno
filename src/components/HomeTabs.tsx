@@ -1,5 +1,7 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { NewFeatureDot } from "@/components/ui/new-feature-badge";
+import { newFeatureIdsForHomeTab } from "@/lib/new-features";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -66,6 +68,7 @@ export function HomeTabs({ className }: HomeTabsProps) {
           >
             <tab.icon className="h-4 w-4" />
             <span>{t(tab.labelKey)}</span>
+            <NewFeatureDot featureIds={newFeatureIdsForHomeTab(tab.value)} />
           </Link>
         );
       })}

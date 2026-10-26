@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import {
   DocumentsLeftNav,
+  LEAVES,
   VALID_LEAVES,
   DEFAULT_LEAF,
   type LeafSlug,
@@ -13,6 +14,7 @@ import { MobileSectionNav } from "@/components/home/documents-hub/MobileSectionN
 import { MultiStepUploadModal } from "@/components/upload/MultiStepUploadModal";
 import type { UploadType } from "@/components/upload/types";
 import { leafForUploadResult } from "@/components/upload/upload-destination";
+import { markFeatureOpened } from "@/lib/new-features";
 
 const MyAllDocsLeaf = lazy(() =>
   import("@/components/home/documents-hub/leaves/MyAllDocsLeaf").then((m) => ({ default: m.MyAllDocsLeaf })),
@@ -113,6 +115,12 @@ export function DocumentsHubTab() {
       );
     }
   }, [searchParams, activeLeaf, setSearchParams]);
+
+  // Reaching a new feature by any path (menu, link, section list) clears its «Новое» mark.
+  useEffect(() => {
+    const leaf = Object.values(LEAVES).find((item) => item.slug === activeLeaf);
+    if (leaf && "newFeatureId" in leaf) markFeatureOpened(leaf.newFeatureId);
+  }, [activeLeaf]);
 
   const handleSelect = useCallback(
     (slug: LeafSlug) => {

@@ -14,12 +14,15 @@ import {
   FileType2,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { NewFeatureBadge } from "@/components/ui/new-feature-badge";
 import { cn } from "@/lib/utils";
 
 export interface LeafItem {
   slug: string;
   labelKey: string;
   icon: typeof FileText;
+  /** Registry id in `@/lib/new-features` when this leaf carries a «Новое» mark. */
+  newFeatureId?: string;
 }
 
 export const LEAVES = {
@@ -34,7 +37,12 @@ export const LEAVES = {
   orgContractorCard: { slug: "org-contractor-card", labelKey: "home.documentsHub.nav.org.contractorCard", icon: IdCard },
   catalogs: { slug: "catalogs", labelKey: "home.documentsHub.nav.catalogs", icon: Package },
   estimates: { slug: "estimates", labelKey: "home.documentsHub.nav.estimates", icon: Calculator },
-  knowledgeBase: { slug: "knowledge-base", labelKey: "home.documentsHub.nav.knowledgeBase", icon: BookOpen },
+  knowledgeBase: {
+    slug: "knowledge-base",
+    labelKey: "home.documentsHub.nav.knowledgeBase",
+    icon: BookOpen,
+    newFeatureId: "knowledge-base",
+  },
   documentTemplates: { slug: "document-templates", labelKey: "home.documentsHub.nav.documentTemplates", icon: FileType2 },
 } as const;
 
@@ -98,9 +106,10 @@ interface NavRowProps {
   activeSlug: string;
   onSelect: (slug: LeafSlug) => void;
   indent?: boolean;
+  newFeatureId?: string;
 }
 
-function NavRow({ slug, labelKey, icon: Icon, activeSlug, onSelect, indent = false }: NavRowProps) {
+function NavRow({ slug, labelKey, icon: Icon, activeSlug, onSelect, indent = false, newFeatureId }: NavRowProps) {
   const { t } = useTranslation();
   const isActive = activeSlug === slug;
   return (
@@ -118,6 +127,7 @@ function NavRow({ slug, labelKey, icon: Icon, activeSlug, onSelect, indent = fal
     >
       <Icon className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{t(labelKey)}</span>
+      {newFeatureId && <NewFeatureBadge featureId={newFeatureId} />}
     </button>
   );
 }
@@ -152,6 +162,7 @@ function Group({ headingKey, items, activeSlug, onSelect, defaultOpen = true }: 
             activeSlug={activeSlug}
             onSelect={onSelect}
             indent
+            newFeatureId={item.newFeatureId}
           />
         ))}
       </CollapsibleContent>
@@ -186,6 +197,7 @@ export function DocumentsLeftNav({ activeSlug, onSelect, cta }: DocumentsLeftNav
               icon={leaf.icon}
               activeSlug={activeSlug}
               onSelect={onSelect}
+              newFeatureId={leaf.newFeatureId}
             />
           ))}
         </div>

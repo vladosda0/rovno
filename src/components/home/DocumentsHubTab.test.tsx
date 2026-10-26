@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -85,6 +85,10 @@ function renderHub(initialPath = "/home") {
 }
 
 describe("DocumentsHubTab", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it("defaults to my-all and clears docTab from the URL", async () => {
     renderHub("/home");
     await waitFor(() => {
@@ -132,6 +136,36 @@ describe("DocumentsHubTab", () => {
     fireEvent.click(docTemplatesButton);
     await waitFor(() => {
       expect(screen.getByTestId("location-search").textContent).toBe("?docTab=document-templates");
+    });
+  });
+  it("marks the knowledge base as New until it is opened, and the mark stays gone after a remount", async () => {
+    const first = renderHub("/home");
+    const kbButton = await screen.findByRole("button", { name: /Knowledge base/i });
+    expect(within(kbButton).getByText("New")).toBeInTheDocument();
+    // Closed mobile section list carries the dot while the knowledge base is unopened.
+    expect(screen.getByText("has something new")).toBeInTheDocument();
+
+    fireEvent.click(kbButton);
+    await waitFor(() => {
+      expect(screen.getByTestId("stub-knowledge-base")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("New")).not.toBeInTheDocument();
+    expect(screen.queryByText("has something new")).not.toBeInTheDocument();
+
+    first.unmount();
+    renderHub("/home");
+    await screen.findByRole("button", { name: /Knowledge base/i });
+    expect(screen.queryByText("New")).not.toBeInTheDocument();
+    expect(screen.queryByText("has something new")).not.toBeInTheDocument();
+  });
+
+  it("clears the New mark when the knowledge base is reached by a link", async () => {
+    renderHub("/home?docTab=knowledge-base");
+    await waitFor(() => {
+      expect(screen.getByTestId("stub-knowledge-base")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("New")).not.toBeInTheDocument();
     });
   });
 });

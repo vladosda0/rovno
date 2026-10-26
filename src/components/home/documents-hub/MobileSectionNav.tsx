@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { NewFeatureBadge, NewFeatureDot } from "@/components/ui/new-feature-badge";
 import { cn } from "@/lib/utils";
 import {
   SECTIONS,
@@ -14,6 +15,14 @@ import {
   type LeafSlug,
   type SectionEntry,
 } from "@/components/home/documents-hub/DocumentsLeftNav";
+
+const SECTION_NEW_FEATURE_IDS: string[] = SECTIONS.flatMap((section) =>
+  section.leaves.flatMap((leaf) => (leaf.newFeatureId ? [leaf.newFeatureId] : [])),
+);
+
+function sectionNewFeatureId(section: SectionEntry): string | undefined {
+  return section.leaves.find((leaf) => leaf.newFeatureId)?.newFeatureId;
+}
 
 interface MobileSectionNavProps {
   activeLeaf: string;
@@ -35,22 +44,27 @@ export function MobileSectionNav({ activeLeaf, onSelect }: MobileSectionNavProps
               <activeSection.icon className="h-4 w-4 shrink-0" />
               <span className="truncate">{t(activeSection.headingKey)}</span>
             </span>
+            <NewFeatureDot featureIds={SECTION_NEW_FEATURE_IDS} className="ml-auto mr-2" />
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
-          {SECTIONS.map((section) => (
-            <DropdownMenuItem
-              key={section.key}
-              onSelect={() => onSelect(section.leaves[0].slug as LeafSlug)}
-              className={cn(
-                activeSection.key === section.key && "bg-accent/10 text-accent font-medium",
-              )}
-            >
-              <section.icon className="h-4 w-4 mr-2" />
-              {t(section.headingKey)}
-            </DropdownMenuItem>
-          ))}
+          {SECTIONS.map((section) => {
+            const newFeatureId = sectionNewFeatureId(section);
+            return (
+              <DropdownMenuItem
+                key={section.key}
+                onSelect={() => onSelect(section.leaves[0].slug as LeafSlug)}
+                className={cn(
+                  activeSection.key === section.key && "bg-accent/10 text-accent font-medium",
+                )}
+              >
+                <section.icon className="h-4 w-4 mr-2" />
+                {t(section.headingKey)}
+                {newFeatureId && <NewFeatureBadge featureId={newFeatureId} className="ml-2" />}
+              </DropdownMenuItem>
+            );
+          })}
         </DropdownMenuContent>
       </DropdownMenu>
 
