@@ -17,6 +17,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { BudgetWidget } from "@/components/dashboard/BudgetWidget";
 import { TaskSummaryWidget } from "@/components/dashboard/TaskSummaryWidget";
 import { DocsWidget } from "@/components/dashboard/DocsWidget";
+import { ReportsWidget } from "@/components/dashboard/ReportsWidget";
+import { showsViewerReports } from "@/lib/project-reports";
 import { GalleryWidget } from "@/components/dashboard/GalleryWidget";
 import { ParticipantsWidget } from "@/components/dashboard/ParticipantsWidget";
 import { QuickActions } from "@/components/dashboard/QuickActions";
@@ -32,7 +34,9 @@ import {
 import { seamAllowsClientReport } from "@/lib/client-report-dialog";
 import { resolveActionState } from "@/lib/permission-contract-actions";
 import { ProjectAddressRow } from "@/components/dashboard/ProjectAddressRow";
-import { useUpdateWorkspaceProjectAddress } from "@/hooks/use-workspace-source";
+import { useUpdateWorkspaceProjectAddress, useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { useProjectReports } from "@/hooks/use-project-reports";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Info, LayoutDashboard } from "lucide-react";
 
 export default function ProjectDashboard() {
@@ -88,6 +92,13 @@ export default function ProjectDashboard() {
 
   const currentUser = useCurrentUser();
   const updateAddress = useUpdateWorkspaceProjectAddress(projectId);
+
+  // rovno#237: the viewer reads the project's published reports here. Owners
+  // and co-owners have «Отчёт клиенту»; the block is the viewer's only.
+  const workspaceMode = useWorkspaceMode();
+  const isMobile = useIsMobile();
+  const showReports = showsViewerReports(workspaceMode.kind, perm.seam.membership?.role);
+  const projectReports = useProjectReports(projectId, null, showReports);
 
   if (!project) {
     return (
@@ -190,13 +201,27 @@ export default function ProjectDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-6 gap-sp-2 items-stretch">
         <TaskSummaryWidget tasks={tasks} projectId={projectId} className="lg:col-span-4 h-full" />
-        {canViewSensitiveDetail && (
-          <BudgetWidget
-            summary={financeSummary}
-            projectId={projectId}
-            isLoading={estimateProject.isLoading}
-            className="lg:col-span-2 h-full"
-          />
+        {(canViewSensitiveDetail || showReports) && (
+          <div className="lg:col-span-2 h-full flex flex-col gap-sp-2">
+            {canViewSensitiveDetail && (
+              <BudgetWidget
+                summary={financeSummary}
+                projectId={projectId}
+                isLoading={estimateProject.isLoading}
+                className={showReports ? "h-auto" : "h-full"}
+              />
+            )}
+            {showReports && (
+              <ReportsWidget
+                projectId={projectId}
+                reports={projectReports.data?.reports ?? []}
+                isLoading={projectReports.isLoading}
+                isError={projectReports.isError}
+                maxItems={isMobile || canViewSensitiveDetail ? 2 : 4}
+                className={canViewSensitiveDetail ? "h-auto flex-1" : undefined}
+              />
+            )}
+          </div>
         )}
       </div>
 

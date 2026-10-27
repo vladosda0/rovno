@@ -404,6 +404,9 @@ describe("ClientReportDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Отозвать ссылку" }));
     const confirm = await screen.findByRole("alertdialog");
+    // rovno#237: revoking closes the link only; participants keep the reports.
+    expect(within(confirm).getByText("Ссылка перестанет работать. Позже можно создать новую.")).toBeInTheDocument();
+    expect(within(confirm).getByText("Участники проекта в приложении отчёты по-прежнему видят.")).toBeInTheDocument();
     fireEvent.click(within(confirm).getByRole("button", { name: "Отозвать ссылку" }));
 
     await waitFor(() =>

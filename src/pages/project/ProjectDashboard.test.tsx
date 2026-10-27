@@ -100,6 +100,12 @@ describe("ProjectDashboard", () => {
     expect(screen.queryByText("Urgent unpaid")).not.toBeInTheDocument();
   });
 
+  it("rovno#237: no reports block in demo mode, where there are no published reports", () => {
+    setAuthRole("viewer");
+    renderProjectDashboard("project-1");
+    expect(screen.queryByRole("heading", { name: "Reports" })).not.toBeInTheDocument();
+  });
+
   it("hides the budget widget for non-detail viewers", () => {
     setAuthRole("contractor");
 

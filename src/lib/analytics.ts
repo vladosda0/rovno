@@ -373,6 +373,7 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/project/:id/hr" },
   { pattern: "/project/:id/gallery" },
   { pattern: "/project/:id/documents" },
+  { pattern: "/project/:id/reports" },
   { pattern: "/project/:id/participants" },
 ];
 
