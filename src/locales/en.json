@@ -3274,6 +3274,7 @@
   "share.estimate.openLatest": "Open latest",
   "share.estimate.notFoundTitle": "Shared estimate not found",
   "share.estimate.notFoundBody": "The shared link is invalid or expired.",
+  "share.estimate.errorTitle": "Could not load the estimate",
   "share.estimate.registerToApproveHint": "Register or sign in to approve this estimate version.",
   "share.estimate.disabledHint": "Approval is unavailable until project owner upgrades plan and adds client as participant.",
   "share.estimate.tax": "Tax: {{percent}}% ({{amount}})",

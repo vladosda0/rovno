@@ -3332,6 +3332,7 @@
   "share.estimate.openLatest": "Открыть свежую",
   "share.estimate.notFoundTitle": "Смета не найдена",
   "share.estimate.notFoundBody": "Ссылка неверна или устарела.",
+  "share.estimate.errorTitle": "Не удалось загрузить смету",
   "share.estimate.registerToApproveHint": "Зарегистрируйся или войди, чтобы утвердить эту версию сметы.",
   "share.estimate.disabledHint": "Утверждение недоступно, пока владелец проекта не обновит тариф и не добавит клиента как участника.",
   "share.estimate.tax": "Налог: {{percent}}% ({{amount}})",

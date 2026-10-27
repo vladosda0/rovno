@@ -283,6 +283,12 @@ describe("initMetrika and the Supabase auth fragment", () => {
     ["a share link behind a literal dot segment", "/auth/login?next=%2Fshare%2Festimate%2F.%2FQA-SHARE-TOKEN"],
     ["a share link behind a dot segment with a fragment", "/auth/login?next=%2Fshare%2Festimate%2F.%2FQA-SHARE-TOKEN%23%2Fitems"],
     ["a share link behind a protocol-relative prefix", "/auth/login?next=%2F%2Fshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["a share link behind a backslash prefix", "/auth/login?next=%2F%5Cshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["a share link with every separator a backslash", "/auth/login?next=%2F%5Cshare%5Cestimate%5CQA-SHARE-TOKEN"],
+    ["a share link behind a tab between slashes", "/auth/login?next=%2F%09%2Fshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["a share link behind a newline and backslash", "/auth/login?next=%2F%5C%0A%5Cshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["a share link behind a leading space", "/auth/login?next=%20%2Fshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["an invite link behind backslash separators", `/auth/signup?next=%5Cinvite%5Caccept%5C${"d".repeat(32)}`],
     ["an invite link behind a parent segment", `/auth/signup?next=%2Fhome%2F..%2Finvite%2Faccept%2F${"c".repeat(32)}`],
   ])("does not start when `next` carries %s", async (_label, url) => {
     vi.useFakeTimers();

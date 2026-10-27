@@ -496,6 +496,15 @@ function carriesCredential(params: URLSearchParams): boolean {
   return AUTH_CREDENTIAL_KEYS.some((key) => (params.get(key) ?? "") !== "");
 }
 
+/** Leading and trailing C0 controls and spaces, as the URL parser strips them. */
+function trimC0AndSpace(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) <= 0x20) start += 1;
+  while (end > start && value.charCodeAt(end - 1) <= 0x20) end -= 1;
+  return value.slice(start, end);
+}
+
 /**
  * A credential also travels as the VALUE of a redirect parameter, where
  * carriesCredential() cannot see it: InviteAccept builds
@@ -519,6 +528,8 @@ function carriesSecretRouteValue(params: URLSearchParams): boolean {
       // the raw value rather than letting the throw escape into a page view.
       decoded = value;
     }
+    // Normalised the way the URL parser reads a path, so these characters cannot hide a secret route.
+    decoded = trimC0AndSpace(decoded).replace(/[\t\n\r]/g, "").replace(/\\/g, "/");
     if (!decoded.startsWith("/")) continue;
     if (matchAnalyticsRoute(decoded.split(/[?#]/, 1)[0])?.secret === true) return true;
     // Also resolved the way the auth pages resolve `next`, so a dot segment
