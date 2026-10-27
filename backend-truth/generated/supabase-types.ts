@@ -2980,6 +2980,9 @@ export type Database = {
           "checked_at": string | null
           "created_at": string
           "updated_at": string
+          "reviewed_by": string | null
+          "reviewed_at": string | null
+          "status_reason": string | null
           }
           Insert: {
           "id"?: string
@@ -2990,6 +2993,9 @@ export type Database = {
           "checked_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "reviewed_by"?: string | null
+          "reviewed_at"?: string | null
+          "status_reason"?: string | null
           }
           Update: {
           "id"?: string
@@ -3000,6 +3006,9 @@ export type Database = {
           "checked_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "reviewed_by"?: string | null
+          "reviewed_at"?: string | null
+          "status_reason"?: string | null
           }
           Relationships: []
         }
@@ -3013,6 +3022,9 @@ export type Database = {
           "clause_anchor": string | null
           "quote": string | null
           "created_at": string
+          "verdict": "follows" | "not_follows" | null
+          "verdict_reason": string | null
+          "verdicted_at": string | null
           }
           Insert: {
           "id"?: string
@@ -3023,6 +3035,9 @@ export type Database = {
           "clause_anchor"?: string | null
           "quote"?: string | null
           "created_at"?: string
+          "verdict"?: "follows" | "not_follows" | null
+          "verdict_reason"?: string | null
+          "verdicted_at"?: string | null
           }
           Update: {
           "id"?: string
@@ -3033,6 +3048,9 @@ export type Database = {
           "clause_anchor"?: string | null
           "quote"?: string | null
           "created_at"?: string
+          "verdict"?: "follows" | "not_follows" | null
+          "verdict_reason"?: string | null
+          "verdicted_at"?: string | null
           }
           Relationships: []
         }
