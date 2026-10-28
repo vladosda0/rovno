@@ -26,10 +26,14 @@ import {
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { planMeets, useTierQuota } from "@/hooks/useTierQuota";
+import { isCheckableInn, usePartyStatusChecks } from "@/hooks/use-party-status";
 import {
   type ExportPayload,
   type ExportVariant,
+  formatExportDate,
   variantCanShare,
   variantShowsRequisites,
 } from "@/lib/estimate-export-data";
@@ -64,6 +68,25 @@ import {
 } from "@/types/org-card";
 
 export type EnsureShareLinkResult = { url: string } | { error: string };
+
+// The paid plans may switch the verification mark off; the choice stays on this device.
+const VERIFIED_MARK_STORAGE_KEY = "rovno.estimateExport.verifiedMark";
+
+function readVerifiedMarkPref(): boolean {
+  try {
+    return window.localStorage.getItem(VERIFIED_MARK_STORAGE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function writeVerifiedMarkPref(on: boolean) {
+  try {
+    window.localStorage.setItem(VERIFIED_MARK_STORAGE_KEY, on ? "on" : "off");
+  } catch {
+    // Storage blocked: the choice lasts until the window closes.
+  }
+}
 
 interface EstimateExportModalProps {
   open: boolean;
@@ -175,6 +198,12 @@ export function EstimateExportModal({
   const setClientInfoMutation = useSetClientInfo();
 
   const [variant, setVariant] = useState<ExportVariant>("client_simple");
+  const statusChecks = usePartyStatusChecks();
+  const { data: tierQuota, isLoading: tierLoading } = useTierQuota();
+  const markIsOptional = planMeets(tierQuota?.plan_code, "master");
+  // While the plan loads, a stored «off» is kept rather than printed over.
+  const markFollowsPref = markIsOptional || tierLoading;
+  const [markPref, setMarkPref] = useState(readVerifiedMarkPref);
   const [orgCardDraft, setOrgCardDraft] = useState<OrgCard>(EMPTY_ORG_CARD);
   const [clientInfoDraft, setClientInfoDraft] = useState<ClientInfo>(EMPTY_CLIENT_INFO);
   const [shareState, setShareState] = useState<
@@ -201,11 +230,13 @@ export function EstimateExportModal({
     }
   }, [open, canShowInternal, variant]);
 
+  const resetStatusChecks = statusChecks.reset;
   useEffect(() => {
     if (!open) {
       setShareState({ phase: "idle" });
+      resetStatusChecks();
     }
-  }, [open]);
+  }, [open, resetStatusChecks]);
 
   useEffect(() => {
     setShareState((current) => (current.phase === "idle" ? current : { phase: "idle" }));
@@ -219,6 +250,7 @@ export function EstimateExportModal({
     pages: string[][] | null;
     orgCard: OrgCard | null;
     clientInfo: ClientInfo | null;
+    contractorVerifiedMark: string | null;
     fileName: string;
   } | null>(null);
   const [preparingPdf, setPreparingPdf] = useState(false);
@@ -300,6 +332,21 @@ export function EstimateExportModal({
   }
 
   const showRequisites = variantShowsRequisites(variant);
+  // rovno#243: the mark is printed only for a contractor the registry lists as active.
+  const orgCheck = statusChecks.get(orgCardDraft.inn);
+  const orgVerifiedAt = orgCheck?.phase === "found" && orgCheck.status === "active" ? orgCheck.checkedAt : null;
+  const orgVerified = orgVerifiedAt !== null;
+  const orgCheckPending = orgCheck?.phase === "checking"
+    || (isCheckableInn(orgCardDraft.inn) && orgCheck === null);
+  // Sole traders live in a separate register, EGRIP; until the check answers, a 12-digit INN tells.
+  const orgIsIp = orgCheck?.phase === "found"
+    ? orgCheck.type === "individual"
+    : (orgCardDraft.inn ?? "").trim().length === 12;
+  const contractorVerifiedMark = variant === "client_signing" && orgVerifiedAt && (!markFollowsPref || markPref)
+    ? t(orgIsIp ? "estimate.export.verifiedMark.documentIp" : "estimate.export.verifiedMark.document", {
+      date: formatExportDate(orgVerifiedAt),
+    })
+    : null;
   const variantSupportsShare = variantCanShare(variant);
   const orientation = getOrientationForVariant(variant);
   const effectiveZoomPct = zoomPct ?? fitPct;
@@ -347,6 +394,7 @@ export function EstimateExportModal({
         clientInfo: variant === "client_signing" ? clientInfoDraft : null,
         labels,
         orientation,
+        contractorVerifiedMark,
       },
       latestPagesRef.current?.variant === variant ? latestPagesRef.current.pages : null,
       `${labels.title} – ${payload.projectTitle}`,
@@ -371,6 +419,7 @@ export function EstimateExportModal({
       pages: latestPagesRef.current?.variant === variant ? latestPagesRef.current.pages : null,
       orgCard: variant === "client_signing" ? orgCardDraft : null,
       clientInfo: variant === "client_signing" ? clientInfoDraft : null,
+      contractorVerifiedMark,
       fileName: t("estimate.export.pdfFileName", {
         project: payload.projectTitle,
         variant: t(VARIANT_TITLE_KEYS[variant]),
@@ -473,7 +522,31 @@ export function EstimateExportModal({
                 onClientInfoChange={setClientInfoDraft}
                 canEditOrgCard={orgCardEditable}
                 requisitesScope={orgCardScope?.kind ?? "device"}
+                statusChecks={statusChecks}
               />
+            ) : null}
+
+            {variant === "client_signing" && markIsOptional ? (
+              <div className="flex items-start justify-between gap-3 rounded-md border border-border p-3">
+                <div className="min-w-0">
+                  <Label htmlFor="export-verified-mark" className="cursor-pointer text-sm font-medium">
+                    {t("estimate.export.verifiedMark.toggle")}
+                  </Label>
+                  <p className="text-caption text-muted-foreground">
+                    {orgVerified || orgCheckPending
+                      ? t(orgIsIp ? "estimate.export.verifiedMark.toggleHintIp" : "estimate.export.verifiedMark.toggleHint")
+                      : t("estimate.export.verifiedMark.toggleHintPending")}
+                  </p>
+                </div>
+                <Switch
+                  id="export-verified-mark"
+                  checked={markPref}
+                  onCheckedChange={(on) => {
+                    setMarkPref(on);
+                    writeVerifiedMarkPref(on);
+                  }}
+                />
+              </div>
             ) : null}
 
             {variantSupportsShare ? (
@@ -543,6 +616,7 @@ export function EstimateExportModal({
                 clientInfo={variant === "client_signing" ? clientInfoDraft : null}
                 labels={labels}
                 orientation={orientation}
+                contractorVerifiedMark={contractorVerifiedMark}
                 zoom={effectiveZoomPct / 100}
                 onPagesChange={handlePagesChange}
               />
@@ -620,6 +694,7 @@ export function EstimateExportModal({
             orgCard={pdfJob.orgCard}
             clientInfo={pdfJob.clientInfo}
             labels={pdfJob.labels}
+            contractorVerifiedMark={pdfJob.contractorVerifiedMark}
             pages={pdfJob.pages}
           />
         </div>,

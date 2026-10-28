@@ -34,6 +34,7 @@ interface RequisitesSuggestInputProps<T> {
   ariaLabel?: string;
   /** Keys the open list did not consume (Enter or Escape with no list shown). */
   onInputKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+  onBlur?: () => void;
   children?: ReactNode;
 }
 
@@ -69,6 +70,7 @@ export function RequisitesSuggestInput<T>({
   autoFocus,
   ariaLabel,
   onInputKeyDown,
+  onBlur,
   children,
 }: RequisitesSuggestInputProps<T>) {
   const listId = useId();
@@ -145,7 +147,10 @@ export function RequisitesSuggestInput<T>({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          onBlur={() => setOpen(false)}
+          onBlur={() => {
+            setOpen(false);
+            onBlur?.();
+          }}
           onKeyDown={(event) => {
             if (!showList || (stale && (event.key === "ArrowDown" || event.key === "ArrowUp"))) {
               onInputKeyDown?.(event);

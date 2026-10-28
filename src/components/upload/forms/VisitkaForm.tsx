@@ -21,6 +21,8 @@ import { slugifyOrgName, isValidOrgSlug } from "@/lib/transliterate";
 import { TierLockTooltip } from "@/components/billing/TierLockTooltip";
 import { PHONE_PREFILL, phoneIsFilled } from "@/lib/phone";
 import type { UploadResult } from "@/components/upload/types";
+import { PartyStatusTag, partyTagKind } from "@/components/requisites/PartyStatusTag";
+import { useCheckAfterPause, usePartyStatusChecks } from "@/hooks/use-party-status";
 
 export interface VisitkaFormProps {
   onBack: () => void;
@@ -73,6 +75,11 @@ export function VisitkaForm({ onBack, onClose, onComplete }: VisitkaFormProps) {
   const [experienceYears, setExperienceYears] = useState("");
   const [description, setDescription] = useState("");
   const [inn, setInn] = useState("");
+  // rovno#243: the INN is checked against the registry once typed; the result
+  // is shown, not saved, and never blocks saving the card.
+  const innChecks = usePartyStatusChecks();
+  useCheckAfterPause(innChecks, inn);
+  const innCheck = innChecks.get(inn);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState(PHONE_PREFILL);
   const [telegram, setTelegram] = useState("");
@@ -435,13 +442,18 @@ export function VisitkaForm({ onBack, onClose, onComplete }: VisitkaFormProps) {
             <Input
               value={inn}
               onChange={(event) => setInn(event.target.value)}
+              onBlur={() => innChecks.check(inn)}
               inputMode="numeric"
               placeholder={t("upload.modal.step3.visitka.fields.innPlaceholder")}
               disabled={submitting}
             />
-            <p className="text-caption text-muted-foreground">
-              {t("upload.modal.step3.visitka.fields.innHint")}
-            </p>
+            {partyTagKind(innCheck, inn) ? (
+              <PartyStatusTag check={innCheck} inn={inn} advice="own" showName />
+            ) : (
+              <p className="text-caption text-muted-foreground">
+                {t("upload.modal.step3.visitka.fields.innHint")}
+              </p>
+            )}
           </div>
         </div>
 

@@ -201,6 +201,11 @@ const TECHNOLOGY_KEYS = [
   "participants.axisHelp.ai.consult_only",
   "participants.axisHelp.ai.project_pool",
   "shurikHints.T51.text",
+  // The signature «Ровно ИИ» under the registry check mark, Vlad's wording (rovno#243).
+  "estimate.export.verifiedMark.document",
+  "estimate.export.verifiedMark.toggleHint",
+  "estimate.export.verifiedMark.documentIp",
+  "estimate.export.verifiedMark.toggleHintIp",
 ];
 
 /** English labels of the assisted mode that had no AI in them to begin with. */

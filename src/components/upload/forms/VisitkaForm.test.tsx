@@ -19,6 +19,11 @@ vi.mock("@/data/contractor-profile-source", () => ({
   upsertContractorProfileForOrg: (...args: unknown[]) => upsertMock(...args),
   submitContractorProfileForModeration: (...args: unknown[]) => submitMock(...args),
 }));
+const partyDetailsMock = vi.fn();
+vi.mock("@/data/requisites-lookup-source", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/data/requisites-lookup-source")>()),
+  lookupPartyDetails: (...args: unknown[]) => partyDetailsMock(...args),
+}));
 const uploadAvatarMock = vi.fn();
 vi.mock("@/hooks/use-avatar-upload", () => ({
   useAvatarUpload: () => ({ uploadAvatar: uploadAvatarMock }),
@@ -144,5 +149,59 @@ describe("VisitkaForm", () => {
     await waitFor(() => expect(screen.getByText("Business card saved")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
     await waitFor(() => expect(submitMock).toHaveBeenCalledWith("o1"));
+  });
+
+  describe("INN check against the registry (rovno#243)", () => {
+    const liquidated = {
+      type: "legal", legalName: "ООО «СТРОЙМАСТЕР-СЕВЕР»", inn: "7809876544", kpp: null, ogrn: null,
+      legalAddress: null, addressIncomplete: false, addressHint: null, signatoryName: null,
+      signatoryPosition: null, status: "liquidated",
+    };
+
+    beforeEach(() => {
+      orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner" }], isLoading: false });
+      activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner" });
+      partyDetailsMock.mockReset().mockResolvedValue({ status: "ok", value: liquidated });
+    });
+
+    it("promises the check under the empty field, then shows the tag after the INN is entered", async () => {
+      renderForm();
+      expect(screen.getByText("We check the organization in the state register (EGRUL) as soon as you enter the tax ID")).toBeInTheDocument();
+      const field = screen.getByPlaceholderText("10 or 12 digits");
+      fireEvent.change(field, { target: { value: "7809876544" } });
+      fireEvent.blur(field);
+      await waitFor(() => expect(screen.getByText("Organization liquidated")).toBeInTheDocument());
+      expect(partyDetailsMock).toHaveBeenCalledWith("7809876544", null);
+      expect(screen.queryByText(/as soon as you enter the tax ID/)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId("party-status-tag"));
+      expect(screen.getAllByText("ООО «СТРОЙМАСТЕР-СЕВЕР»").length).toBeGreaterThan(0);
+    });
+
+    it("does not check a short INN and saves the card whatever the status", async () => {
+      renderForm();
+      const field = screen.getByPlaceholderText("10 or 12 digits");
+      fireEvent.change(field, { target: { value: "78098" } });
+      fireEvent.blur(field);
+      expect(partyDetailsMock).not.toHaveBeenCalled();
+
+      fireEvent.change(field, { target: { value: "7809876544" } });
+      fireEvent.blur(field);
+      await waitFor(() => expect(screen.getByText("Organization liquidated")).toBeInTheDocument());
+      fireEvent.change(screen.getByPlaceholderText(/How clients will see you/i), { target: { value: "Builder" } });
+      fireEvent.change(screen.getByPlaceholderText("@username"), { target: { value: "@builder" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+      await waitFor(() => expect(upsertMock).toHaveBeenCalledWith("o1", expect.objectContaining({ inn: "7809876544" })));
+    });
+
+    it("keeps the hint and shows no tag when the check does not answer", async () => {
+      partyDetailsMock.mockResolvedValue({ status: "unavailable" });
+      renderForm();
+      const field = screen.getByPlaceholderText("10 or 12 digits");
+      fireEvent.change(field, { target: { value: "7809876544" } });
+      fireEvent.blur(field);
+      await waitFor(() => expect(partyDetailsMock).toHaveBeenCalled());
+      await waitFor(() => expect(screen.queryByTestId("party-status-tag")).toBeNull());
+      expect(screen.getByText(/as soon as you enter the tax ID/)).toBeInTheDocument();
+    });
   });
 });

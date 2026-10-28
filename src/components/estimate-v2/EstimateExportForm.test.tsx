@@ -219,3 +219,69 @@ describe("a plain organization member", () => {
     expect(screen.getByText(en("estimate.export.org.emptyForMember"))).toBeTruthy();
   });
 });
+
+describe("registry status under the INN (rovno#243)", () => {
+  const liquidated: PartyDetails = { ...sber, inn: "7701234567", legalName: "ООО «СТАРЫЙ ДОМ»", status: "liquidated" };
+
+  async function pause(ms = 500) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  it("checks a saved legal-entity client when the window opens and shows the verified tag", async () => {
+    vi.useFakeTimers();
+    const lookup = fakeLookup();
+    render(<Harness lookup={lookup} initialClient={{ name: "ПАО", isLegalEntity: true, inn: "7707083893" }} />);
+    await pause();
+    expect(lookup.partyDetails).toHaveBeenCalledWith("7707083893", null);
+    expect(screen.getByText(en("requisites.partyStatus.org.active"))).toBeTruthy();
+  });
+
+  it("marks a liquidated client in orange and does not check a private person", async () => {
+    vi.useFakeTimers();
+    const lookup = fakeLookup({ partyDetails: vi.fn(async () => ({ status: "ok" as const, value: liquidated })) });
+    const { unmount } = render(<Harness lookup={lookup} initialClient={{ name: "ООО", isLegalEntity: true, inn: "7701234567" }} />);
+    await pause();
+    const tag = screen.getByTestId("party-status-tag");
+    expect(tag).toHaveTextContent(en("requisites.partyStatus.org.liquidated"));
+    expect(tag).toHaveAttribute("data-tone", "bad");
+    unmount();
+
+    const quiet = fakeLookup();
+    render(<Harness lookup={quiet} initialClient={{ name: "Иванов", isLegalEntity: false, inn: "7707083893" }} />);
+    await pause();
+    expect(quiet.partyDetails).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("party-status-tag")).toBeNull();
+  });
+
+  it("checks the contractor's own INN, also for a read-only member", async () => {
+    vi.useFakeTimers();
+    const lookup = fakeLookup({ partyDetails: vi.fn(async () => ({ status: "ok" as const, value: null })) });
+    render(<Harness lookup={lookup} canEdit={false} initialOrg={{ legalName: "ООО Ровно", inn: "7812345679" }} />);
+    await pause();
+    expect(screen.getByTestId("party-status-tag")).toHaveTextContent(en("requisites.partyStatus.org.notFound"));
+  });
+
+  it("takes the status from the picked organization without a second request", async () => {
+    const lookup = fakeLookup();
+    render(<Harness lookup={lookup} initialClient={{ name: "", isLegalEntity: true }} />);
+    await typeAndWait("client-inn", "7707083");
+    fireEvent.mouseDown(screen.getByText("ПАО СБЕРБАНК"));
+    await waitFor(() => expect(screen.getByText(en("requisites.partyStatus.org.active"))).toBeTruthy());
+    vi.useFakeTimers();
+    await pause();
+    expect(lookup.partyDetails).toHaveBeenCalledTimes(1);
+  });
+
+  it("checks an INN typed by hand as soon as the person leaves the field", async () => {
+    vi.useFakeTimers();
+    const lookup = fakeLookup();
+    render(<Harness lookup={lookup} initialClient={{ name: "", isLegalEntity: true }} />);
+    fireEvent.change(document.getElementById("client-inn")!, { target: { value: "7707083893" } });
+    fireEvent.blur(document.getElementById("client-inn")!);
+    await act(async () => {});
+    expect(lookup.partyDetails).toHaveBeenCalledWith("7707083893", null);
+    expect(screen.getByText(en("requisites.partyStatus.org.active"))).toBeTruthy();
+  });
+});

@@ -243,3 +243,23 @@ describe("renderEstimatePagesToHtml", () => {
     expect((html.match(/class="est-sheet-print"/g) ?? []).length).toBe(2);
   });
 });
+
+describe("contractor verification mark (rovno#243)", () => {
+  const MARK = "Подрядчик проверен по ЕГРЮЛ 26.10.2026 · Ровно ИИ";
+  const org: OrgCard = { legalName: "ООО «Ремонт-Плюс»", inn: "7812345678", signatoryName: "Иванов И. И." };
+
+  it("prints the mark under the contractor's details in the signing variant", () => {
+    const props = { ...buildProps([stage(1, 1, 1)], "client_signing"), orgCard: org, contractorVerifiedMark: MARK };
+    const html = renderEstimatePagesToHtml(props, null, "Смета");
+    expect(html).toContain(MARK);
+    expect(html.indexOf(MARK)).toBeGreaterThan(html.indexOf("Иванов И. И."));
+    expect(html.indexOf(MARK)).toBeLessThan(html.indexOf("Заказчик"));
+  });
+
+  it("prints nothing without a mark, and never outside the signing variant", () => {
+    const without = renderEstimatePagesToHtml({ ...buildProps([stage(1, 1, 1)], "client_signing"), orgCard: org }, null, "Смета");
+    expect(without).not.toContain("ЕГРЮЛ");
+    const simple = renderEstimatePagesToHtml({ ...buildProps([stage(1, 1, 1)]), contractorVerifiedMark: MARK }, null, "Смета");
+    expect(simple).not.toContain("ЕГРЮЛ");
+  });
+});

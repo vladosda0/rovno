@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ShieldCheck } from "lucide-react";
 import type { ClientInfo, OrgCard } from "@/types/org-card";
 import {
   type ExportLineRow,
@@ -102,6 +103,8 @@ interface EstimateDocumentProps {
   clientInfo: ClientInfo | null;
   labels: EstimateDocumentLabels;
   orientation?: DocumentOrientation;
+  /** «Подрядчик проверен по ЕГРЮЛ … · Ровно ИИ» under the contractor (rovno#243); null prints nothing. */
+  contractorVerifiedMark?: string | null;
 }
 
 export function getOrientationForVariant(variant: ExportVariant): DocumentOrientation {
@@ -170,6 +173,19 @@ const REQS_HEADING: CSSProperties = {
 
 const REQS_LINE: CSSProperties = {
   margin: "2px 0",
+};
+
+// A thin green frame; on black-and-white print it reads as grey.
+const VERIFIED_MARK: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "4px",
+  marginTop: "6px",
+  padding: "1px 6px",
+  border: "1px solid #7cb98f",
+  borderRadius: "4px",
+  fontSize: "8.5pt",
+  color: "#1f6b3a",
 };
 
 const STAGE_HEADER: CSSProperties = {
@@ -483,7 +499,7 @@ export interface DocBlock {
  * the user previews is exactly what prints.
  */
 export function buildEstimateBlocks(props: EstimateDocumentProps): DocBlock[] {
-  const { payload, variant, orgCard, clientInfo, labels } = props;
+  const { payload, variant, orgCard, clientInfo, labels, contractorVerifiedMark } = props;
   const showCost = variantShowsCost(variant);
   const showRequisites = variantShowsRequisites(variant);
   const showSignatures = variantShowsSignatures(variant);
@@ -542,6 +558,12 @@ export function buildEstimateBlocks(props: EstimateDocumentProps): DocBlock[] {
               [orgCard?.signatoryPosition, orgCard?.signatoryName].filter(Boolean).join(", ") || undefined,
               labels.placeholder,
             )}
+            {contractorVerifiedMark ? (
+              <div style={VERIFIED_MARK}>
+                <ShieldCheck size={11} strokeWidth={2.25} aria-hidden />
+                <span>{contractorVerifiedMark}</span>
+              </div>
+            ) : null}
           </div>
           <div style={REQS_CELL_RIGHT}>
             <div style={REQS_HEADING}>{labels.customer}</div>
@@ -757,6 +779,7 @@ export function PaginatedEstimateDocument({
   clientInfo,
   labels,
   orientation: orientationProp,
+  contractorVerifiedMark,
   zoom = 1,
   onPagesChange,
 }: PaginatedEstimateDocumentProps) {
@@ -765,8 +788,8 @@ export function PaginatedEstimateDocument({
   // Depend on the concrete fields (not a spread object that changes identity
   // every render) so blocks/heights stay stable and don't loop the measure pass.
   const blocks = useMemo(
-    () => buildEstimateBlocks({ payload, variant, orgCard, clientInfo, labels, orientation }),
-    [payload, variant, orgCard, clientInfo, labels, orientation],
+    () => buildEstimateBlocks({ payload, variant, orgCard, clientInfo, labels, orientation, contractorVerifiedMark }),
+    [payload, variant, orgCard, clientInfo, labels, orientation, contractorVerifiedMark],
   );
   const blockMap = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
   const allBlockIds = useMemo(() => blocks.map((b) => b.id), [blocks]);

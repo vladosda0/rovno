@@ -15,6 +15,8 @@ import {
   lookupPartyDetails,
 } from "@/data/requisites-lookup-source";
 import { RequisitesSuggestInput } from "@/components/estimate-v2/RequisitesSuggestInput";
+import { PartyStatusTag } from "@/components/requisites/PartyStatusTag";
+import { type PartyStatusChecks, useCheckAfterPause, usePartyStatusChecks } from "@/hooks/use-party-status";
 
 const REQUISITES_NOTE_KEYS = {
   org: "estimate.export.profileNote",
@@ -46,6 +48,8 @@ interface EstimateExportFormProps {
   /** Where the requisites live: decides which sharing note is shown. */
   requisitesScope?: "org" | "profile" | "device";
   lookup?: RequisitesLookup;
+  /** Registry status checks shared with the window (the document mark reads them). */
+  statusChecks?: PartyStatusChecks;
 }
 
 export function EstimateExportForm({
@@ -56,8 +60,16 @@ export function EstimateExportForm({
   canEditOrgCard = true,
   requisitesScope = "org",
   lookup = DEFAULT_LOOKUP,
+  statusChecks,
 }: EstimateExportFormProps) {
   const { t } = useTranslation();
+  const ownChecks = usePartyStatusChecks(lookup.partyDetails);
+  const checks = statusChecks ?? ownChecks;
+  const clientIsLegal = clientInfo.isLegalEntity ?? false;
+  // rovno#243: a saved INN is checked when the window opens, a typed one after
+  // a pause or when the person leaves the field.
+  useCheckAfterPause(checks, orgCard.inn);
+  useCheckAfterPause(checks, clientInfo.inn, clientIsLegal);
   const [highlighted, setHighlighted] = useState<ReadonlySet<string>>(new Set());
   const [filledFromRegistry, setFilledFromRegistry] = useState(false);
   const [orgAddressHint, setOrgAddressHint] = useState<string | null>(null);
@@ -98,6 +110,7 @@ export function EstimateExportForm({
       return null;
     }
     setLookupFailed(null);
+    checks.seed(outcome.value);
     return outcome.value;
   };
 
@@ -213,11 +226,13 @@ export function EstimateExportForm({
               search={searchParties}
               view={partyView}
               onPick={(item) => { void pickOrgParty(item); }}
+              onBlur={() => checks.check(orgRef.current.inn)}
               {...partyTexts}
             >
               {lookupFailed === "org" ? (
                 <p className="mt-1 text-caption text-warning">{partyTexts.unavailableText}</p>
               ) : null}
+              <PartyStatusTag check={checks.get(orgCard.inn)} inn={orgCard.inn ?? ""} advice="own" />
             </RequisitesSuggestInput>
           </div>
           <div>
@@ -375,11 +390,13 @@ export function EstimateExportForm({
                   search={searchParties}
                   view={partyView}
                   onPick={(item) => { void pickClientParty(item); }}
+                  onBlur={() => checks.check(clientRef.current.inn)}
                   {...partyTexts}
                 >
                   {lookupFailed === "client" ? (
                     <p className="mt-1 text-caption text-warning">{partyTexts.unavailableText}</p>
                   ) : null}
+                  <PartyStatusTag check={checks.get(clientInfo.inn)} inn={clientInfo.inn ?? ""} advice="client" />
                 </RequisitesSuggestInput>
               </div>
               <div>
