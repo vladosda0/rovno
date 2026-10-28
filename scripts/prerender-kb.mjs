@@ -3,6 +3,8 @@
 // Runs after scripts/prerender-blog.mjs (see package.json "build").
 //
 //   dist/baza/<slug>/index.html   — one static page per published kb_documents row
+//   dist/baza/resheniya/[<slug>/]  — «Решения» (slice 4): the folder and one page per
+//                                    published card, none while no card is published
 //   dist/sitemap.xml              — the blog's sitemap, extended with those pages
 //
 // Same mechanics and env as the blog prerenderer: the app shell is dist/index.html,
@@ -36,6 +38,9 @@ import {
   kbIndexPageHtml,
   kbPageHtml,
   kbSitemapUrls,
+  kbSolutionPages,
+  kbSolutionSitemapUrls,
+  kbUsableSolutionRows,
   mergeIntoSitemap,
   sortKbRows,
 } from "../src/lib/knowledge-base/kbPrerenderConfig.mjs";
@@ -49,6 +54,7 @@ import {
   kbLlmsSection,
 } from "../src/lib/knowledge-base/kbSeo.mjs";
 import { KB_FOLDERS, normalizeKbRow } from "../src/lib/knowledge-base/kbConfig.mjs";
+import { KB_SOLUTION_SELECT, normalizeKbSolution, sortKbSolutions } from "../src/lib/knowledge-base/kbSolutions.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = path.join(ROOT, "dist");
@@ -171,6 +177,22 @@ async function fetchClauses(env, docId) {
   }
 }
 
+/**
+ * Published «Решения» cards with their facts, read as anon (RLS: published only).
+ * The SP switch does not touch them (decision 12.10). Fail-soft: a failed read
+ * writes no card pages and leaves the documents alone.
+ */
+async function fetchSolutionsOrNone(env) {
+  try {
+    const select = encodeURIComponent(KB_SOLUTION_SELECT.replace(/\s+/g, ""));
+    const rows = await fetchAnon(env, `kb_solutions?select=${select}&status=eq.published&order=slug.asc`);
+    return Array.isArray(rows) ? rows : [];
+  } catch (error) {
+    log(`WARN: solutions fetch failed, no /baza/resheniya/ pages (${error?.message ?? error})`);
+    return [];
+  }
+}
+
 /** CSS chunks carrying the landing/blog styles (code-split out of the entry CSS). */
 async function findLandingCssAssets() {
   const assetsDir = path.join(DIST, "assets");
@@ -248,8 +270,17 @@ async function writePages(outcome) {
     byFolder.get(folder).push(row);
   }
   const counts = Object.fromEntries([...byFolder].map(([f, list]) => [f, list.length]));
+  const solutionRows = kbUsableSolutionRows(await fetchSolutionsOrNone(env));
+  const solutionPages = kbSolutionPages(template, solutionRows, t, cssAssets);
+  const solutionCount = solutionRows.length;
   await mkdir(path.join(DIST, "baza"), { recursive: true });
-  await writeFile(path.join(DIST, "baza", "index.html"), kbIndexPageHtml(template, counts, t, cssAssets), "utf8");
+  await writeFile(path.join(DIST, "baza", "index.html"), kbIndexPageHtml(template, counts, t, cssAssets, solutionCount), "utf8");
+  for (const page of solutionPages) {
+    const dir = path.join(DIST, ...page.path.split("/").filter(Boolean));
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "index.html"), page.html, "utf8");
+  }
+  log(`wrote ${solutionPages.length} «Решения» page(s) under baza/resheniya/`);
   const hubPaths = [KB_INDEX_PATH];
   for (const [folder, list] of byFolder) {
     if (!list.length) continue;
@@ -277,7 +308,8 @@ async function writePages(outcome) {
       .filter((r) => r.full_text_available === true && (r.folder !== "sp" || spFullText))
       .map(normalizeKbRow);
     const llms = (await readFile(llmsPath, "utf8")).replace(/\n## База знаний Ровно[\s\S]*$/, "\n");
-    await writeFile(llmsPath, llms.trimEnd() + "\n" + kbLlmsSection(counts, t, fullTextDocs), "utf8");
+    const solutions = sortKbSolutions(solutionRows.map(normalizeKbSolution));
+    await writeFile(llmsPath, llms.trimEnd() + "\n" + kbLlmsSection(counts, t, fullTextDocs, solutions), "utf8");
   }
   log(`wrote ${rows_.length} page(s) under baza/`);
 
@@ -286,10 +318,14 @@ async function writePages(outcome) {
   const today = new Date().toISOString().slice(0, 10);
   await writeFile(
     sitemapPath,
-    mergeIntoSitemap(existing, [...kbHubSitemapUrls(hubPaths, today), ...kbSitemapUrls(rows_, today)]),
+    mergeIntoSitemap(existing, [
+      ...kbHubSitemapUrls(hubPaths, today),
+      ...kbSolutionSitemapUrls(solutionRows, today),
+      ...kbSitemapUrls(rows_, today),
+    ]),
     "utf8",
   );
-  log(`added ${hubPaths.length + rows_.length} url(s) to sitemap.xml`);
+  log(`added ${hubPaths.length + solutionPages.length + rows_.length} url(s) to sitemap.xml`);
   outcome.fetchFailed = false;
   return rows_.length;
 }

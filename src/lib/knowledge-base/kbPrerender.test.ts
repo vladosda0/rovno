@@ -4,12 +4,19 @@ import {
   createTranslator,
   fallbackShellWithoutKbPages,
   escapeHtml,
+  KB_RESERVED_SLUGS,
   kbDocumentRootHtml,
+  kbIndexPageHtml,
   kbPageHtml,
+  kbSolutionPages,
+  kbSolutionSitemapUrls,
   kbSitemapUrls,
   mergeIntoSitemap,
   stripCanonicalTags,
 } from "./kbPrerenderConfig.mjs";
+import { kbLlmsSection } from "./kbSeo.mjs";
+import { normalizeKbSolution } from "./kbSolutions.mjs";
+import { SEAMS_ROW, SOLUTION_ROW, solutionRow } from "./kbSolutions.fixture";
 
 const t = createTranslator(ruLocale as Record<string, string>);
 
@@ -217,5 +224,137 @@ describe("full text in the static page (docs-library slice 2, step 2.6)", () => 
   it("writes no text block for a document without clauses", () => {
     expect(kbDocumentRootHtml(FULL, t, { clauses: [] })).not.toContain("rv-kb-text");
     expect(kbPageHtml(TEMPLATE, FULL, t, [], { clauses: CLAUSES })).toContain('id="p-4-7"');
+  });
+});
+
+describe("«Решения» guest pages (docs-library slice 4, step 4.7)", () => {
+  const second = solutionRow({ slug: "pol-v-sanuzle-pod-plitku", title: "Пол в санузле под плитку", updated_at: "2026-10-26T00:00:00Z" });
+
+  it("writes nothing while no card is published", () => {
+    expect(kbSolutionPages(TEMPLATE, [], t)).toEqual([]);
+    expect(kbSolutionPages(TEMPLATE, [{ slug: "../x", title: "Плохой" }], t)).toEqual([]);
+    expect(kbSolutionSitemapUrls([], "2026-10-28")).toEqual([]);
+    expect(kbIndexPageHtml(TEMPLATE, { sp: 1 }, t)).not.toContain("/baza/resheniya/");
+  });
+
+  it("writes the folder and one page per card", () => {
+    const pages = kbSolutionPages(TEMPLATE, [SOLUTION_ROW, second], t);
+    expect(pages.map((p) => p.path)).toEqual([
+      "/baza/resheniya/",
+      "/baza/resheniya/steny-v-sanuzle-pod-plitku/",
+      "/baza/resheniya/pol-v-sanuzle-pod-plitku/",
+    ]);
+    const folder = pages[0].html;
+    expect(folder).toContain('<link rel="canonical" href="https://rovno.ai/baza/resheniya/" />');
+    expect(folder).toContain('<a href="/baza/resheniya/steny-v-sanuzle-pod-plitku/">Стены в санузле под плитку</a>');
+    expect(folder).toContain("2 решения");
+    expect(folder).toContain('"@type":"CollectionPage"');
+  });
+
+  it("puts every case of the card into the HTML; only the default case is shown", () => {
+    const html = kbSolutionPages(TEMPLATE, [SOLUTION_ROW], t)[1].html;
+    expect(html).toContain("<title>Стены в санузле под плитку: как сделать по нормам — База знаний Ровно</title>");
+    expect(html).toContain('<link rel="canonical" href="https://rovno.ai/baza/resheniya/steny-v-sanuzle-pod-plitku/" />');
+    expect(html.match(/rel="canonical"/g)).toHaveLength(1);
+    expect(html).toContain('<meta name="description" content="Как подготовить стены ванной или душевой под облицовку плиткой. По документам: СП 163.1325800, СП 71.13330" />');
+    // Crumbs and markup match.
+    expect(html).toContain('<a href="/baza/resheniya/">Решения</a>');
+    expect(html).toContain('"@type":"BreadcrumbList"');
+    expect(html).toContain('"@type":"Article"');
+    expect(html).toContain('"citation":[{"@type":"CreativeWork","name":"СП 163.1325800","url":"https://rovno.ai/baza/sp-163-1325800/"}');
+    // Every case is in the page: the default one visible, the others hidden.
+    expect(html).toContain('<li data-when="base:gklv zone:wet">Поверхности листов ГКЛВ покрыть гидроизолирующим составом.');
+    expect(html).toContain('<li data-when="base:mineral" hidden>Основание из бетона огрунтовать перед облицовкой.');
+    expect(html).toContain('<tr data-when="base:gklv"><td>Заход полосы гидроизоляции на листы (рекомендация)</td>');
+    expect(html).toContain('<button type="button" data-option="mineral" aria-pressed="false">Бетон, кирпич, штукатурка</button>');
+    // Sections, quotes and clause links, the check line and the guest CTA.
+    for (const text of ["Шаги", "Числа", "Что проверить при приёмке", "Где источники расходятся"]) expect(html).toContain(`<h2>${text}</h2>`);
+    expect(html).toContain("<summary>СП 163, п. 6.4.2.8</summary>");
+    expect(html).toContain("<blockquote>«…должны быть покрыты гидроизолирующим составом…»</blockquote>");
+    expect(html).toContain('<a href="/baza/sp-163-1325800/#p-6-4-2-8">Открыть пункт в документе</a>');
+    expect(html).toContain("Проверено 25.10.2026");
+    expect(html).toContain("Сверено с источниками, 25.10.2026");
+    expect(html).toContain('href="/auth/signup">Спросить Шурика</a>');
+    expect(html).toContain('<script type="application/json" id="__KB_SOLUTION_DATA__">');
+  });
+
+  it("adds the folder and every card to the sitemap, the index and llms.txt", () => {
+    expect(kbSolutionSitemapUrls([SOLUTION_ROW, second], "2026-10-28")).toEqual([
+      "  <url><loc>https://rovno.ai/baza/resheniya/</loc><lastmod>2026-10-28</lastmod></url>",
+      "  <url><loc>https://rovno.ai/baza/resheniya/steny-v-sanuzle-pod-plitku/</loc><lastmod>2026-10-25</lastmod></url>",
+      "  <url><loc>https://rovno.ai/baza/resheniya/pol-v-sanuzle-pod-plitku/</loc><lastmod>2026-10-26</lastmod></url>",
+    ]);
+    const index = kbIndexPageHtml(TEMPLATE, { sp: 1 }, t, [], 2);
+    expect(index.indexOf('href="/baza/resheniya/"')).toBeLessThan(index.indexOf('href="/baza/razdel/sp/"'));
+    expect(index).toContain("2 решения");
+    const llms = kbLlmsSection({ sp: 1 }, t, [], [normalizeKbSolution(SOLUTION_ROW)]);
+    expect(llms).toContain("- [Стены в санузле под плитку](https://rovno.ai/baza/resheniya/steny-v-sanuzle-pod-plitku/)");
+    // A document can never take the folder's address.
+    expect(KB_RESERVED_SLUGS.has("resheniya")).toBe(true);
+  });
+
+  it("dates the sitemap on the Moscow calendar", () => {
+    const late = solutionRow({ updated_at: "2026-10-27T22:31:00Z" });
+    expect(kbSolutionSitemapUrls([late], "2026-10-28")[1]).toContain("<lastmod>2026-10-28</lastmod>");
+    const html = kbSolutionPages(TEMPLATE, [solutionRow({ reviewed_at: "2026-10-27T22:31:00Z" })], t)[1].html;
+    expect(html).toContain("Проверено 28.10.2026");
+    expect(html).toContain("Сверено с источниками, 28.10.2026");
+  });
+
+  it("lists the pages, the sitemap and llms.txt from the same usable cards", () => {
+    const untitled = solutionRow({ slug: "bez-nazvaniya", title: "  " });
+    expect(kbSolutionPages(TEMPLATE, [SOLUTION_ROW, untitled], t)).toHaveLength(2);
+    expect(kbSolutionSitemapUrls([SOLUTION_ROW, untitled], "2026-10-28")).toHaveLength(2);
+    expect(kbSolutionSitemapUrls([untitled], "2026-10-28")).toEqual([]);
+    const bracketed = normalizeKbSolution(solutionRow({ title: "Швы [и стыки] \\ примыкания" }));
+    expect(kbLlmsSection({}, t, [], [bracketed])).toContain(
+      "- [Швы \\[и стыки\\] \\\\ примыкания](https://rovno.ai/baza/resheniya/steny-v-sanuzle-pod-plitku/)",
+    );
+  });
+
+  it("puts the quote of every fact behind a chip into its <details>", () => {
+    const html = kbSolutionPages(TEMPLATE, [SEAMS_ROW], t)[1].html;
+    expect(html.match(/<details class="rv-kb-cite">/g)).toHaveLength(1);
+    expect(html).toContain(
+      "<summary>СП 71, п. 7.4.13</summary><p>СП 71.13330 · п. 7.4.13</p>" +
+        "<blockquote>«…швы должны быть заполнены специальными шовными материалами…»</blockquote>" +
+        "<blockquote>«…допускается сокращение технологической паузы, если это предусмотрено ПР или требованием производителя материала клеевой прослойки…»</blockquote>",
+    );
+  });
+
+  it("escapes hostile card content: no injected tags or attributes", () => {
+    const evil = '</script><img src=x onerror=x>">';
+    const body = SOLUTION_ROW.body as Record<string, unknown>;
+    const facts = SOLUTION_ROW.kb_solution_facts as Array<Record<string, unknown>>;
+    const build = (value: string) =>
+      solutionRow({
+        title: value,
+        body: { ...body, summary: value, steps: [{ text: value, facts: [1] }] },
+        kb_solution_facts: facts.map((f) => (f.position === 1 ? { ...f, quote: value, clause_anchor: value } : f)),
+      });
+    const row = build(evil);
+    const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
+    const clean = kbSolutionPages(TEMPLATE, [build("обычный текст")], t).map((p) => parse(p.html));
+    kbSolutionPages(TEMPLATE, [row], t).forEach((page, i) => {
+      const doc = parse(page.html);
+      // The same tags as the same card with plain text (the site chrome has its own logo), and no handler anywhere.
+      expect(doc.querySelectorAll("*").length).toBe(clean[i].querySelectorAll("*").length);
+      expect([...doc.querySelectorAll("img")].map((el) => el.getAttribute("src"))).toEqual(
+        [...clean[i].querySelectorAll("img")].map((el) => el.getAttribute("src")),
+      );
+      expect([...doc.querySelectorAll("*")].some((el) => [...el.attributes].some((a) => a.name.startsWith("on")))).toBe(false);
+      const scripts = [...doc.querySelectorAll("script")].map((el) => `${el.getAttribute("type")}#${el.id}`);
+      expect(scripts).toEqual(
+        page.path === "/baza/resheniya/"
+          ? ["application/ld+json#rv-jsonld"]
+          : ["application/ld+json#rv-jsonld", "application/json#__KB_SOLUTION_DATA__"],
+      );
+      expect(page.html).not.toContain("</script><img");
+    });
+    const card = new DOMParser().parseFromString(kbSolutionPages(TEMPLATE, [row], t)[1].html, "text/html");
+    expect(card.querySelector("h1")?.textContent).toBe(evil);
+    expect(card.querySelector(".rv-kb-cite blockquote")?.textContent).toBe(`«…${evil}…»`);
+    const data = JSON.parse(card.getElementById("__KB_SOLUTION_DATA__")?.textContent ?? "null");
+    expect(data.title).toBe(evil);
   });
 });

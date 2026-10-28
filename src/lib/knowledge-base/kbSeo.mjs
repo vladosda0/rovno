@@ -15,6 +15,7 @@
 
 import { KB_FOLDERS, displayTitle, kbDocPath, kbHeading, sourceHost } from "./kbConfig.mjs";
 import { kbEditionLine, kbFullTextReadable, kbTextLabel } from "./kbFullText.mjs";
+import { KB_SOLUTIONS_PATH, kbSolutionDocuments, kbSolutionPath } from "./kbSolutions.mjs";
 
 export const SITE_ORIGIN = "https://rovno.ai";
 export const KB_SITE_SECTION = "База знаний Ровно";
@@ -211,12 +212,15 @@ export function kbFolderDescription(folder, t, total) {
   return clip(`${name}: ${desc}. ${documentsCountText(t, total)} с редакцией, датой проверки и ссылкой на первоисточник.`);
 }
 
-/** CollectionPage + ItemList + BreadcrumbList for the index or a folder page. */
-export function kbCollectionJsonLd(t, { folder = null, page = 1, items = [], name, description }) {
-  const path = folder ? kbFolderPath(folder, page) : KB_INDEX_PATH;
+/**
+ * CollectionPage + ItemList + BreadcrumbList for the index or a folder page; the
+ * «Решения» folder passes its own path and trail.
+ */
+export function kbCollectionJsonLd(t, { folder = null, page = 1, items = [], name, description, path: ownPath = null, trail: ownTrail = null }) {
+  const path = ownPath ?? (folder ? kbFolderPath(folder, page) : KB_INDEX_PATH);
   const url = abs(path);
-  const trail = kbBreadcrumbTrail(t, { folder });
-  if (folder && page > 1) trail[trail.length - 1] = { name: trail[trail.length - 1].name, path };
+  const trail = ownTrail ?? kbBreadcrumbTrail(t, { folder });
+  if (!ownTrail && folder && page > 1) trail[trail.length - 1] = { name: trail[trail.length - 1].name, path };
   return {
     "@context": "https://schema.org",
     "@graph": [
@@ -283,22 +287,149 @@ export function isStagingBackend(supabaseUrl) {
 
 export const STAGING_ROBOTS_TXT = "# Staging build: not for search engines. rovno.ai is the indexed site.\nUser-agent: *\nDisallow: /\n";
 
+function russianPluralForm(count) {
+  const n10 = count % 10, n100 = count % 100;
+  return n10 === 1 && n100 !== 11 ? "one" : n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14) ? "few" : "many";
+}
+
 /** «1 документ», «3 документа», «237 документов»: the locale's _one/_few/_many by Russian rules. */
 export function documentsCountText(t, count) {
-  const n10 = count % 10, n100 = count % 100;
-  const form = n10 === 1 && n100 !== 11 ? "one" : n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14) ? "few" : "many";
-  return t(`home.knowledgeBase.documentsCount_${form}`, { count });
+  return t(`home.knowledgeBase.documentsCount_${russianPluralForm(count)}`, { count });
+}
+
+/** «1 решение», «3 решения», «6 решений». */
+export function solutionsCountText(t, count) {
+  return t(`home.knowledgeBase.solutions.count_${russianPluralForm(count)}`, { count });
+}
+
+// ── «Решения» (slice 4, frame 6) ────────────────────────────────────────────
+
+/** Главная › База знаний › Решения [› <card>]: the visible trail and the BreadcrumbList. */
+export function kbSolutionsTrail(t, solution = null) {
+  const trail = [
+    { name: "Главная", path: "/" },
+    { name: t("home.knowledgeBase.title"), path: KB_INDEX_PATH },
+    { name: t("home.knowledgeBase.solutions.title"), path: KB_SOLUTIONS_PATH },
+  ];
+  if (solution) trail.push({ name: solution.title, path: kbSolutionPath(solution.slug) });
+  return trail;
+}
+
+/** The «Решения» line of the /baza/ index, first, only while a card is published. */
+export function kbSolutionsIndexItem(count, t) {
+  if (!count) return null;
+  return {
+    name: t("home.knowledgeBase.solutions.title"),
+    description: t("home.knowledgeBase.solutions.description"),
+    count,
+    path: KB_SOLUTIONS_PATH,
+  };
+}
+
+export function kbSolutionsTitle() {
+  return `Решения: как сделать по нормам — ${KB_SITE_SECTION}`;
+}
+
+export function kbSolutionsDescription(t, count) {
+  return clip(
+    `Готовые решения для стройки и ремонта: шаги, числа и что проверить при приёмке, у каждого факта пункт нормы и цитата. ${solutionsCountText(t, count)}.`,
+  );
+}
+
+export function kbSolutionsItems(solutions) {
+  return solutions.map((s) => ({ path: kbSolutionPath(s.slug), name: s.title }));
+}
+
+export function kbSolutionsJsonLd(t, solutions) {
+  const name = kbSolutionsTitle();
+  return kbCollectionJsonLd(t, {
+    items: kbSolutionsItems(solutions),
+    name,
+    description: kbSolutionsDescription(t, solutions.length),
+    path: KB_SOLUTIONS_PATH,
+    trail: kbSolutionsTrail(t),
+  });
+}
+
+export function kbSolutionTitle(solution) {
+  return `${solution.title}: как сделать по нормам — ${KB_SITE_SECTION}`;
+}
+
+/** <meta description>: the summary, then the documents it rests on. */
+export function kbSolutionDescription(solution) {
+  const docs = kbSolutionDocuments(solution);
+  const parts = [solution.summary, docs.length ? `По документам: ${docs.join(", ")}` : null].filter(Boolean);
+  return clip(parts.length ? parts.join(" ") : solution.title);
+}
+
+/**
+ * JSON-LD for a card page: WebPage → Article (our retelling) citing the
+ * documents it rests on, with the date it was checked against them, plus the
+ * BreadcrumbList that matches the visible trail.
+ */
+export function kbSolutionJsonLd(solution, t) {
+  const url = abs(kbSolutionPath(solution.slug));
+  const cited = new Map();
+  for (const fact of solution.facts) {
+    const name = fact.designation ?? fact.docId;
+    if (!name || cited.has(name)) continue;
+    cited.set(name, {
+      "@type": "CreativeWork",
+      name,
+      ...(fact.docSlug ? { url: abs(kbDocPath(fact.docSlug)) } : {}),
+    });
+  }
+  const article = {
+    "@type": "Article",
+    "@id": `${url}#solution`,
+    headline: solution.title,
+    inLanguage: "ru-RU",
+    url,
+    publisher: { "@id": PUBLISHER["@id"] },
+  };
+  if (solution.summary) article.description = solution.summary;
+  if (cited.size) article.citation = [...cited.values()];
+  if (solution.checkedAt) article.dateModified = solution.checkedAt;
+
+  const page = {
+    "@type": "WebPage",
+    "@id": url,
+    url,
+    name: kbSolutionTitle(solution),
+    description: kbSolutionDescription(solution),
+    inLanguage: "ru-RU",
+    isPartOf: { "@id": WEBSITE["@id"] },
+    breadcrumb: { "@id": `${url}#breadcrumb` },
+    mainEntity: { "@id": article["@id"] },
+    publisher: { "@id": PUBLISHER["@id"] },
+  };
+  if (solution.checkedAt) page.dateModified = solution.checkedAt;
+  const crumbs = { ...breadcrumbJsonLd(kbSolutionsTrail(t, solution)), "@id": `${url}#breadcrumb` };
+  return { "@context": "https://schema.org", "@graph": [page, article, crumbs, WEBSITE, PUBLISHER] };
+}
+
+/** Markdown link text: a bracket or backslash in a title must not end the link. */
+function mdLinkText(value) {
+  return String(value).replace(/[\\[\]]/g, "\\$&");
 }
 
 /** The knowledge-base section appended to /llms.txt. */
-export function kbLlmsSection(counts, t, fullTextDocs = []) {
+export function kbLlmsSection(counts, t, fullTextDocs = [], solutions = []) {
   const lines = ["", `## ${KB_SITE_SECTION} — строительные нормы`, `- [Все разделы](${abs(KB_INDEX_PATH)})`];
+  const solutionsItem = kbSolutionsIndexItem(solutions.length, t);
+  if (solutionsItem) {
+    lines.push(`- [${mdLinkText(solutionsItem.name)}](${abs(solutionsItem.path)}): ${solutionsItem.description}, ${solutionsCountText(t, solutions.length)}`);
+  }
   for (const item of kbIndexItems(counts, t)) {
-    lines.push(`- [${item.name}](${abs(item.path)}): ${item.description}, ${documentsCountText(t, item.count)}`);
+    lines.push(`- [${mdLinkText(item.name)}](${abs(item.path)}): ${item.description}, ${documentsCountText(t, item.count)}`);
   }
   if (fullTextDocs.length) {
     lines.push("", "### Полный текст со ссылками на пункты");
-    for (const doc of fullTextDocs) lines.push(`- [${displayTitle(doc)}](${abs(kbDocPath(doc.slug))})`);
+    for (const doc of fullTextDocs) lines.push(`- [${mdLinkText(displayTitle(doc))}](${abs(kbDocPath(doc.slug))})`);
+  }
+  if (solutions.length) {
+    lines.push("", "### Решения: шаги, числа и приёмка со ссылками на пункты");
+    for (const s of solutions) lines.push(`- [${mdLinkText(s.title)}](${abs(kbSolutionPath(s.slug))})`);
   }
   return lines.join("\n") + "\n";
 }

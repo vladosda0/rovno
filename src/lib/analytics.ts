@@ -338,6 +338,8 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/baza" },
   { pattern: "/baza/razdel/:folder" },
   { pattern: "/baza/razdel/:folder/:page" },
+  { pattern: "/baza/resheniya" },
+  { pattern: "/baza/resheniya/:slug" },
   { pattern: "/baza/:slug" },
   { pattern: "/offer" },
   { pattern: "/privacy" },

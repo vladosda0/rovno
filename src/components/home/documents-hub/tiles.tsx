@@ -12,12 +12,21 @@ import { cn } from "@/lib/utils";
 
 type IconComponent = ComponentType<{ className?: string; strokeWidth?: number | string }>;
 
+/** Cover colour: blue for documents, green for the knowledge base's own «Решения». */
+type TileTone = "accent" | "success";
+
+const COVER_TONE: Record<TileTone, string> = {
+  accent: "from-accent/20 via-accent/8",
+  success: "from-success/20 via-success/8",
+};
+
 interface FolderTileProps {
   title: string;
   count: number;
   icon?: IconComponent;
   description?: string | null;
   coverUrl?: string | null;
+  tone?: TileTone;
   active?: boolean;
   onClick?: () => void;
   draggingOver?: boolean;
@@ -39,6 +48,7 @@ export function FolderTile({
   icon: Icon = Folder,
   description,
   coverUrl,
+  tone = "accent",
   active = false,
   onClick,
   draggingOver = false,
@@ -71,13 +81,14 @@ export function FolderTile({
       )}
     >
       <div
-        className="h-32 w-full bg-gradient-to-br from-accent/20 via-accent/8 to-transparent flex items-center justify-center"
+        className={cn("h-32 w-full bg-gradient-to-br to-transparent flex items-center justify-center", COVER_TONE[tone])}
         aria-hidden="true"
+        data-tone={tone}
       >
         {coverUrl ? (
           <img src={coverUrl} alt="" className="h-full w-full object-cover" />
         ) : (
-          <Icon className="h-10 w-10 text-accent" strokeWidth={1.5} />
+          <Icon className={cn("h-10 w-10", tone === "success" ? "text-success" : "text-accent")} strokeWidth={1.5} />
         )}
       </div>
       <CardContent className="flex flex-1 flex-col gap-1 p-4">
@@ -152,6 +163,7 @@ interface FileTileProps {
   description?: string | null;
   icon?: IconComponent;
   iconColor?: string;
+  tone?: TileTone;
   /** ISO date string or pre-formatted "YYYY-MM-DD". Shown in the meta row. */
   dateAdded?: string | null;
   /** Replaces the date in the meta row (the knowledge-base label). */
@@ -174,6 +186,7 @@ export function FileTile({
   description,
   icon: Icon = FileText,
   iconColor = "text-accent",
+  tone = "accent",
   dateAdded,
   meta,
   onClick,
@@ -208,7 +221,11 @@ export function FileTile({
         draggable && "cursor-grab active:cursor-grabbing",
       )}
     >
-      <div className="flex h-32 w-full items-center justify-center bg-gradient-to-br from-accent/20 via-accent/8 to-transparent" aria-hidden="true">
+      <div
+        className={cn("flex h-32 w-full items-center justify-center bg-gradient-to-br to-transparent", COVER_TONE[tone])}
+        aria-hidden="true"
+        data-tone={tone}
+      >
         <Icon className={cn("h-10 w-10", iconColor)} strokeWidth={1.5} />
       </div>
       <CardContent className="flex flex-1 flex-col gap-1 p-4">

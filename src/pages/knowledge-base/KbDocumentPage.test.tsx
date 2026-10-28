@@ -8,7 +8,12 @@ import type { KbDocument } from "@/lib/knowledge-base/api";
 const fetchKbDocumentBySlug = vi.fn();
 const fetchKbClauses = vi.fn();
 
+const fetchKbSolutions = vi.fn().mockResolvedValue([]);
+const fetchKbSolutionBySlug = vi.fn().mockResolvedValue(null);
+
 vi.mock("@/lib/knowledge-base/api", () => ({
+  fetchKbSolutions: () => fetchKbSolutions(),
+  fetchKbSolutionBySlug: (slug: string) => fetchKbSolutionBySlug(slug),
   fetchKbFolderCounts: vi.fn(),
   fetchKbDocumentPage: vi.fn(),
   fetchKbDocumentBySlug: (slug: string) => fetchKbDocumentBySlug(slug),

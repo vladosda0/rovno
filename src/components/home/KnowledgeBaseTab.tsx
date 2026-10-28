@@ -6,57 +6,74 @@
 // document window. Differences, all from the approved mockup v3: no date filter
 // (the documents have no upload date), paging is server-side (≈7k rows), and a
 // document has no file, so the tile carries a source arrow instead of «Скачать».
+//
+// Slice 4 (mockup v2 approved 22.10, frames 1-2): «Решения» is the first tile,
+// with a green cover, and only while at least one card is published. Inside, the
+// same folder view; the cards are few, so search and paging run in the browser.
+// The header search at the root finds cards too and shows them first.
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookOpen, ChevronLeft, FileText, SearchX } from "lucide-react";
+import { BookOpen, ChevronLeft, FileText, Lightbulb, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SectionChrome } from "@/components/home/documents-hub/SectionChrome";
 import { FileTile, FolderTile, TileGrid } from "@/components/home/documents-hub/tiles";
 import { EmptyState } from "@/components/home/documents-hub/EmptyState";
 import { KbDocumentDialog } from "@/components/knowledge-base/KbDocumentDialog";
 import { KbReadingPage } from "@/components/knowledge-base/KbReadingPage";
+import { KbSolutionPage } from "@/components/knowledge-base/KbSolutionPage";
 import { KbLabelBadge } from "@/components/knowledge-base/KbTextLabel";
 import { kbSourceButtons, openKbSource } from "@/components/knowledge-base/kb-view";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useKbDocumentPage, useKbFolderCounts, useKbSpFullText } from "@/hooks/use-knowledge-base";
+import { useKbDocumentPage, useKbFolderCounts, useKbSolutions, useKbSpFullText } from "@/hooks/use-knowledge-base";
 import type { KbDocument } from "@/lib/knowledge-base/api";
 import { KB_FOLDERS, KB_PAGE_SIZE, displayTitle, formatKbDate, type KbFolder } from "@/lib/knowledge-base/kbConfig.mjs";
 import { kbFullTextReadable, kbTextLabel } from "@/lib/knowledge-base/kbFullText.mjs";
+import { kbSolutionCheckedDate, kbSolutionMatches, type KbSolution } from "@/lib/knowledge-base/kbSolutions.mjs";
 
 /** The reading page's address inside «Документы» (slice 2). */
 export const KB_READ_PARAM = "kbDoc";
+/** A «Решения» card's address inside «Документы» (slice 4). */
+export const KB_SOLUTION_PARAM = "kbSolution";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 export function KnowledgeBaseTab() {
   const { t } = useTranslation();
   const [folder, setFolderState] = useState<KbFolder | null>(null);
+  const [solutionsOpen, setSolutionsOpenState] = useState(false);
   const [search, setSearchState] = useState("");
   const [page, setPage] = useState(0);
   const [openDoc, setOpenDoc] = useState<KbDocument | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const readingSlug = searchParams.get(KB_READ_PARAM);
+  const solutionSlug = searchParams.get(KB_SOLUTION_PARAM);
   const sp = useKbSpFullText();
 
-  function setReading(slug: string | null) {
+  function setParam(param: string, slug: string | null) {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
-      if (slug) next.set(KB_READ_PARAM, slug);
-      else next.delete(KB_READ_PARAM);
+      if (slug) next.set(param, slug);
+      else next.delete(param);
       return next;
     });
   }
+  const setReading = (slug: string | null) => setParam(KB_READ_PARAM, slug);
+  const setSolution = (slug: string | null) => setParam(KB_SOLUTION_PARAM, slug);
 
   const debouncedSearch = useDebounce(search.trim(), SEARCH_DEBOUNCE_MS);
   const searching = debouncedSearch !== "";
-  const listing = folder !== null || searching;
+  const listing = !solutionsOpen && (folder !== null || searching);
 
   // A new folder or a new query starts from the first page (in the handler, not
   // an effect, so no render ever asks for page N of the new scope).
   function setFolder(next: KbFolder | null) {
     setFolderState(next);
+    setPage(0);
+  }
+  function setSolutionsOpen(next: boolean) {
+    setSolutionsOpenState(next);
     setPage(0);
   }
   function setSearch(next: string) {
@@ -65,6 +82,17 @@ export function KnowledgeBaseTab() {
   }
 
   const counts = useKbFolderCounts();
+  // A failed card read only hides the tile: the documents stay usable.
+  const solutions = useKbSolutions();
+  const allSolutions = useMemo(() => solutions.data ?? [], [solutions.data]);
+  const hasSolutions = allSolutions.length > 0;
+  const matchedSolutions = useMemo(
+    () => allSolutions.filter((s) => kbSolutionMatches(s, solutionsOpen ? search : debouncedSearch)),
+    [allSolutions, solutionsOpen, search, debouncedSearch],
+  );
+  const solutionsPage = matchedSolutions.slice(page * KB_PAGE_SIZE, (page + 1) * KB_PAGE_SIZE);
+  // From the root, a search shows the matching cards first, on its first page.
+  const rootSolutionHits = searching && folder === null && !solutionsOpen && page === 0 ? matchedSolutions : [];
   const docs = useKbDocumentPage(
     { folder, search: debouncedSearch, page, pageSize: KB_PAGE_SIZE },
     listing,
@@ -77,7 +105,7 @@ export function KnowledgeBaseTab() {
 
   const folderTitle = (f: KbFolder) => t(`home.knowledgeBase.folders.${f}.title`);
   const rows = listing ? docs.data?.rows ?? [] : [];
-  const total = listing ? docs.data?.total ?? 0 : 0;
+  const total = solutionsOpen ? matchedSolutions.length : listing ? docs.data?.total ?? 0 : 0;
   // From the root a hit names its folder; inside a folder that is implied.
   const showFolderOnTile = folder === null;
 
@@ -96,18 +124,63 @@ export function KnowledgeBaseTab() {
     return label ? <KbLabelBadge kind={label.kind} text={label.text} /> : null;
   }
 
-  const loadFailed = listing ? docs.isError : counts.isError;
-  const loading = listing ? docs.isLoading : counts.isLoading;
+  const loadFailed = solutionsOpen ? solutions.isError : listing ? docs.isError : counts.isError;
+  // The root shows the folders as soon as the counts arrive; the «Решения» tile joins when the cards do.
+  const loading = solutionsOpen
+    ? solutions.isLoading
+    : listing
+      ? docs.isLoading
+      : counts.isLoading || (visibleFolders.length === 0 && solutions.isLoading);
+
+  function solutionTile(solution: KbSolution) {
+    const checked = kbSolutionCheckedDate(solution);
+    return (
+      <FileTile
+        key={`solution:${solution.slug}`}
+        title={solution.title}
+        description={solution.summary}
+        icon={Lightbulb}
+        iconColor="text-success"
+        tone="success"
+        meta={checked ? <KbLabelBadge kind="verified" text={t("home.knowledgeBase.checkedOn", { date: checked })} /> : null}
+        onClick={() => setSolution(solution.slug)}
+        viewLabel=""
+        downloadLabel=""
+      />
+    );
+  }
 
   if (readingSlug) {
     return <KbReadingPage slug={readingSlug} onBack={() => setReading(null)} />;
   }
 
+  if (solutionSlug) {
+    return (
+      <KbSolutionPage
+        slug={solutionSlug}
+        onBack={() => {
+          setSolutionsOpen(true);
+          setSolution(null);
+        }}
+      />
+    );
+  }
+
+  const title = solutionsOpen
+    ? t("home.knowledgeBase.solutions.title")
+    : folder
+      ? folderTitle(folder)
+      : t("home.knowledgeBase.title");
+  const subtitle =
+    folder || solutionsOpen
+      ? undefined
+      : t(hasSolutions ? "home.knowledgeBase.subtitleWithSolutions" : "home.knowledgeBase.subtitle");
+
   return (
     <>
       <SectionChrome
-        title={folder ? folderTitle(folder) : t("home.knowledgeBase.title")}
-        subtitle={folder ? undefined : t("home.knowledgeBase.subtitle")}
+        title={title}
+        subtitle={subtitle}
         search={search}
         onSearchChange={setSearch}
         pageSize={KB_PAGE_SIZE}
@@ -117,8 +190,15 @@ export function KnowledgeBaseTab() {
         isFilterActive={search !== ""}
         onReset={reset}
         headerExtra={
-          folder ? (
-            <Button variant="ghost" size="sm" onClick={() => setFolder(null)}>
+          folder || solutionsOpen ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFolder(null);
+                setSolutionsOpen(false);
+              }}
+            >
               <ChevronLeft className="h-3.5 w-3.5 mr-1" />
               {t("home.documentsHub.folders.backToAll")}
             </Button>
@@ -128,11 +208,30 @@ export function KnowledgeBaseTab() {
         {loadFailed ? (
           <EmptyState icon={BookOpen} title={t("home.knowledgeBase.title")} body={t("home.knowledgeBase.loadError")} />
         ) : loading ? (
-          <p className="text-body-sm text-muted-foreground">{t("home.tab.loading")}</p>
-        ) : !listing && visibleFolders.length === 0 ? (
+          <p className="text-body-sm text-muted-foreground">
+            {t(solutionsOpen ? "home.knowledgeBase.solutions.loadingList" : "home.tab.loading")}
+          </p>
+        ) : solutionsOpen ? (
+          solutionsPage.length === 0 ? (
+            <EmptyState icon={SearchX} title={t("home.knowledgeBase.solutions.searchEmpty")} />
+          ) : (
+            <TileGrid>{solutionsPage.map(solutionTile)}</TileGrid>
+          )
+        ) : !listing && visibleFolders.length === 0 && !hasSolutions ? (
           <EmptyState icon={BookOpen} title={t("home.knowledgeBase.emptyBase")} />
         ) : !listing ? (
           <TileGrid>
+            {hasSolutions && (
+              <FolderTile
+                title={t("home.knowledgeBase.solutions.title")}
+                icon={Lightbulb}
+                tone="success"
+                count={allSolutions.length}
+                filesLabel={t("home.knowledgeBase.solutions.count", { count: allSolutions.length })}
+                description={t("home.knowledgeBase.solutions.description")}
+                onClick={() => setSolutionsOpen(true)}
+              />
+            )}
             {visibleFolders.map((f) => (
               <FolderTile
                 key={f}
@@ -145,10 +244,11 @@ export function KnowledgeBaseTab() {
               />
             ))}
           </TileGrid>
-        ) : rows.length === 0 ? (
+        ) : rows.length === 0 && rootSolutionHits.length === 0 ? (
           <EmptyState icon={SearchX} title={t("home.knowledgeBase.searchEmpty")} />
         ) : (
           <TileGrid>
+            {rootSolutionHits.map(solutionTile)}
             {rows.map((doc) => {
               const firstSource = kbSourceButtons(doc, t)[0];
               const checked = formatKbDate(doc.lastCheckedAt);

@@ -9,8 +9,11 @@ import {
   fetchKbSpFullTextEnabled,
   fetchKbDocumentPage,
   fetchKbFolderCounts,
+  fetchKbSolutionBySlug,
+  fetchKbSolutions,
   type KbDocument,
   type KbDocumentPageParams,
+  type KbSolution,
 } from "@/lib/knowledge-base/api";
 
 const STALE = 10 * 60 * 1000;
@@ -24,6 +27,8 @@ export const kbKeys = {
   docById: (docId: string) => [...kbKeys.all, "doc-id", docId] as const,
   clauses: (docId: string) => [...kbKeys.all, "clauses", docId] as const,
   spFullText: () => [...kbKeys.all, "sp-full-text"] as const,
+  solutions: () => [...kbKeys.all, "solutions"] as const,
+  solution: (slug: string) => [...kbKeys.all, "solution", slug] as const,
 };
 
 export function useKbFolderCounts() {
@@ -92,5 +97,29 @@ export function useKbDocumentById(docId: string | null | undefined) {
     queryFn: () => fetchKbDocumentById(docId!),
     enabled: !!docId,
     staleTime: STALE,
+  });
+}
+
+/** Published «Решения» cards (slice 4); the folder, the card page and the guest pages share one read. */
+export function useKbSolutions(initialData?: KbSolution[]) {
+  return useQuery({
+    queryKey: kbKeys.solutions(),
+    queryFn: fetchKbSolutions,
+    staleTime: STALE,
+    // The root of «База знаний» does not wait for the cards: one retry, then the tile stays away.
+    retry: 1,
+    // Prerendered /baza/resheniya/… inlines the cards (lib/knowledge-base/prerendered-data).
+    initialData,
+  });
+}
+
+export function useKbSolution(slug: string | undefined, initialData?: KbSolution, initialDataUpdatedAt?: number) {
+  return useQuery({
+    queryKey: kbKeys.solution(slug ?? ""),
+    queryFn: () => fetchKbSolutionBySlug(slug!),
+    enabled: !!slug,
+    staleTime: STALE,
+    initialData,
+    initialDataUpdatedAt,
   });
 }

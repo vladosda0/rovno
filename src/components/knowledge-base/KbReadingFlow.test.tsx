@@ -14,7 +14,12 @@ const fetchKbDocumentBySlug = vi.fn();
 const fetchKbClauses = vi.fn();
 const fetchKbSpFullTextEnabled = vi.fn();
 
+const fetchKbSolutions = vi.fn().mockResolvedValue([]);
+const fetchKbSolutionBySlug = vi.fn().mockResolvedValue(null);
+
 vi.mock("@/lib/knowledge-base/api", () => ({
+  fetchKbSolutions: () => fetchKbSolutions(),
+  fetchKbSolutionBySlug: (slug: string) => fetchKbSolutionBySlug(slug),
   fetchKbFolderCounts: () => fetchKbFolderCounts(),
   fetchKbDocumentPage: (p: unknown) => fetchKbDocumentPage(p),
   fetchKbDocumentBySlug: (slug: string) => fetchKbDocumentBySlug(slug),

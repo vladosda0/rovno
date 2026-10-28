@@ -11,7 +11,7 @@ import { BlogShell } from "@/components/blog/BlogShell";
 import { Breadcrumbs } from "@/components/blog/Breadcrumbs";
 import { KbLabelBadge } from "@/components/knowledge-base/KbTextLabel";
 import { useDocumentHead } from "@/lib/blog/seo";
-import { useKbDocumentPage, useKbFolderCounts, useKbSpFullText } from "@/hooks/use-knowledge-base";
+import { useKbDocumentPage, useKbFolderCounts, useKbSolutions, useKbSpFullText } from "@/hooks/use-knowledge-base";
 import { KB_FOLDERS, type KbFolder } from "@/lib/knowledge-base/kbConfig.mjs";
 import {
   KB_FOLDER_PAGE_SIZE,
@@ -26,6 +26,8 @@ import {
   kbIndexDescription,
   kbIndexItems,
   kbIndexTitle,
+  kbSolutionsIndexItem,
+  solutionsCountText,
 } from "@/lib/knowledge-base/kbSeo.mjs";
 
 const H1 = {
@@ -43,6 +45,9 @@ function useTr() {
 export function KbIndexPage() {
   const t = useTr();
   const counts = useKbFolderCounts();
+  // «Решения» leads the list while a card is published (slice 4, frame 1).
+  const solutions = useKbSolutions();
+  const solutionsItem = kbSolutionsIndexItem(solutions.data?.length ?? 0, t);
   const items = kbIndexItems(counts.data, t);
   const total = items.reduce((n, i) => n + i.count, 0);
   const title = kbIndexTitle();
@@ -53,7 +58,9 @@ export function KbIndexPage() {
     description,
     canonicalPath: KB_INDEX_PATH,
     ogType: "website",
-    jsonLd: counts.data ? kbCollectionJsonLd(t, { items, name: title, description }) : null,
+    jsonLd: counts.data
+      ? kbCollectionJsonLd(t, { items: solutionsItem ? [solutionsItem, ...items] : items, name: title, description })
+      : null,
   });
 
   return (
@@ -62,7 +69,7 @@ export function KbIndexPage() {
         <Breadcrumbs trail={kbBreadcrumbTrail(t)} />
         <h1 style={H1}>{t("home.knowledgeBase.title")}</h1>
         <p style={LEAD}>
-          {t("home.knowledgeBase.subtitle")} {total > 0 && t("home.knowledgeBase.public.total", { count: total })}
+          {t(solutionsItem ? "home.knowledgeBase.subtitleWithSolutions" : "home.knowledgeBase.subtitle")} {total > 0 && t("home.knowledgeBase.public.total", { count: total })}
         </p>
         {counts.isLoading ? (
           <p style={MUTED}>{t("home.knowledgeBase.public.loading")}</p>
@@ -70,6 +77,16 @@ export function KbIndexPage() {
           <p style={MUTED}>{t("home.knowledgeBase.loadError")}</p>
         ) : (
           <ul className="rv-kb-folders">
+            {solutionsItem && (
+              <li className="rv-kb-folder">
+                <Link to={solutionsItem.path}>
+                  <strong>{solutionsItem.name}</strong>
+                </Link>
+                <span>
+                  {solutionsItem.description} · {solutionsCountText(t, solutionsItem.count)}
+                </span>
+              </li>
+            )}
             {items.map((item) => (
               <li key={item.folder} className="rv-kb-folder">
                 <Link to={item.path}>

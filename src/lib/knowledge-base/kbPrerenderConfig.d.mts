@@ -45,8 +45,14 @@ export declare function withKbHead(
     cssAssets?: string[];
   },
 ): string;
-export declare function kbIndexRootHtml(counts: Record<string, number>, t: KbTranslate): string;
-export declare function kbIndexPageHtml(template: string, counts: Record<string, number>, t: KbTranslate, cssAssets?: string[]): string;
+export declare function kbIndexRootHtml(counts: Record<string, number>, t: KbTranslate, solutionsCount?: number): string;
+export declare function kbIndexPageHtml(
+  template: string,
+  counts: Record<string, number>,
+  t: KbTranslate,
+  cssAssets?: string[],
+  solutionsCount?: number,
+): string;
 export declare function kbFolderRootHtml(
   folder: string,
   docs: import("./kbConfig.mjs").KbDocumentShape[],
@@ -64,3 +70,18 @@ export declare function kbHubSitemapUrls(paths: string[], today: string): string
 export declare const KB_RESERVED_SLUGS: Set<string>;
 export declare function sortKbRows<T extends Record<string, unknown>>(rows: T[]): T[];
 export declare function documentsCountText(t: KbTranslate, count: number): string;
+
+export declare const KB_SOLUTION_DATA_ID: string;
+export declare function kbSolutionCardHtml(solution: import("./kbSolutions.mjs").KbSolution, t: KbTranslate): string;
+export declare function kbSolutionRootHtml(row: Record<string, unknown>, t: KbTranslate): string;
+export declare function kbSolutionPageHtml(template: string, row: Record<string, unknown>, t: KbTranslate, cssAssets?: string[]): string;
+export declare function kbSolutionsRootHtml(rows: Array<Record<string, unknown>>, t: KbTranslate): string;
+export declare function kbSolutionsPageHtml(template: string, rows: Array<Record<string, unknown>>, t: KbTranslate, cssAssets?: string[]): string;
+export declare function kbSolutionPages(
+  template: string,
+  rows: Array<Record<string, unknown>>,
+  t: KbTranslate,
+  cssAssets?: string[],
+): Array<{ path: string; html: string }>;
+export declare function kbUsableSolutionRows<T extends Record<string, unknown>>(rows: T[]): T[];
+export declare function kbSolutionSitemapUrls(rows: Array<Record<string, unknown>>, today: string): string[];

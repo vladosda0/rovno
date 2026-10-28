@@ -5,6 +5,18 @@
 // page say the same thing.
 
 import { buildKbDocumentView, kbDocPath, normalizeKbRow } from "./kbConfig.mjs";
+import {
+  KB_SOLUTIONS_PATH,
+  kbDefaultChoice,
+  kbItemChips,
+  kbItemVisible,
+  kbMoscowIsoDate,
+  kbSolutionCheckedDate,
+  kbSolutionDocuments,
+  kbSolutionPath,
+  normalizeKbSolution,
+  sortKbSolutions,
+} from "./kbSolutions.mjs";
 import { kbEditionLine, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
 import {
   KB_INDEX_PATH,
@@ -22,10 +34,21 @@ import {
   kbIndexItems,
   kbIndexTitle,
   documentsCountText,
+  kbSolutionDescription,
+  kbSolutionJsonLd,
+  kbSolutionTitle,
+  kbSolutionsDescription,
+  kbSolutionsIndexItem,
+  kbSolutionsItems,
+  kbSolutionsTitle,
+  kbSolutionsTrail,
+  solutionsCountText,
 } from "./kbSeo.mjs";
 
 export const SITE_ORIGIN = "https://rovno.ai";
 export const KB_DOC_DATA_ID = "__KB_DOC_DATA__";
+/** The card inlined on /baza/resheniya/<slug>/ (lib/knowledge-base/prerendered-data). */
+export const KB_SOLUTION_DATA_ID = "__KB_SOLUTION_DATA__";
 /** Same og:site_name as prerender-blog.mjs and src/lib/blog/seo.ts. */
 export const SITE_NAME = "Ровно ИИ";
 
@@ -206,10 +229,14 @@ const H1 = 'style="font-family:var(--font-display);font-size:56px;line-height:1;
 const LEAD = 'style="font-family:var(--font-body);font-size:18px;color:var(--rv-blue);opacity:.8;margin-top:12px"';
 
 /** /baza/: every folder with its count and description, each a link. */
-export function kbIndexRootHtml(counts, t) {
+export function kbIndexRootHtml(counts, t, solutionsCount = 0) {
   const items = kbIndexItems(counts, t);
   const total = items.reduce((n, i) => n + i.count, 0);
-  const list = items
+  const solutions = kbSolutionsIndexItem(solutionsCount, t);
+  const solutionsLine = solutions
+    ? `<li class="rv-kb-folder"><a href="${escapeHtml(solutions.path)}"><strong>${escapeHtml(solutions.name)}</strong></a><span>${escapeHtml(solutions.description)} · ${escapeHtml(solutionsCountText(t, solutions.count))}</span></li>`
+    : "";
+  const list = solutionsLine + items
     .map(
       (i) =>
         `<li class="rv-kb-folder"><a href="${escapeHtml(i.path)}"><strong>${escapeHtml(i.name)}</strong></a><span>${escapeHtml(i.description)} · ${escapeHtml(documentsCountText(t, i.count))}</span></li>`,
@@ -219,26 +246,27 @@ export function kbIndexRootHtml(counts, t) {
   <main><section class="rv-section rv-kb-hub" style="padding:64px 48px 96px">
     ${kbBreadcrumbsHtml(kbBreadcrumbTrail(t))}
     <h1 ${H1}>${escapeHtml(t("home.knowledgeBase.title"))}</h1>
-    <p ${LEAD}>${escapeHtml(t("home.knowledgeBase.subtitle"))} ${escapeHtml(t("home.knowledgeBase.public.total", { count: total }))}</p>
+    <p ${LEAD}>${escapeHtml(t(solutions ? "home.knowledgeBase.subtitleWithSolutions" : "home.knowledgeBase.subtitle"))} ${escapeHtml(t("home.knowledgeBase.public.total", { count: total }))}</p>
     <ul class="rv-kb-folders">${list}</ul>
   </section></main>
   ${chromeEnd()}`;
 }
 
-export function kbIndexPageHtml(template, counts, t, cssAssets = []) {
+export function kbIndexPageHtml(template, counts, t, cssAssets = [], solutionsCount = 0) {
   const items = kbIndexItems(counts, t);
   const total = items.reduce((n, i) => n + i.count, 0);
   const title = kbIndexTitle();
   const description = kbIndexDescription(total);
+  const solutions = kbSolutionsIndexItem(solutionsCount, t);
   const html = withKbHead(template, {
     title,
     description,
     canonicalPath: KB_INDEX_PATH,
     ogType: "website",
-    jsonLd: kbCollectionJsonLd(t, { items, name: title, description }),
+    jsonLd: kbCollectionJsonLd(t, { items: solutions ? [solutions, ...items] : items, name: title, description }),
     cssAssets,
   });
-  return html.replace(/<div id="root"><\/div>/, () => `<div id="root">${kbIndexRootHtml(counts, t)}</div>`);
+  return html.replace(/<div id="root"><\/div>/, () => `<div id="root">${kbIndexRootHtml(counts, t, solutionsCount)}</div>`);
 }
 
 function pagerHtml(folder, page, pages) {
@@ -309,7 +337,7 @@ export function kbHubSitemapUrls(paths, today) {
 }
 
 /** Slugs a document cannot take: they are the public folder pages' segment. */
-export const KB_RESERVED_SLUGS = new Set(["razdel"]);
+export const KB_RESERVED_SLUGS = new Set(["razdel", "resheniya"]);
 
 /** Sorted by designation, title, doc_id. */
 export function sortKbRows(rows) {
@@ -354,4 +382,193 @@ export function fallbackShellWithoutKbPages(indexHtml, { pagesWritten, fetchFail
   if (pagesWritten > 0 || !fetchFailed) return null;
   if (!/<link rel="canonical"/.test(indexHtml)) return null;
   return stripCanonicalTags(indexHtml);
+}
+
+// ── «Решения» (slice 4, step 4.7, frame 6) ──────────────────────────────────
+
+const LABEL_VERIFIED = (t, date) =>
+  `<span class="rv-kb-label rv-kb-label--verified">${escapeHtml(t("home.knowledgeBase.checkedOn", { date }))}</span>`;
+
+/**
+ * A source chip without JS: <details> opens the quote and the link to the
+ * clause on the guest document page, like the SPA's popover (frame 4).
+ */
+function solutionChipsHtml(solution, entry, t) {
+  return kbItemChips(solution, entry)
+    .map((chip) => {
+      const link =
+        chip.docSlug
+          ? `<a href="${escapeHtml(`${kbDocPath(chip.docSlug)}${chip.anchor ? `#${chip.anchor}` : ""}`)}">${escapeHtml(t("home.knowledgeBase.solutions.openClause"))}</a>`
+          : "";
+      const quotes = chip.quotes.map((quote) => `<blockquote>«…${escapeHtml(quote)}…»</blockquote>`).join("");
+      return `<details class="rv-kb-cite"><summary>${escapeHtml(chip.label)}</summary><p>${escapeHtml(chip.heading)}</p>${quotes}${link}</details>`;
+    })
+    .join(" ");
+}
+
+/** data-when="base:gklv zone:wet": which case an item belongs to. */
+function whenAttr(entry) {
+  if (!entry.when) return "";
+  const value = Object.entries(entry.when).map(([k, v]) => `${k}:${v}`).join(" ");
+  return ` data-when="${escapeHtml(value)}"`;
+}
+
+/**
+ * Every case of the card in the HTML (frame 6): items outside the default case
+ * carry `hidden`, the toggles only hide, so a crawler reads the whole card.
+ */
+export function kbSolutionCardHtml(solution, t) {
+  const choice = kbDefaultChoice(solution);
+  const checked = kbSolutionCheckedDate(solution);
+  const docs = kbSolutionDocuments(solution);
+  const rec = (entry) => (entry.recommendation ? ` ${escapeHtml(t("home.knowledgeBase.solutions.recommendation"))}` : "");
+  const hidden = (entry) => (kbItemVisible(entry, choice) ? "" : " hidden");
+  const li = (entry) =>
+    `<li${whenAttr(entry)}${hidden(entry)}>${escapeHtml(entry.text)}${rec(entry)} ${solutionChipsHtml(solution, entry, t)}</li>`;
+  const section = (key, body) => `<section class="rv-kb-solution__section"><h2>${escapeHtml(t(`home.knowledgeBase.solutions.${key}`))}</h2>${body}</section>`;
+
+  const conditions = solution.conditions
+    .map(
+      (c) =>
+        `<div class="rv-kb-condition" data-condition="${escapeHtml(c.key)}"><span>${escapeHtml(c.label)}</span> ${c.options
+          .map(
+            (o) =>
+              `<button type="button" data-option="${escapeHtml(o.key)}" aria-pressed="${choice[c.key] === o.key}">${escapeHtml(o.label)}</button>`,
+          )
+          .join(" ")}</div>`,
+    )
+    .join("");
+  const numbers = solution.numbers.length
+    ? section(
+        "numbers",
+        `<table><thead><tr><th>${escapeHtml(t("home.knowledgeBase.solutions.numbersWhat"))}</th><th>${escapeHtml(
+          t("home.knowledgeBase.solutions.numbersValue"),
+        )}</th><th>${escapeHtml(t("home.knowledgeBase.solutions.numbersSource"))}</th></tr></thead><tbody>${solution.numbers
+          .map(
+            (n) =>
+              `<tr${whenAttr(n)}${hidden(n)}><td>${escapeHtml(n.what)}${rec(n)}</td><td>${escapeHtml(n.value)}</td><td>${solutionChipsHtml(solution, n, t)}</td></tr>`,
+          )
+          .join("")}</tbody></table>`,
+      )
+    : "";
+
+  return [
+    `<p class="rv-kb-solution__meta">${checked ? LABEL_VERIFIED(t, checked) : ""}${
+      docs.length ? ` <span>${escapeHtml(t("home.knowledgeBase.solutions.documents", { list: docs.join(", ") }))}</span>` : ""
+    }</p>`,
+    // The static snapshot is what a guest from search sees: «Спросить Шурика» leads
+    // to sign-up, like on the document pages (decision D6).
+    `<div class="rv-kb-actions"><a class="rv-btn rv-btn--secondary rv-kb-ask" href="/auth/signup">${escapeHtml(t("home.knowledgeBase.askShurik"))}</a></div>`,
+    solution.summary ? `<p class="rv-article-subtitle">${escapeHtml(solution.summary)}</p>` : "",
+    conditions ? `<div class="rv-kb-conditions">${conditions}</div>` : "",
+    solution.steps.length ? section("steps", `<ol>${solution.steps.map(li).join("")}</ol>`) : "",
+    solution.divergences.length ? section("divergences", `<ul>${solution.divergences.map(li).join("")}</ul>`) : "",
+    numbers,
+    solution.acceptance.length ? section("acceptance", `<ul>${solution.acceptance.map(li).join("")}</ul>`) : "",
+    `<footer class="rv-kb-solution__footer">${
+      checked ? `<p>${escapeHtml(t("home.knowledgeBase.solutions.checkedWithSources", { date: checked }))}</p>` : ""
+    }<p>${escapeHtml(t("home.knowledgeBase.solutions.disclaimer"))}</p></footer>`,
+  ].join("");
+}
+
+export function kbSolutionRootHtml(row, t) {
+  const solution = normalizeKbSolution(row);
+  return `${chromeStart()}
+  <main><article class="rv-kb-doc rv-kb-solution"><section class="rv-section" style="padding:64px 48px 96px">
+    ${kbBreadcrumbsHtml(kbSolutionsTrail(t, solution))}
+    <header class="rv-article-header"><h1 class="rv-article-title">${escapeHtml(solution.title)}</h1></header>
+    ${kbSolutionCardHtml(solution, t)}
+  </section></article></main>
+  ${chromeEnd()}`;
+}
+
+/** /baza/resheniya/<slug>/: the whole card, its head and the inlined row for the SPA. */
+export function kbSolutionPageHtml(template, row, t, cssAssets = []) {
+  const solution = normalizeKbSolution(row);
+  let html = withKbHead(template, {
+    title: kbSolutionTitle(solution),
+    description: kbSolutionDescription(solution),
+    canonicalPath: kbSolutionPath(solution.slug),
+    jsonLd: kbSolutionJsonLd(solution, t),
+    cssAssets,
+  });
+  const data = `<script type="application/json" id="${KB_SOLUTION_DATA_ID}">${jsonForScriptTag(row)}</script>`;
+  html = html.replace(/<div id="root"><\/div>/, () => `<div id="root">${kbSolutionRootHtml(row, t)}</div>\n    ${data}`);
+  return html;
+}
+
+/** /baza/resheniya/: every published card as a link with its summary and label. */
+export function kbSolutionsRootHtml(rows, t) {
+  const solutions = sortKbSolutions(rows.map(normalizeKbSolution));
+  const list = solutions
+    .map((s) => {
+      const checked = kbSolutionCheckedDate(s);
+      const meta = [checked ? LABEL_VERIFIED(t, checked) : "", s.summary ? escapeHtml(s.summary) : ""].filter(Boolean).join(" ");
+      return `<li class="rv-kb-doc-item"><a href="${escapeHtml(kbSolutionPath(s.slug))}">${escapeHtml(s.title)}</a>${meta ? `<span>${meta}</span>` : ""}</li>`;
+    })
+    .join("");
+  return `${chromeStart()}
+  <main><section class="rv-section rv-kb-hub" style="padding:64px 48px 96px">
+    ${kbBreadcrumbsHtml(kbSolutionsTrail(t))}
+    <h1 ${H1}>${escapeHtml(t("home.knowledgeBase.solutions.title"))}</h1>
+    <p ${LEAD}>${escapeHtml(t("home.knowledgeBase.solutions.description"))} · ${escapeHtml(solutionsCountText(t, solutions.length))}</p>
+    <ul class="rv-kb-doc-list">${list}</ul>
+  </section></main>
+  ${chromeEnd()}`;
+}
+
+export function kbSolutionsPageHtml(template, rows, t, cssAssets = []) {
+  const solutions = sortKbSolutions(rows.map(normalizeKbSolution));
+  const title = kbSolutionsTitle();
+  const description = kbSolutionsDescription(t, solutions.length);
+  const html = withKbHead(template, {
+    title,
+    description,
+    canonicalPath: KB_SOLUTIONS_PATH,
+    ogType: "website",
+    jsonLd: kbCollectionJsonLd(t, {
+      items: kbSolutionsItems(solutions),
+      name: title,
+      description,
+      path: KB_SOLUTIONS_PATH,
+      trail: kbSolutionsTrail(t),
+    }),
+    cssAssets,
+  });
+  return html.replace(/<div id="root"><\/div>/, () => `<div id="root">${kbSolutionsRootHtml(rows, t)}</div>`);
+}
+
+/**
+ * The cards the prerenderer publishes: a safe slug and a title. One list feeds
+ * the pages, the sitemap, the index count and llms.txt.
+ */
+export function kbUsableSolutionRows(rows) {
+  return rows.filter((row) => isSafeSlug(row?.slug) && typeof row?.title === "string" && row.title.trim());
+}
+
+/**
+ * The «Решения» pages to write: the folder and one page per card, nothing at all
+ * while no card is published (no empty folder, frame 1). Rows with an unusable
+ * slug or no title are skipped like documents.
+ */
+export function kbSolutionPages(template, rows, t, cssAssets = []) {
+  const usable = kbUsableSolutionRows(rows);
+  if (!usable.length) return [];
+  return [
+    { path: KB_SOLUTIONS_PATH, html: kbSolutionsPageHtml(template, usable, t, cssAssets) },
+    ...usable.map((row) => ({ path: kbSolutionPath(row.slug), html: kbSolutionPageHtml(template, row, t, cssAssets) })),
+  ];
+}
+
+/** Sitemap lines for the folder and every card; a card's lastmod is the Moscow date of its updated_at. */
+export function kbSolutionSitemapUrls(rows, today) {
+  const usable = kbUsableSolutionRows(rows);
+  if (!usable.length) return [];
+  return [
+    `  <url><loc>${escapeHtml(`${SITE_ORIGIN}${KB_SOLUTIONS_PATH}`)}</loc><lastmod>${today}</lastmod></url>`,
+    ...usable.map((row) => {
+      const lastmod = kbMoscowIsoDate(row.updated_at) ?? today;
+      return `  <url><loc>${escapeHtml(`${SITE_ORIGIN}${kbSolutionPath(row.slug)}`)}</loc><lastmod>${lastmod}</lastmod></url>`;
+    }),
+  ];
 }

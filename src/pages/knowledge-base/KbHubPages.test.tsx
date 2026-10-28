@@ -7,7 +7,12 @@ import { normalizeKbRow } from "@/lib/knowledge-base/kbConfig.mjs";
 const fetchKbFolderCounts = vi.fn();
 const fetchKbDocumentPage = vi.fn();
 
+const fetchKbSolutions = vi.fn().mockResolvedValue([]);
+const fetchKbSolutionBySlug = vi.fn().mockResolvedValue(null);
+
 vi.mock("@/lib/knowledge-base/api", () => ({
+  fetchKbSolutions: () => fetchKbSolutions(),
+  fetchKbSolutionBySlug: (slug: string) => fetchKbSolutionBySlug(slug),
   fetchKbFolderCounts: () => fetchKbFolderCounts(),
   fetchKbDocumentPage: (p: unknown) => fetchKbDocumentPage(p),
   fetchKbSpFullTextEnabled: () => Promise.resolve(true),

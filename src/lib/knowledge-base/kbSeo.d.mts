@@ -2,6 +2,7 @@
 
 import type { KbDocumentShape, KbFolder, KbTranslate } from "./kbConfig.mjs";
 import type { KbClause, KbTextLabel } from "./kbFullText.mjs";
+import type { KbSolution } from "./kbSolutions.mjs";
 
 export interface KbCrumb {
   name: string;
@@ -52,7 +53,15 @@ export declare function kbFolderTitle(folder: KbFolder, t: KbTranslate, page?: n
 export declare function kbFolderDescription(folder: KbFolder, t: KbTranslate, total: number): string;
 export declare function kbCollectionJsonLd(
   t: KbTranslate,
-  options: { folder?: KbFolder | null; page?: number; items?: Array<{ path: string; name: string }>; name: string; description: string },
+  options: {
+    folder?: KbFolder | null;
+    page?: number;
+    items?: Array<{ path: string; name: string }>;
+    name: string;
+    description: string;
+    path?: string | null;
+    trail?: KbCrumb[] | null;
+  },
 ): Json;
 export declare function kbIndexItems(counts: Partial<Record<KbFolder, number>> | null | undefined, t: KbTranslate): KbIndexItem[];
 export declare function kbFolderItem(doc: KbDocumentShape, t: KbTranslate, options?: { spFullText?: boolean }): KbFolderItem;
@@ -61,5 +70,23 @@ export declare function kbLlmsSection(
   counts: Partial<Record<KbFolder, number>>,
   t: KbTranslate,
   fullTextDocs?: KbDocumentShape[],
+  solutions?: KbSolution[],
 ): string;
 export declare function documentsCountText(t: KbTranslate, count: number): string;
+export declare function solutionsCountText(t: KbTranslate, count: number): string;
+
+export interface KbSolutionsIndexItem {
+  name: string;
+  description: string;
+  count: number;
+  path: string;
+}
+export declare function kbSolutionsTrail(t: KbTranslate, solution?: KbSolution | null): KbCrumb[];
+export declare function kbSolutionsIndexItem(count: number, t: KbTranslate): KbSolutionsIndexItem | null;
+export declare function kbSolutionsTitle(): string;
+export declare function kbSolutionsDescription(t: KbTranslate, count: number): string;
+export declare function kbSolutionsItems(solutions: KbSolution[]): Array<{ path: string; name: string }>;
+export declare function kbSolutionsJsonLd(t: KbTranslate, solutions: KbSolution[]): Json;
+export declare function kbSolutionTitle(solution: KbSolution): string;
+export declare function kbSolutionDescription(solution: KbSolution): string;
+export declare function kbSolutionJsonLd(solution: KbSolution, t: KbTranslate): Json;

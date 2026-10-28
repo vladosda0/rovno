@@ -54,6 +54,12 @@ const BlogTagPage = lazy(() => import("@/pages/blog/BlogTagPage"));
 const KbDocumentPage = lazy(() => import("@/pages/knowledge-base/KbDocumentPage"));
 const KbIndexPage = lazy(() => import("@/pages/knowledge-base/KbHubPages").then((m) => ({ default: m.KbIndexPage })));
 const KbFolderPage = lazy(() => import("@/pages/knowledge-base/KbHubPages").then((m) => ({ default: m.KbFolderPage })));
+const KbSolutionsPage = lazy(() =>
+  import("@/pages/knowledge-base/KbSolutionPages").then((m) => ({ default: m.KbSolutionsPage })),
+);
+const KbSolutionPublicPage = lazy(() =>
+  import("@/pages/knowledge-base/KbSolutionPages").then((m) => ({ default: m.KbSolutionPublicPage })),
+);
 const BlogAdminList = lazy(() => import("@/pages/blog/admin/BlogAdminList"));
 const BlogEditorPage = lazy(() => import("@/pages/blog/admin/BlogEditorPage"));
 const Offer = lazy(() => import("@/pages/legal/Offer"));
@@ -107,6 +113,8 @@ const App = () => (
           <Route path="/baza" element={routeElement(<KbIndexPage />)} />
           <Route path="/baza/razdel/:folder" element={routeElement(<KbFolderPage />)} />
           <Route path="/baza/razdel/:folder/:page" element={routeElement(<KbFolderPage />)} />
+          <Route path="/baza/resheniya" element={routeElement(<KbSolutionsPage />)} />
+          <Route path="/baza/resheniya/:slug" element={routeElement(<KbSolutionPublicPage />)} />
           <Route path="/baza/:slug" element={routeElement(<KbDocumentPage />)} />
 
           {/* Legal / compliance pages (required by T-Bank acquirer) */}

@@ -15,11 +15,12 @@ import {
   type KbDocumentShape,
   type KbFolder,
 } from "./kbConfig.mjs";
+import { KB_SOLUTION_SELECT, normalizeKbSolution, sortKbSolutions, type KbSolution } from "./kbSolutions.mjs";
 
 const rawSupabase = supabase as unknown as SupabaseClient;
 
 export type KbDocument = KbDocumentShape;
-export type { KbClause };
+export type { KbClause, KbSolution };
 
 export const KB_DOCUMENT_COLUMNS =
   "doc_id, slug, designation, title, category, folder, display_mode, object_types, domains, " +
@@ -138,4 +139,31 @@ export async function fetchKbSpFullTextEnabled(): Promise<boolean> {
     .maybeSingle();
   if (error) throw error;
   return (data as { value?: unknown } | null)?.value === true;
+}
+
+/**
+ * Published «Решения» cards with their facts (slice 4). A handful of rows, so
+ * the folder filters and pages them in the browser. RLS returns published
+ * cards only; the SP switch does not touch them (decision 12.10).
+ */
+export async function fetchKbSolutions(): Promise<KbSolution[]> {
+  const { data, error } = await rawSupabase
+    .from("kb_solutions")
+    .select(KB_SOLUTION_SELECT)
+    .eq("status", "published")
+    .order("title", { ascending: true });
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  return sortKbSolutions(rows.map(normalizeKbSolution).filter((s) => s.slug && s.title));
+}
+
+export async function fetchKbSolutionBySlug(slug: string): Promise<KbSolution | null> {
+  const { data, error } = await rawSupabase
+    .from("kb_solutions")
+    .select(KB_SOLUTION_SELECT)
+    .eq("slug", slug)
+    .eq("status", "published")
+    .maybeSingle();
+  if (error) throw error;
+  return data ? normalizeKbSolution(data as unknown as Record<string, unknown>) : null;
 }
