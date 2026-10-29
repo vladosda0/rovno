@@ -663,6 +663,10 @@
     {
       "path": "supabase/migrations/20261027040000_knowledge_base_solutions_review.sql",
       "sha256": "006bbacf46bc85720e14bf6cb377d125998045d67a3556e82d744216a5400375"
+    },
+    {
+      "path": "supabase/migrations/20261029100000_billing_plan_code_checks.sql",
+      "sha256": "7f3acd81fc9395d34a4ce2140ffbb2ffae1813303b8af42b7c370738ac506d03"
     }
   ],
   "generated_artifacts": [

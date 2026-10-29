@@ -196,6 +196,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261022030000_knowledge_base_full_text.sql`
 - `supabase/migrations/20261023030000_knowledge_base_text_gaps.sql`
 - `supabase/migrations/20261027040000_knowledge_base_solutions_review.sql`
+- `supabase/migrations/20261029100000_billing_plan_code_checks.sql`
 
 ## Exclusions
 

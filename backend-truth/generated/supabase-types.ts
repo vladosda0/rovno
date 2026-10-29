@@ -1390,7 +1390,7 @@ export type Database = {
           "billing_customer_id": string
           "provider": "stripe" | "tbank"
           "external_subscription_id": string
-          "plan_code": string
+          "plan_code": "free" | "master" | "brigade"
           "status": "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
           "is_current": boolean
           "currency": "RUB" | "USD" | "EUR" | "GBP"
@@ -1413,7 +1413,7 @@ export type Database = {
           "billing_customer_id": string
           "provider": "stripe" | "tbank"
           "external_subscription_id": string
-          "plan_code": string
+          "plan_code": "free" | "master" | "brigade"
           "status": "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
           "is_current"?: boolean
           "currency"?: "RUB" | "USD" | "EUR" | "GBP"
@@ -1436,7 +1436,7 @@ export type Database = {
           "billing_customer_id"?: string
           "provider"?: "stripe" | "tbank"
           "external_subscription_id"?: string
-          "plan_code"?: string
+          "plan_code"?: "free" | "master" | "brigade"
           "status"?: "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
           "is_current"?: boolean
           "currency"?: "RUB" | "USD" | "EUR" | "GBP"
@@ -2173,7 +2173,7 @@ export type Database = {
           "provider": "tbank"
           "external_payment_id": string | null
           "order_id": string
-          "plan_code": string
+          "plan_code": "master" | "brigade"
           "amount_kopecks": number
           "currency": string
           "status": "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
@@ -2204,7 +2204,7 @@ export type Database = {
           "provider": "tbank"
           "external_payment_id"?: string | null
           "order_id": string
-          "plan_code": string
+          "plan_code": "master" | "brigade"
           "amount_kopecks": number
           "currency"?: string
           "status"?: "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
@@ -2235,7 +2235,7 @@ export type Database = {
           "provider"?: "tbank"
           "external_payment_id"?: string | null
           "order_id"?: string
-          "plan_code"?: string
+          "plan_code"?: "master" | "brigade"
           "amount_kopecks"?: number
           "currency"?: string
           "status"?: "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
