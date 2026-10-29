@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
+import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
+import { EmailCodeStep } from "@/components/auth/EmailCodeStep";
+import { isJustConfirmed } from "@/lib/email-code";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { clearDemoSession, setAuthRole } from "@/lib/auth-state";
+import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
-import { trackEvent } from "@/lib/analytics";
+import { setAnalyticsUserId, trackEvent, trackEventOncePerUser } from "@/lib/analytics";
 import { safeNextPath } from "@/lib/safe-next-path";
 
 export default function Signup() {
@@ -18,9 +21,8 @@ export default function Signup() {
   const [searchParams] = useSearchParams();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
   const safeNext = safeNextPath(searchParams.get("next"));
   const postAuthDestination = safeNext ?? "/onboarding";
 
@@ -30,81 +32,87 @@ export default function Signup() {
     trackEvent("registration_start");
   }, []);
 
+  // No password on sign-up (epic external-login, D7): the letter carries a code
+  // and GoTrue creates the account. The marker tells «Безопасность» there is no
+  // password yet; it is cosmetic and grants nothing. A taken address gets a
+  // sign-in code to its existing account, so the screen never reveals it.
+  const sendCode = async () => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${window.location.origin}/auth/callback${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}`,
+        data: { full_name: name.trim(), passwordless: true },
+      },
+    });
+    if (error) throw error;
+  };
+
+  const showFailure = (error: unknown) => {
+    toast({
+      title: t("auth.signup.failureTitle"),
+      description: error instanceof Error ? error.message : t("auth.signup.genericFailure"),
+      variant: "destructive",
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password || !passwordConfirm) {
+    if (!name.trim() || !email.trim()) {
       toast({ title: t("auth.signup.validationTitle"), description: t("auth.signup.validationAllRequired"), variant: "destructive" });
-      return;
-    }
-    if (password.length < 6) {
-      toast({ title: t("auth.signup.validationTitle"), description: t("auth.signup.validationPasswordLength"), variant: "destructive" });
-      return;
-    }
-    if (password !== passwordConfirm) {
-      toast({ title: t("auth.signup.validationTitle"), description: t("auth.signup.validationPasswordMismatch"), variant: "destructive" });
       return;
     }
     setLoading(true);
     try {
-      const emailRedirectTo = `${window.location.origin}/auth/callback`;
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          emailRedirectTo,
-          data: {
-            full_name: name.trim(),
-          },
-        },
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      const hasSession = Boolean(data.session?.user);
-      const identities = data.user?.identities ?? [];
-      const looksLikeExistingEmail = !hasSession && data.user != null && identities.length === 0;
-
-      if (looksLikeExistingEmail) {
-        toast({
-          title: t("auth.signup.duplicateEmailTitle"),
-          description: t("auth.signup.duplicateEmailDescription"),
-          variant: "destructive",
-        });
-        return;
-      }
-
-      clearDemoSession();
-      clearAiSidebarSessionPreference();
-      if (data.session?.user) {
-        // Email confirmation disabled: the signup IS the first login.
-        trackEvent("registration_complete", {
-          user_id: data.session.user.id,
-          email_confirmation_required: false,
-        });
-        trackEvent("first_login", { user_id: data.session.user.id, via: "signup_autologin" });
-        setAuthRole("owner");
-        toast({ title: t("auth.signup.successTitle"), description: t("auth.signup.welcomeToApp") });
-        navigate(postAuthDestination);
-        return;
-      }
-
-      trackEvent("registration_complete", {
-        user_id: data.user?.id ?? "unknown",
-        email_confirmation_required: true,
-      });
-      navigate(`/auth/email-sent?email=${encodeURIComponent(email.trim())}`);
+      await sendCode();
+      setCodeSent(true);
     } catch (error) {
-      toast({
-        title: t("auth.signup.failureTitle"),
-        description: error instanceof Error ? error.message : t("auth.signup.genericFailure"),
-        variant: "destructive",
-      });
+      showFailure(error);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleVerified = async (user: User) => {
+    clearDemoSession();
+    clearAiSidebarSessionPreference();
+    setAuthRole("owner");
+    setAnalyticsUserId(user.id);
+
+    if (isJustConfirmed(user)) {
+      // The code confirmed the email: the registration IS the first login.
+      trackEventOncePerUser("registration_complete", {
+        user_id: user.id,
+        email_confirmation_required: false,
+        method: "email_code",
+      });
+      trackEventOncePerUser("first_login", { user_id: user.id, via: "signup_autologin", method: "email_code" });
+      toast({ title: t("auth.signup.successTitle"), description: t("auth.signup.welcomeToApp") });
+      navigate(postAuthDestination);
+      return;
+    }
+
+    const completedOnboarding = await hasCompletedOnboarding(user.id);
+    toast({ title: t("auth.login.successTitle"), description: t("auth.login.successDescription") });
+    navigate(safeNext ?? (completedOnboarding ? "/home" : "/onboarding"));
+  };
+
+  if (codeSent) {
+    return (
+      <EmailCodeStep
+        email={email.trim()}
+        onVerified={(session) => handleVerified(session.user)}
+        onResend={async () => {
+          try {
+            await sendCode();
+          } catch (error) {
+            showFailure(error);
+          }
+        }}
+        onChangeEmail={() => setCodeSent(false)}
+      />
+    );
+  }
 
   return (
     <AuthCard
@@ -119,29 +127,14 @@ export default function Signup() {
       <form onSubmit={handleSubmit} className="space-y-sp-2">
         <div className="space-y-1.5">
           <Label htmlFor="name">{t("auth.signup.fullNameLabel")}</Label>
-          <Input id="name" placeholder={t("auth.signup.fullNamePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} />
+          <Input id="name" autoComplete="name" placeholder={t("auth.signup.fullNamePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="email">{t("common.email")}</Label>
-          <Input id="email" type="email" placeholder={t("common.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="password">{t("common.password")}</Label>
-          <Input id="password" type="password" autoComplete="new-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="password-confirm">{t("auth.signup.confirmPasswordLabel")}</Label>
-          <Input
-            id="password-confirm"
-            type="password"
-            autoComplete="new-password"
-            placeholder="••••••••"
-            value={passwordConfirm}
-            onChange={(e) => setPasswordConfirm(e.target.value)}
-          />
+          <Input id="email" type="email" autoComplete="email" placeholder={t("common.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <Button type="submit" disabled={loading} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-          {loading ? t("auth.signup.submitting") : t("auth.signup.submit")}
+          {loading ? t("auth.code.sending") : t("auth.signup.submit")}
         </Button>
         <p className="text-center text-caption text-muted-foreground">
           <Trans

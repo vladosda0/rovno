@@ -156,6 +156,14 @@ export type AnalyticsEventName =
 export type AnalyticsEventPayload = Record<string, unknown>;
 
 /**
+ * How a person signed in or registered, carried as `method` on
+ * `registration_complete` and `first_login` so `/pulse` can split the funnel
+ * by sign-in method (epic external-login, D10). `yandex`, `vk` and `passkey`
+ * arrive with later slices of that epic.
+ */
+export type AuthMethod = "password" | "email_code" | "yandex" | "vk" | "passkey";
+
+/**
  * Product analytics provider: Yandex Metrika.
  *
  * History: this module previously used Mixpanel (api-eu.mixpanel.com).

@@ -87,7 +87,8 @@ export default function AuthResetPassword() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      // Clears the «Пароль не задан» marker of an account registered by code.
+      const { error } = await supabase.auth.updateUser({ password, data: { passwordless: false } });
 
       if (error) {
         throw error;
