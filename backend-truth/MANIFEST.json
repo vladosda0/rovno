@@ -671,6 +671,10 @@
     {
       "path": "supabase/migrations/20261030030000_knowledge_base_assistant_search.sql",
       "sha256": "68216c6d40852f118e0e61795026a1da3c5ed61781b7d2b7731e27db141b552c"
+    },
+    {
+      "path": "supabase/migrations/20261031010000_briefing_lead_setting.sql",
+      "sha256": "cea2175cd1a29b0d2b6b9701f785480ac6f9bef238d9c74720941ae06fecab6a"
     }
   ],
   "generated_artifacts": [
