@@ -166,12 +166,14 @@ describe("TelegramDeliverySection", () => {
         peopleEnabled: true,
         hintsChatEnabled: true,
         hintsTelegramEnabled: true,
+        leadEnabled: false,
       })),
       saveSettings: vi.fn(async () => {}),
       setProjectMuted: vi.fn(async () => {}),
       setPeopleEnabled: vi.fn(async () => {}),
       setHintsChatEnabled: vi.fn(async () => {}),
       setHintsTelegramEnabled: vi.fn(async () => {}),
+      setLeadEnabled: vi.fn(async () => {}),
     };
     vi.spyOn(briefingSettingsSource, "getBriefingSettingsSource").mockResolvedValue(briefing);
     const first = renderWithProviders(<NotificationsPanel />);
@@ -189,6 +191,7 @@ describe("TelegramDeliverySection", () => {
       peopleEnabled: true,
       hintsChatEnabled: true,
       hintsTelegramEnabled: true,
+      leadEnabled: false,
     });
     renderWithProviders(<NotificationsPanel />);
     expect(await screen.findByRole("heading", { name: "Where to send" })).toBeInTheDocument();

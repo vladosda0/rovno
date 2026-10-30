@@ -126,6 +126,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function payloadText(message: Pick<ShurikMessage, "payload">, key: string): string {
+  const value = message.payload[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** «Пара слов от Шурика» (rovno-db#151): the greeting and the phrase above the lines, or null. */
+export function readShurikBriefingLead(message: Pick<ShurikMessage, "payload">): string | null {
+  const lead = payloadText(message, "lead");
+  if (lead === "") return null;
+  const greeting = payloadText(message, "lead_greeting");
+  return greeting === "" ? lead : `${greeting} ${lead}`;
+}
+
+/** The line under the last briefing of a morning when the phrase was skipped to keep the last AI messages. */
+export function readShurikBriefingLeadNote(message: Pick<ShurikMessage, "payload">): string | null {
+  const note = payloadText(message, "lead_note");
+  return note === "" ? null : note;
+}
+
 /**
  * The lines of a briefing, or null when the payload is not the shape the server writes; the
  * caller then shows the plain text. A link that does not lead inside the app loses the link only.

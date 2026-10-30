@@ -8,6 +8,8 @@ import {
   isClientReportReminderShurikMessage,
   isMoneyShurikMessage,
   isPeopleShurikMessage,
+  readShurikBriefingLead,
+  readShurikBriefingLeadNote,
   readShurikBriefingLines,
   readShurikMessageAction,
   type ShurikBriefingLine,
@@ -48,11 +50,14 @@ function BriefingText({
   lines: ShurikBriefingLine[] | null;
   onAction?: () => void;
 }) {
+  const lead = readShurikBriefingLead(message);
+  const note = readShurikBriefingLeadNote(message);
   return (
     <div className="mt-0.5">
       <p data-testid="shurik-briefing-title" className="text-[13px] font-bold text-foreground [overflow-wrap:anywhere]">
         {message.title}
       </p>
+      {lead && <p data-testid="shurik-briefing-lead" className={MESSAGE_TEXT_CLASS}>{lead}</p>}
       {lines ? (
         <ul className={cn("list-disc pl-4", MESSAGE_TEXT_CLASS)}>
           {lines.map((line, lineIndex) => (
@@ -77,6 +82,11 @@ function BriefingText({
         </ul>
       ) : (
         message.body?.trim() && <p className={cn("whitespace-pre-wrap", MESSAGE_TEXT_CLASS)}>{message.body}</p>
+      )}
+      {note && (
+        <p data-testid="shurik-briefing-lead-note" className="mt-1 text-caption text-muted-foreground [overflow-wrap:anywhere]">
+          {note}
+        </p>
       )}
     </div>
   );

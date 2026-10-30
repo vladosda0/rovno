@@ -392,3 +392,74 @@ describe("briefing settings, without a backend", () => {
     expect((await local.load()).peopleEnabled).toBe(true);
   });
 });
+
+describe("«Пара слов от Шурика», on this device", () => {
+  it("is off until switched on", async () => {
+    const local = createBrowserBriefingSettingsSource("local");
+    expect((await local.load()).leadEnabled).toBe(false);
+
+    await local.setLeadEnabled(true);
+    expect((await createBrowserBriefingSettingsSource("local").load()).leadEnabled).toBe(true);
+
+    await local.setLeadEnabled(false);
+    expect((await local.load()).leadEnabled).toBe(false);
+  });
+});
+
+describe("«Пара слов от Шурика», the database", () => {
+  const leadRead = (error: { code: string; message: string }) =>
+    createFakeSupabase({
+      notification_preferences: {
+        selectOf: (columns) => (columns === "briefing_lead_enabled" ? { data: null, error } : undefined),
+        select: { data: null, error: null },
+      },
+    });
+
+  it("reads off only when the column is missing; any other failure of the read is an error", async () => {
+    const missing = leadRead({ code: "42703", message: "column does not exist" });
+    expect((await source(missing).load()).leadEnabled).toBe(false);
+
+    const failed = leadRead({ code: "57014", message: "timeout" });
+    await expect(source(failed).load()).rejects.toMatchObject({ code: "57014" });
+  });
+
+  it("is off for a person with no row, reads the switch on its own and writes that one value", async () => {
+    const off = createFakeSupabase({ notification_preferences: { select: { data: null, error: null } } });
+    expect((await source(off).load()).leadEnabled).toBe(false);
+
+    const fake = createFakeSupabase({
+      notification_preferences: {
+        selectOf: (columns) =>
+          columns === "briefing_lead_enabled" ? { data: { briefing_lead_enabled: true }, error: null } : undefined,
+        select: { data: null, error: null },
+      },
+    });
+    expect((await source(fake).load()).leadEnabled).toBe(true);
+
+    await source(fake).setLeadEnabled(false);
+    const write = fake.queriesOf("notification_preferences").at(-1)!;
+    expect(write.calls[0]).toEqual({
+      method: "upsert",
+      args: [{ profile_id: "me", briefing_lead_enabled: false }, { onConflict: "profile_id" }],
+    });
+  });
+
+  it("stays off, and the rest of the settings load, when the database has no such column yet", async () => {
+    const fake = createFakeSupabase({
+      notification_preferences: {
+        selectOf: (columns) =>
+          columns === "briefing_lead_enabled"
+            ? { data: null, error: { code: "42703", message: "column does not exist" } }
+            : undefined,
+        select: {
+          data: { briefing_enabled: false, briefing_minute: 540, briefing_weekends: false, people_enabled: true },
+          error: null,
+        },
+      },
+    });
+
+    const snapshot = await source(fake).load();
+    expect(snapshot.settings.enabled).toBe(false);
+    expect(snapshot.leadEnabled).toBe(false);
+  });
+});

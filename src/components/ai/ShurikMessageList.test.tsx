@@ -256,6 +256,57 @@ describe("ShurikMessageList", () => {
 });
 
 describe("ShurikMessageList, a briefing", () => {
+  it("puts «Пара слов от Шурика» between the title and the list, and the limit line under the list", () => {
+    const base = briefing();
+    renderList([briefing({
+      payload: {
+        ...base.payload,
+        lead: "Сегодня две задачи со сроком.",
+        lead_greeting: "Доброе утро.",
+        lead_note: "Осталось 10 ИИ-сообщений, приберегу их для твоих вопросов.",
+      },
+    })]);
+
+    const title = screen.getByTestId("shurik-briefing-title");
+    const lead = screen.getByTestId("shurik-briefing-lead");
+    const list = screen.getByRole("list");
+    const note = screen.getByTestId("shurik-briefing-lead-note");
+    expect(lead).toHaveTextContent("Доброе утро. Сегодня две задачи со сроком.");
+    expect(note).toHaveTextContent("Осталось 10 ИИ-сообщений, приберегу их для твоих вопросов.");
+    expect(title.compareDocumentPosition(lead) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(lead.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(list.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps the phrase and the limit line next to the plain text when the lines cannot be read", () => {
+    const base = briefing();
+    renderList([briefing({
+      body: "Задача просрочена.",
+      payload: { ...base.payload, lines: "broken", lead: "Демонтаж отстаёт.", lead_note: "Осталось 10." },
+    })]);
+
+    expect(screen.getByTestId("shurik-briefing-lead")).toHaveTextContent("Демонтаж отстаёт.");
+    expect(screen.getByTestId("shurik-briefing-lead-note")).toHaveTextContent("Осталось 10.");
+    expect(screen.getByText("Задача просрочена.")).toBeInTheDocument();
+  });
+
+  it.each([[42], [""], ["   "], [null]])("shows no phrase and no limit line for %j", (value) => {
+    const base = briefing();
+    renderList([briefing({ payload: { ...base.payload, lead: value, lead_note: value } })]);
+
+    expect(screen.queryByTestId("shurik-briefing-lead")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("shurik-briefing-lead-note")).not.toBeInTheDocument();
+  });
+
+  it("shows no phrase without one: a greeting alone is not shown", () => {
+    const base = briefing();
+    renderList([briefing({ payload: { ...base.payload, lead_greeting: "Доброе утро." } })]);
+
+    expect(screen.queryByTestId("shurik-briefing-lead")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("shurik-briefing-lead-note")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Доброе утро/)).not.toBeInTheDocument();
+  });
+
   it("opens with the project line and lists the rest, naming tasks and orders as links", () => {
     renderList([briefing()]);
 

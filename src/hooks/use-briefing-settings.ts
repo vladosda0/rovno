@@ -35,6 +35,7 @@ export function useBriefingSettings(onSaveError: () => void): {
   setPeopleEnabled: (enabled: boolean) => void;
   setHintsChatEnabled: (enabled: boolean) => void;
   setHintsTelegramEnabled: (enabled: boolean) => void;
+  setLeadEnabled: (enabled: boolean) => void;
 } {
   const mode = useWorkspaceMode();
   const queryClient = useQueryClient();
@@ -123,6 +124,11 @@ export function useBriefingSettings(onSaveError: () => void): {
       run({
         apply: (snapshot) => ({ ...snapshot, hintsTelegramEnabled: enabled }),
         send: (source) => source.setHintsTelegramEnabled(enabled),
+      }),
+    setLeadEnabled: (enabled) =>
+      run({
+        apply: (snapshot) => ({ ...snapshot, leadEnabled: enabled }),
+        send: (source) => source.setLeadEnabled(enabled),
       }),
   };
 }

@@ -1104,6 +1104,8 @@
   "notifications.briefing.title": "Shurik's briefing",
   "notifications.briefing.attention": "What needs attention today",
   "notifications.briefing.time": "Briefing time",
+  "notifications.briefing.lead": "A word from Shurik",
+  "notifications.briefing.leadHint": "Shurik opens the briefing with the main point in two sentences. It uses 1 AI message per project, or 1 for the whole morning from five projects.",
   "notifications.briefing.weekends": "Also send on Saturday and Sunday",
   "notifications.briefing.projects": "For which projects",
   "notifications.briefing.allProjects": "All projects",

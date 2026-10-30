@@ -186,6 +186,8 @@ const TECHNOLOGY_KEYS = [
   "landing.faq.q4",
   "landing.finalCta.subtitle",
   "landing.footer.tagline",
+  // The price of «Пара слов от Шурика» is counted in the plan's AI messages (rovno-db#151).
+  "notifications.briefing.leadHint",
   "pricing.plans.free.ai.title",
   "pricing.plans.free.ai.chat",
   "pricing.plans.master.ai.title",

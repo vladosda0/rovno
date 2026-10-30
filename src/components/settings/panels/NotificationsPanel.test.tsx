@@ -36,6 +36,7 @@ function createFakeBackend(
   let peopleEnabled: boolean | undefined = initial.storedPeopleEnabled;
   let hintsChatEnabled = true;
   let hintsTelegramEnabled = true;
+  let leadEnabled = false;
   let muted = [...(initial.mutedProjectIds ?? [])];
   const projects = initial.projects ?? THREE_PROJECTS;
   const inAnyProject = initial.inAnyProject ?? true;
@@ -49,6 +50,7 @@ function createFakeBackend(
       peopleEnabled: peopleEnabled ?? true,
       hintsChatEnabled,
       hintsTelegramEnabled,
+      leadEnabled,
     })),
     saveSettings: vi.fn(async (patch: Partial<BriefingSettings>) => {
       stored = { ...(stored ?? briefingSettingsSource.DEFAULT_BRIEFING_SETTINGS), ...patch };
@@ -62,6 +64,9 @@ function createFakeBackend(
     setHintsTelegramEnabled: vi.fn(async (enabled: boolean) => {
       hintsTelegramEnabled = enabled;
     }),
+    setLeadEnabled: vi.fn(async (enabled: boolean) => {
+      leadEnabled = enabled;
+    }),
     setProjectMuted: vi.fn(async (projectId: string, isMuted: boolean) => {
       muted = isMuted ? [...muted.filter((id) => id !== projectId), projectId] : muted.filter((id) => id !== projectId);
     }),
@@ -73,6 +78,7 @@ function createFakeBackend(
     peopleEnabled: () => peopleEnabled,
     hintsChatEnabled: () => hintsChatEnabled,
     hintsTelegramEnabled: () => hintsTelegramEnabled,
+    leadEnabled: () => leadEnabled,
   };
 }
 
@@ -130,7 +136,7 @@ describe("NotificationsPanel", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows the briefing section with its three rows, at the defaults for a person with no saved row", async () => {
+  it("shows the briefing section with its rows, at the defaults for a person with no saved row", async () => {
     createFakeBackend();
     renderPanel();
     await loaded();
@@ -149,7 +155,7 @@ describe("NotificationsPanel", () => {
     renderPanel();
     await loaded();
 
-    expect(screen.getAllByRole("switch")).toHaveLength(5);
+    expect(screen.getAllByRole("switch")).toHaveLength(6);
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
     // The old screen had a bare «Telegram» channel row; the Telegram hint switch is new and stays.
@@ -362,6 +368,39 @@ describe("NotificationsPanel", () => {
     expect(screen.getByRole("switch", { name: "Tips in the project chat" })).toBeChecked();
   });
 
+  it("has «A word from Shurik» under the briefing switch, off by default, saved at once", async () => {
+    const { source, leadEnabled } = createFakeBackend();
+    renderPanel();
+    await loaded();
+
+    const leadSwitch = screen.getByRole("switch", { name: "A word from Shurik" });
+    const weekends = screen.getByRole("switch", { name: "Also send on Saturday and Sunday" });
+    expect(briefingSwitch().compareDocumentPosition(leadSwitch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(leadSwitch.compareDocumentPosition(weekends) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText(
+      "Shurik opens the briefing with the main point in two sentences. It uses 1 AI message per project, or 1 for the whole morning from five projects.",
+    )).toBeInTheDocument();
+    expect(leadSwitch).not.toBeChecked();
+
+    fireEvent.click(leadSwitch);
+    await waitFor(() => expect(source.setLeadEnabled).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(screen.getByRole("switch", { name: "A word from Shurik" })).toBeChecked());
+    expect(leadEnabled()).toBe(true);
+    expect(source.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it("keeps «A word from Shurik» on screen and working while the briefing itself is off", async () => {
+    const { source } = createFakeBackend({ storedSettings: { enabled: false, minute: 540, weekends: false } });
+    renderPanel();
+    await loaded();
+
+    expect(briefingSwitch()).not.toBeChecked();
+    const leadSwitch = screen.getByRole("switch", { name: "A word from Shurik" });
+    expect(leadSwitch).toBeEnabled();
+    fireEvent.click(leadSwitch);
+    await waitFor(() => expect(source.setLeadEnabled).toHaveBeenCalledWith(true));
+  });
+
   it("shows the hints switch to a person with no briefing projects too", async () => {
     createFakeBackend({ projects: [] });
     renderPanel();
@@ -453,6 +492,7 @@ describe("NotificationsPanel", () => {
       peopleEnabled: true,
       hintsChatEnabled: true,
       hintsTelegramEnabled: true,
+      leadEnabled: false,
     });
     await loaded();
     expect(screen.queryByTestId("notifications-loading")).not.toBeInTheDocument();
@@ -535,6 +575,7 @@ describe("NotificationsPanel", () => {
       peopleEnabled: true,
       hintsChatEnabled: true,
       hintsTelegramEnabled: true,
+      leadEnabled: false,
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(briefingSwitch()).not.toBeChecked();

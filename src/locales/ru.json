@@ -1120,6 +1120,8 @@
   "notifications.briefing.title": "Планёрка от Шурика",
   "notifications.briefing.attention": "Что сегодня требует внимания",
   "notifications.briefing.time": "Время планёрки",
+  "notifications.briefing.lead": "Пара слов от Шурика",
+  "notifications.briefing.leadHint": "В начале планёрки Шурик в двух фразах говорит главное. Тратит 1 ИИ-сообщение на проект, а с пяти проектов 1 на всё утро.",
   "notifications.briefing.weekends": "Присылать и в субботу и воскресенье",
   "notifications.briefing.projects": "По каким проектам",
   "notifications.briefing.allProjects": "Все проекты",

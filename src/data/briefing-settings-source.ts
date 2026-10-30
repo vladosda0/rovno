@@ -26,6 +26,7 @@ const LOCAL_MUTES_KEY = "briefing-muted-projects";
 const LOCAL_PEOPLE_KEY = "people-messages-enabled";
 const LOCAL_HINTS_CHAT_KEY = "shurik-hints-chat-enabled";
 const LOCAL_HINTS_TELEGRAM_KEY = "shurik-hints-telegram-enabled";
+const LOCAL_LEAD_KEY = "briefing-lead-enabled";
 
 export interface BriefingProject {
   id: string;
@@ -46,6 +47,8 @@ export interface BriefingSettingsSnapshot {
   hintsChatEnabled: boolean;
   /** The one most important hint of the day sent to Telegram; on for a person with no row. */
   hintsTelegramEnabled: boolean;
+  /** «Пара слов от Шурика» above the briefing, paid from the person's AI messages; off for a person with no row. */
+  leadEnabled: boolean;
 }
 
 export interface BriefingSettingsSource {
@@ -60,6 +63,8 @@ export interface BriefingSettingsSource {
   setHintsChatEnabled: (enabled: boolean) => Promise<void>;
   /** The same for the hint in Telegram. */
   setHintsTelegramEnabled: (enabled: boolean) => Promise<void>;
+  /** The same for «Пара слов от Шурика». */
+  setLeadEnabled: (enabled: boolean) => Promise<void>;
 }
 
 export function isBriefingMinute(minute: number): boolean {
@@ -115,6 +120,7 @@ export function createBrowserBriefingSettingsSource(mode: "demo" | "local"): Bri
         peopleEnabled: readLocalJson(LOCAL_PEOPLE_KEY) !== false,
         hintsChatEnabled: readLocalJson(LOCAL_HINTS_CHAT_KEY) !== false,
         hintsTelegramEnabled: readLocalJson(LOCAL_HINTS_TELEGRAM_KEY) !== false,
+        leadEnabled: readLocalJson(LOCAL_LEAD_KEY) === true,
       };
     },
     async saveSettings(patch) {
@@ -133,6 +139,9 @@ export function createBrowserBriefingSettingsSource(mode: "demo" | "local"): Bri
     },
     async setHintsTelegramEnabled(enabled) {
       localStorage.setItem(LOCAL_HINTS_TELEGRAM_KEY, JSON.stringify(enabled));
+    },
+    async setLeadEnabled(enabled) {
+      localStorage.setItem(LOCAL_LEAD_KEY, JSON.stringify(enabled));
     },
   };
 }
@@ -154,7 +163,19 @@ export function createSupabaseBriefingSettingsSource(
     if (error || !data) return true;
     return (data as Record<string, unknown>)[column] !== false;
   };
-  const saveHintsSwitch = async (column: HintsColumn, enabled: boolean): Promise<void> => {
+  // Off unless the row says on: the phrase costs the person's AI messages.
+  const loadLeadSwitch = async (): Promise<boolean> => {
+    const { data, error } = await raw
+      .from("notification_preferences")
+      .select("briefing_lead_enabled")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    // Any other failure must not show a paid switch as off while the server keeps it on.
+    if (error && error.code !== "42703") throw error;
+    if (!data) return false;
+    return (data as Record<string, unknown>).briefing_lead_enabled === true;
+  };
+  const saveSwitchColumn = async (column: HintsColumn | "briefing_lead_enabled", enabled: boolean): Promise<void> => {
     const { error } = await raw
       .from("notification_preferences")
       .upsert({ profile_id: profileId, [column]: enabled }, { onConflict: "profile_id" });
@@ -166,7 +187,7 @@ export function createSupabaseBriefingSettingsSource(
   return {
     mode: "supabase",
     async load() {
-      const [preferences, projects, memberships, mutes, hintsChatEnabled, hintsTelegramEnabled] = await Promise.all([
+      const [preferences, projects, memberships, mutes, hintsChatEnabled, hintsTelegramEnabled, leadEnabled] = await Promise.all([
         supabase
           .from("notification_preferences")
           .select("briefing_enabled, briefing_minute, briefing_weekends, people_enabled")
@@ -181,6 +202,7 @@ export function createSupabaseBriefingSettingsSource(
         supabase.from("notification_project_mutes").select("project_id").eq("profile_id", profileId),
         loadHintsSwitch("hints_chat_enabled"),
         loadHintsSwitch("hints_telegram_enabled"),
+        loadLeadSwitch(),
       ]);
       const error = preferences.error ?? projects.error ?? memberships.error ?? mutes.error;
       if (error) {
@@ -207,6 +229,7 @@ export function createSupabaseBriefingSettingsSource(
         peopleEnabled: preferences.data ? preferences.data.people_enabled : true,
         hintsChatEnabled,
         hintsTelegramEnabled,
+        leadEnabled,
       };
     },
     async saveSettings(patch) {
@@ -229,10 +252,13 @@ export function createSupabaseBriefingSettingsSource(
       }
     },
     async setHintsChatEnabled(enabled) {
-      await saveHintsSwitch("hints_chat_enabled", enabled);
+      await saveSwitchColumn("hints_chat_enabled", enabled);
     },
     async setHintsTelegramEnabled(enabled) {
-      await saveHintsSwitch("hints_telegram_enabled", enabled);
+      await saveSwitchColumn("hints_telegram_enabled", enabled);
+    },
+    async setLeadEnabled(enabled) {
+      await saveSwitchColumn("briefing_lead_enabled", enabled);
     },
     async setProjectMuted(projectId, muted) {
       if (muted) {
