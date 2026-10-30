@@ -3541,6 +3541,14 @@ export type Database = {
           Args: Record<PropertyKey, never>
           Returns: unknown
         }
+        "kb_assistant_search": {
+          Args: {
+          "p_question": string
+          "p_solution_limit": unknown
+          "p_clause_limit": unknown
+          }
+          Returns: Json
+        }
         "kb_folder_counts": {
           Args: Record<PropertyKey, never>
           Returns: unknown
