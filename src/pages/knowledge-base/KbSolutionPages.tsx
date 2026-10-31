@@ -182,7 +182,7 @@ export function KbSolutionPublicPage() {
             headerExtra={
               showAskShurik ? (
                 <div className="rv-kb-actions">
-                  <Link className="rv-btn rv-btn--secondary rv-kb-ask" to={SIGN_UP_PATH}>
+                  <Link className="rv-btn rv-btn--primary rv-kb-ask" to={SIGN_UP_PATH}>
                     {t("home.knowledgeBase.askShurik")}
                   </Link>
                 </div>

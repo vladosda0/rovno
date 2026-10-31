@@ -53,6 +53,7 @@ import { useShurikMessages } from "@/hooks/use-shurik-messages";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
 import { GroundingCallout } from "@/components/ai/GroundingCallout";
+import { KbSourceLine } from "@/components/ai/KbSourceLine";
 import { WorkProposalPreview } from "@/components/ai/WorkProposalPreview";
 import { isAIEvent } from "@/components/ai/event-utils";
 import { PreviewCard } from "@/components/ai/PreviewCard";
@@ -1752,6 +1753,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               groundingDetails: result.groundingDetails,
               followUps: result.followUps,
               freshnessHint: result.freshnessHint,
+              knowledgeBase: result.knowledgeBase,
             },
           };
           setMessages((prev) => [...prev, assistantMsg]);
@@ -3157,6 +3159,22 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
           ) : null}
           {!isUserMessage && message.liveTextAssistantV1 && message.liveTextProjectId ? (
             <>
+              {message.liveTextAssistantV1.knowledgeBase ? (
+                <KbSourceLine
+                  knowledgeBase={message.liveTextAssistantV1.knowledgeBase}
+                  onAskAboutClause={(text) => {
+                    chipSeedRef.current = null;
+                    // Keep a draft the person already typed: the quote goes in front of it.
+                    setInputValue((prev) => (prev.trim() ? `${text}${prev}` : text));
+                    requestAnimationFrame(() => {
+                      composerTextareaRef.current?.focus();
+                      resizeComposer();
+                    });
+                  }}
+                />
+              ) : null}
+              {/* Frame 4: the «not in the base» line takes this spot. The server does not set it on a degraded turn. */}
+              {message.liveTextAssistantV1.knowledgeBase?.missing ? null : (
               <GroundingCallout
                 grounding={message.liveTextAssistantV1.grounding}
                 groundingNote={message.liveTextAssistantV1.groundingNote}
@@ -3166,6 +3184,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                 freshnessHint={message.liveTextAssistantV1.freshnessHint}
                 language={message.liveTextAssistantV1.assistantUiLanguage ?? "en"}
               />
+              )}
               {message.liveTextAssistantV1.followUps
                 && message.liveTextAssistantV1.followUps.length > 0 ? (
                 <div className="mt-1.5 min-w-0 max-w-full">
@@ -4101,6 +4120,15 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                         ) : null}
                       </div>
                       </AIQuotaGate>
+
+                      {isProjectContext && (
+                        <p className="w-full min-w-0 px-1 text-[10px] leading-snug text-muted-foreground" data-testid="shurik-disclaimer">
+                          <span className="mr-1 rounded-pill bg-accent/15 px-1.5 py-0.5 font-medium text-accent">
+                            {t("ai.sidebar.composer.beta")}
+                          </span>
+                          {t("ai.sidebar.composer.disclaimer")}
+                        </p>
+                      )}
 
                       {isHomeContext && (
                         <div className="w-full min-w-0">

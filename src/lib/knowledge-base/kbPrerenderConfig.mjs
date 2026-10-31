@@ -151,7 +151,7 @@ export function kbDocumentRootHtml(row, t, { clauses = [], spFullText = true } =
     .join("");
   // The static snapshot is what a guest from search sees, so it carries the guest
   // CTA (step 1.6); the SPA re-renders #root and drops it for a signed-in user.
-  const askShurik = `<a class="rv-btn rv-btn--secondary rv-kb-ask" href="/auth/signup">${escapeHtml(t("home.knowledgeBase.askShurik"))}</a>`;
+  const askShurik = `<a class="rv-btn rv-btn--primary rv-kb-ask" href="/auth/signup">${escapeHtml(t("home.knowledgeBase.askShurik"))}</a>`;
   const category = doc.category ? `<p class="rv-article-subtitle">${escapeHtml(doc.category)}</p>` : "";
   return `${chromeStart()}
   <main><article class="rv-kb-doc"><section class="rv-section" style="padding:64px 48px 96px">
@@ -458,7 +458,7 @@ export function kbSolutionCardHtml(solution, t) {
     }</p>`,
     // The static snapshot is what a guest from search sees: «Спросить Шурика» leads
     // to sign-up, like on the document pages (decision D6).
-    `<div class="rv-kb-actions"><a class="rv-btn rv-btn--secondary rv-kb-ask" href="/auth/signup">${escapeHtml(t("home.knowledgeBase.askShurik"))}</a></div>`,
+    `<div class="rv-kb-actions"><a class="rv-btn rv-btn--primary rv-kb-ask" href="/auth/signup">${escapeHtml(t("home.knowledgeBase.askShurik"))}</a></div>`,
     solution.summary ? `<p class="rv-article-subtitle">${escapeHtml(solution.summary)}</p>` : "",
     conditions ? `<div class="rv-kb-conditions">${conditions}</div>` : "",
     solution.steps.length ? section("steps", `<ol>${solution.steps.map(li).join("")}</ol>`) : "",

@@ -208,6 +208,8 @@ const TECHNOLOGY_KEYS = [
   "estimate.export.verifiedMark.toggleHint",
   "estimate.export.verifiedMark.documentIp",
   "estimate.export.verifiedMark.toggleHintIp",
+  // The line under the composer, «Шурик это ИИ и может ошибаться…», approved on the slice 5 mockup (docs-library, 26.10).
+  "ai.sidebar.composer.disclaimer",
 ];
 
 /** English labels of the assisted mode that had no AI in them to begin with. */

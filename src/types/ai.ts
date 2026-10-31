@@ -25,6 +25,7 @@ import type {
   InferenceGroundingKind,
   LiveTextAssistantSource,
   LiveTextFollowUpPrompt,
+  LiveTextKnowledgeBase,
   PresentationalWorkProposal,
 } from "@/lib/ai-assistant-contract";
 
@@ -49,6 +50,7 @@ export interface AIMessageLiveTextAssistantV1 {
   };
   followUps?: LiveTextFollowUpPrompt[];
   freshnessHint?: Record<string, unknown> | null;
+  knowledgeBase?: LiveTextKnowledgeBase;
 }
 
 export interface AIMessage {

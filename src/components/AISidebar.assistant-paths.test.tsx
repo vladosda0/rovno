@@ -141,6 +141,81 @@ describe("AISidebar assistant paths", () => {
       expect(screen.queryByText("PREVIEW_TITLE")).toBeInTheDocument();
     });
 
+    function renderProjectSidebar() {
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    }
+
+    async function askWithKnowledgeBase(knowledgeBase: unknown, grounding = "project_context_grounded") {
+      invokeLiveTextAssistantMock.mockResolvedValueOnce({
+        explanation: "LIVE_ASSISTANT_EXPLANATION_BODY",
+        grounding,
+        sources: [{ kind: "project_summary" as const, label: "SRC_PROJECT_A" }],
+        workProposal: {
+          proposalTitle: "PREVIEW_TITLE",
+          proposalSummary: "PREVIEW_SUMMARY",
+          suggestedWorkItems: [{ label: "PREVIEW_LINE", note: "PREVIEW_NOTE" }],
+        },
+        knowledgeBase,
+      } as never);
+      renderProjectSidebar();
+      // The conversation of this project outlives a render: count what the new turn adds.
+      const callouts = () => screen.queryAllByText(/Using (limited )?project context/i).length;
+      const before = { callouts: callouts(), answers: screen.queryAllByText("LIVE_ASSISTANT_EXPLANATION_BODY").length };
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "wall question" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+      await waitFor(() => {
+        expect(screen.queryAllByText("LIVE_ASSISTANT_EXPLANATION_BODY").length).toBe(before.answers + 1);
+      });
+      return callouts() - before.callouts;
+    }
+
+    it("«not in the base» takes the place of the project grounding callout", async () => {
+      const addedCallouts = await askWithKnowledgeBase({ sources: [], missing: true });
+      expect(screen.getAllByTestId("kb-missing").length).toBeGreaterThan(0);
+      expect(addedCallouts).toBe(0);
+    });
+
+    it("«not in the base» also replaces the limited-context callout of a snapshot-only answer", async () => {
+      expect(await askWithKnowledgeBase({ sources: [], missing: true }, "partial")).toBe(0);
+    });
+
+    it("a sourced answer keeps the callout and «Ask about this clause» puts the quote before the draft", async () => {
+      const addedCallouts = await askWithKnowledgeBase({
+        missing: false,
+        sources: [{
+          docId: "SP-155",
+          docSlug: "sp-163",
+          docLabel: "СП 163.1325800",
+          clause: "6.4.2.8",
+          anchor: "p-6-4-2-8",
+          checking: false,
+          pendingAmendments: [],
+          quote: "покрыты гидроизолирующим составом",
+        }],
+      });
+      expect(addedCallouts).toBe(1);
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "my draft" } });
+      fireEvent.click(within(screen.getByTestId("kb-sources")).getByRole("button", { expanded: false }));
+      fireEvent.click((await screen.findAllByRole("button", { name: /6\.4\.2\.8/ })).at(-1)!);
+      fireEvent.click(await screen.findByRole("button", { name: /about this clause/i }));
+      expect((composer as HTMLTextAreaElement).value).toBe(
+        "«покрыты гидроизолирующим составом» · СП 163.1325800, cl. 6.4.2.8\nmy draft",
+      );
+    });
+
+    it("shows the beta mark and the AI disclaimer under the project composer", () => {
+      renderProjectSidebar();
+      expect(screen.getByTestId("shurik-disclaimer")).toHaveTextContent(/beta/i);
+    });
+
     it("sends GigaChat even when the browser remembers Qwen, and forgets that choice", async () => {
       localStorage.setItem("ai-sidebar-chat-model", "qwen");
       const queryClient = createQueryClient();

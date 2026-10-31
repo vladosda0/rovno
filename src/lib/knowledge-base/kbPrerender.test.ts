@@ -92,7 +92,7 @@ describe("kbDocumentRootHtml", () => {
   });
 
   it("offers guests «Спросить Шурика» leading to sign-up", () => {
-    expect(html).toContain('<a class="rv-btn rv-btn--secondary rv-kb-ask" href="/auth/signup">Спросить Шурика</a>');
+    expect(html).toContain('<a class="rv-btn rv-btn--primary rv-kb-ask" href="/auth/signup">Спросить Шурика</a>');
   });
 });
 

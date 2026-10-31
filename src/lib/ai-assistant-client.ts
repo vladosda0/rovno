@@ -4,9 +4,11 @@ import type { AiLlmProvider } from "@/lib/ai-llm-provider";
 import type {
   AssistantGroundingStatus,
   InferenceGroundingKind,
+  KbAnswerSource,
   LiveTextAssistantResult,
   LiveTextAssistantSource,
   LiveTextFollowUpPrompt,
+  LiveTextKnowledgeBase,
   PresentationalWorkProposal,
 } from "@/lib/ai-assistant-contract";
 import type { AIAccess } from "@/types/entities";
@@ -183,6 +185,8 @@ interface AIInferenceResponseBody {
   groundingNote?: string;
   groundingSources?: BackendGroundingSource[];
   workProposal?: BackendWorkProposal | null;
+  knowledgeBaseSources?: unknown;
+  knowledgeBaseMissing?: unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +266,45 @@ function softenProgrammaticCopy(
     .replace(/\bEvidence domains\b/gi, "Project areas")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
+}
+
+function kbString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * Knowledge-base sources keep their address and clause (unlike grounding
+ * sources, which are reduced to a label). Undefined when the server did not
+ * search the base for this turn.
+ */
+export function mapKnowledgeBase(
+  rawSources: unknown,
+  rawMissing: unknown,
+): LiveTextKnowledgeBase | undefined {
+  if (!Array.isArray(rawSources) && typeof rawMissing !== "boolean") return undefined;
+  const sources: KbAnswerSource[] = [];
+  for (const raw of Array.isArray(rawSources) ? rawSources : []) {
+    if (!raw || typeof raw !== "object") continue;
+    const s = raw as Record<string, unknown>;
+    const docId = kbString(s.docId);
+    const docLabel = kbString(s.docLabel);
+    if (s.kind !== "knowledge_base" || !docId || !docLabel) continue;
+    sources.push({
+      docId,
+      docSlug: kbString(s.docSlug),
+      docLabel,
+      clause: kbString(s.clause),
+      anchor: kbString(s.anchor),
+      solutionSlug: kbString(s.solutionSlug),
+      solutionTitle: kbString(s.solutionTitle),
+      checking: s.checking === true,
+      pendingAmendments: Array.isArray(s.pendingAmendments)
+        ? s.pendingAmendments.filter((n): n is number => typeof n === "number" && Number.isFinite(n))
+        : [],
+      quote: kbString(s.quote),
+    });
+  }
+  return { sources, missing: rawMissing === true && sources.length === 0 };
 }
 
 export function mapGroundingSources(
@@ -392,6 +435,7 @@ export function mapInferenceResponse(
       ? softenProgrammaticCopy(body.groundingNote, assistantUiLanguage)
       : undefined,
     sources: mapGroundingSources(body.groundingSources, assistantUiLanguage),
+    knowledgeBase: mapKnowledgeBase(body.knowledgeBaseSources, body.knowledgeBaseMissing),
     workProposal: proposal,
     responseVersion: typeof body.responseVersion === "string" ? body.responseVersion : undefined,
     groundingKind,
