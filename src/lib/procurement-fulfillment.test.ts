@@ -14,6 +14,7 @@ import {
   isEstimateLinkedProcurementItem,
   isOpenOrderStatus,
 } from "@/lib/procurement-fulfillment";
+import { pickVisibleInStockRows } from "@/lib/procurement-fulfillment";
 import type { InventoryLocation, OrderWithLines, ProcurementItemV2 } from "@/types/entities";
 
 function buildTestRequestLine(
@@ -1022,5 +1023,24 @@ describe("order status predicates", () => {
   ] as const)("classifies %s", (status, applied, open) => {
     expect(isAppliedOrderStatus(status)).toBe(applied);
     expect(isOpenOrderStatus(status)).toBe(open);
+  });
+});
+
+describe("pickVisibleInStockRows", () => {
+  const rows = { eventRows: ["event"], balanceRows: ["balance"] };
+
+  it("keeps event rows for anyone who may manage or see detail", () => {
+    expect(pickVisibleInStockRows({ ...rows, balancesAreAuthoritative: false })).toEqual(["event"]);
+  });
+
+  it("shows balances to a restricted viewer even when events produced rows", () => {
+    expect(pickVisibleInStockRows({ ...rows, balancesAreAuthoritative: true })).toEqual(["balance"]);
+  });
+
+  it("falls back to whichever side has rows", () => {
+    expect(pickVisibleInStockRows({ eventRows: [], balanceRows: ["balance"], balancesAreAuthoritative: false }))
+      .toEqual(["balance"]);
+    expect(pickVisibleInStockRows({ eventRows: ["event"], balanceRows: [], balancesAreAuthoritative: true }))
+      .toEqual(["event"]);
   });
 });

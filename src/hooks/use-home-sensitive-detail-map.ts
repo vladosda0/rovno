@@ -10,7 +10,9 @@ import {
   applyWorkspaceDemoOverlayToSeam,
   buildProjectAuthoritySeam,
   getProjectRole,
+  resolveFinanceRowLoadAccess,
   seamCanViewSensitiveDetail,
+  type FinanceRowLoadAccess,
 } from "@/lib/permissions";
 import type { Member, Project } from "@/types/entities";
 import {
@@ -24,14 +26,15 @@ import {
 const WORKSPACE_QUERY_STALE_TIME_MS = 60_000;
 
 const EMPTY_DETAIL_MAP: ReadonlyMap<string, boolean> = new Map();
+const EMPTY_FINANCE_ACCESS_MAP: ReadonlyMap<string, FinanceRowLoadAccess> = new Map();
 
-function resolveCanViewForProject(
+function resolveProjectFinanceDetail(
   project: Pick<Project, "id">,
   profileId: string,
   members: Member[],
   projectRow: Project | undefined,
   workspaceMode: WorkspaceModeState,
-): boolean {
+): { canView: boolean; financeAccess: FinanceRowLoadAccess } {
   const seam = buildProjectAuthoritySeam({
     projectId: project.id,
     profileId,
@@ -39,7 +42,10 @@ function resolveCanViewForProject(
     project: projectRow,
   });
   const effective = applyWorkspaceDemoOverlayToSeam(seam, workspaceMode);
-  return seamCanViewSensitiveDetail(effective);
+  return {
+    canView: seamCanViewSensitiveDetail(effective),
+    financeAccess: resolveFinanceRowLoadAccess(effective),
+  };
 }
 
 /**
@@ -48,7 +54,9 @@ function resolveCanViewForProject(
  */
 export function useWorkspaceProjectsSensitiveDetailMap(): {
   canViewSensitiveDetailByProjectId: ReadonlyMap<string, boolean>;
+  financeAccessByProjectId: ReadonlyMap<string, FinanceRowLoadAccess>;
   isLoading: boolean;
+  accessLoadFailed?: boolean;
 } {
   const workspaceMode = useWorkspaceMode();
   const workspaceHookProjects = useWorkspaceProjects();
@@ -97,44 +105,67 @@ export function useWorkspaceProjectsSensitiveDetailMap(): {
   });
 
   if (workspaceMode.kind === "pending-supabase") {
-    return { canViewSensitiveDetailByProjectId: EMPTY_DETAIL_MAP, isLoading: true };
+    return {
+      canViewSensitiveDetailByProjectId: EMPTY_DETAIL_MAP,
+      financeAccessByProjectId: EMPTY_FINANCE_ACCESS_MAP,
+      isLoading: true,
+    };
   }
 
   if (workspaceMode.kind === "demo" || workspaceMode.kind === "local") {
     const map = new Map<string, boolean>();
+    const financeAccess = new Map<string, FinanceRowLoadAccess>();
     for (const project of projects) {
       const members = store.getMembers(project.id);
       const projectRow = store.getProject(project.id);
-      map.set(
-        project.id,
-        resolveCanViewForProject(project, user.id, members, projectRow, workspaceMode),
-      );
+      const detail = resolveProjectFinanceDetail(project, user.id, members, projectRow, workspaceMode);
+      map.set(project.id, detail.canView);
+      financeAccess.set(project.id, detail.financeAccess);
     }
-    return { canViewSensitiveDetailByProjectId: map, isLoading: false };
+    return { canViewSensitiveDetailByProjectId: map, financeAccessByProjectId: financeAccess, isLoading: false };
   }
 
   if (workspaceMode.kind !== "supabase") {
-    return { canViewSensitiveDetailByProjectId: EMPTY_DETAIL_MAP, isLoading: false };
+    return {
+      canViewSensitiveDetailByProjectId: EMPTY_DETAIL_MAP,
+      financeAccessByProjectId: EMPTY_FINANCE_ACCESS_MAP,
+      isLoading: false,
+    };
   }
 
   const membersLoading = membersQueries.some((q) => q.isPending);
   const projectLoading = projectQueries.some((q) => q.isPending);
   if (membersLoading || projectLoading) {
-    return { canViewSensitiveDetailByProjectId: EMPTY_DETAIL_MAP, isLoading: true };
+    return {
+      canViewSensitiveDetailByProjectId: EMPTY_DETAIL_MAP,
+      financeAccessByProjectId: EMPTY_FINANCE_ACCESS_MAP,
+      isLoading: true,
+    };
   }
 
   const map = new Map<string, boolean>();
+  const financeAccess = new Map<string, FinanceRowLoadAccess>();
+  let accessLoadFailed = false;
   projectIds.forEach((projectId, index) => {
     const members = membersQueries[index]?.data ?? [];
     const projectRow = projectQueries[index]?.data;
     const project = projects.find((p) => p.id === projectId);
     if (!project) return;
-    map.set(
-      projectId,
-      resolveCanViewForProject(project, user.id, members, projectRow, workspaceMode),
-    );
+    const detail = resolveProjectFinanceDetail(project, user.id, members, projectRow, workspaceMode);
+    map.set(projectId, detail.canView);
+    // A query that never loaded leaves access unknown, so the project stays out of the access map.
+    if (membersQueries[index]?.isLoadingError || projectQueries[index]?.isLoadingError) {
+      accessLoadFailed = true;
+      return;
+    }
+    financeAccess.set(projectId, detail.financeAccess);
   });
-  return { canViewSensitiveDetailByProjectId: map, isLoading: false };
+  return {
+    canViewSensitiveDetailByProjectId: map,
+    financeAccessByProjectId: financeAccess,
+    isLoading: false,
+    accessLoadFailed,
+  };
 }
 
 const EMPTY_CAN_USE_STOCK_MAP: ReadonlyMap<string, boolean> = new Map();

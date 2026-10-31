@@ -13,7 +13,7 @@ import {
 import { useWorkspaceMode, useWorkspaceProjectsState } from "@/hooks/use-workspace-source";
 import type { InventoryLocation, Project } from "@/types/entities";
 
-const INVENTORY_QUERY_STALE_TIME_MS = 60_000;
+export const INVENTORY_QUERY_STALE_TIME_MS = 60_000;
 const EMPTY_LOCATIONS: InventoryLocation[] = [];
 const EMPTY_STOCK_ROWS: InventoryStockRow[] = [];
 

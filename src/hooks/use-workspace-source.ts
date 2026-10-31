@@ -254,7 +254,7 @@ export function useUpdateWorkspaceProjectAddress(projectId: string) {
   });
 }
 
-export function useWorkspaceProjectsState(): { projects: Project[]; isLoading: boolean } {
+export function useWorkspaceProjectsState(): { projects: Project[]; isLoading: boolean; isError: boolean } {
   const mode = useWorkspaceModeState();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const projectsQuery = useQuery({
@@ -270,12 +270,13 @@ export function useWorkspaceProjectsState(): { projects: Project[]; isLoading: b
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return { projects: store.getProjects(), isLoading: false };
+    return { projects: store.getProjects(), isLoading: false, isError: false };
   }
 
   return {
     projects: projectsQuery.data ?? [],
     isLoading: Boolean(supabaseMode) && projectsQuery.isPending,
+    isError: projectsQuery.isLoadingError,
   };
 }
 

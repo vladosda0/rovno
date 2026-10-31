@@ -603,3 +603,13 @@ export function computeTabChipTotals(
 
   return { requested, ordered, inStock };
 }
+
+/** A restricted viewer reads warehouse balances: rows built from order events miss stock no item names. */
+export function pickVisibleInStockRows<T>(input: {
+  eventRows: T[];
+  balanceRows: T[];
+  balancesAreAuthoritative: boolean;
+}): T[] {
+  if (input.balancesAreAuthoritative && input.balanceRows.length > 0) return input.balanceRows;
+  return input.eventRows.length > 0 ? input.eventRows : input.balanceRows;
+}

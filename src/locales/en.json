@@ -818,6 +818,7 @@
   "procurementTab.itemsCount": "{{count}} items",
   "procurementTab.view": "View",
   "procurementTab.empty": "No procurement items across projects.",
+  "procurementTab.loadFailed": "Couldn't load procurement for some projects. Reload the page.",
   "resourcesTab.peopleWorkload": "People Workload",
   "resourcesTab.open": "Open",
   "resourcesTab.dueSoon": "Due soon",

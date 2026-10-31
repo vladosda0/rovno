@@ -834,6 +834,7 @@
   "procurementTab.itemsCount": "Элементов: {{count}}",
   "procurementTab.view": "Открыть",
   "procurementTab.empty": "Нет позиций снабжения по проектам.",
+  "procurementTab.loadFailed": "Не удалось загрузить снабжение части проектов. Обновите страницу.",
   "resourcesTab.peopleWorkload": "Загрузка людей",
   "resourcesTab.open": "Открытых",
   "resourcesTab.dueSoon": "Скоро дедлайн",

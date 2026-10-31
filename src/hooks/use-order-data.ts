@@ -13,7 +13,7 @@ import { resolveFinanceRowLoadAccess, usePermission } from "@/lib/permissions";
 import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import type { OrderWithLines } from "@/types/entities";
 
-const ORDERS_QUERY_STALE_TIME_MS = 60_000;
+export const ORDERS_QUERY_STALE_TIME_MS = 60_000;
 const EMPTY_ORDERS: OrderWithLines[] = [];
 
 export const orderProjectOrdersQueryRoot = (profileId: string, projectId: string) =>

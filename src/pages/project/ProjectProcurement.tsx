@@ -75,6 +75,7 @@ import {
   computeProcurementHeaderKpis,
   computeLastReceivedAt,
   computeInStockByLocation,
+  pickVisibleInStockRows,
   computeProjectLastReceivedAt,
   computePurchasePriceVariance,
   computeRemainingRequestedQty,
@@ -1064,7 +1065,11 @@ export default function ProjectProcurement() {
     ));
   }, [canManageProcurement, estimateState.project.updatedAt, items, locations, pid, search, stockRows, t]);
 
-  const visibleInStockRows = inStockRows.length > 0 ? inStockRows : summaryFallbackInStockRows;
+  const visibleInStockRows = pickVisibleInStockRows({
+    eventRows: inStockRows,
+    balanceRows: summaryFallbackInStockRows,
+    balancesAreAuthoritative: isSupabaseMode && !canManageProcurement && !canViewSensitiveDetail,
+  });
 
   const inStockRowByKey = useMemo(
     () => new Map(visibleInStockRows.map((row) => [row.key, row])),
