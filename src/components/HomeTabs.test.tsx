@@ -54,6 +54,7 @@ describe("HomeTabs", () => {
     unmount();
 
     markFeatureOpened("knowledge-base");
+    markFeatureOpened("contractor-card");
     renderTabs("/home");
     expect(screen.queryByText("has something new")).not.toBeInTheDocument();
     localStorage.clear();

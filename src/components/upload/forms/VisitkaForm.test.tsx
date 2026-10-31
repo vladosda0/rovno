@@ -8,6 +8,7 @@ const activeOrgMock = vi.fn();
 const createMock = vi.fn();
 const upsertMock = vi.fn();
 const submitMock = vi.fn();
+const fetchMock = vi.fn();
 
 vi.mock("@/hooks/use-orgs", () => ({
   useUserOrganizations: () => orgsMock(),
@@ -18,18 +19,22 @@ vi.mock("@/data/contractor-profile-source", () => ({
   createOrgWithContractorProfile: (...args: unknown[]) => createMock(...args),
   upsertContractorProfileForOrg: (...args: unknown[]) => upsertMock(...args),
   submitContractorProfileForModeration: (...args: unknown[]) => submitMock(...args),
+  fetchContractorProfile: (...args: unknown[]) => fetchMock(...args),
 }));
 const partyDetailsMock = vi.fn();
 vi.mock("@/data/requisites-lookup-source", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/data/requisites-lookup-source")>()),
   lookupPartyDetails: (...args: unknown[]) => partyDetailsMock(...args),
 }));
+const toastMock = vi.fn();
+vi.mock("@/hooks/use-toast", () => ({ toast: (...args: unknown[]) => toastMock(...args) }));
 const uploadAvatarMock = vi.fn();
 vi.mock("@/hooks/use-avatar-upload", () => ({
   useAvatarUpload: () => ({ uploadAvatar: uploadAvatarMock }),
 }));
 
 import { VisitkaForm } from "@/components/upload/forms/VisitkaForm";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 function renderForm() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -45,6 +50,7 @@ function renderForm() {
 describe("VisitkaForm", () => {
   beforeEach(() => {
     orgsMock.mockReset();
+    fetchMock.mockReset().mockResolvedValue(null);
     activeOrgMock.mockReset();
     createMock.mockReset().mockResolvedValue({ org_id: "new-org", profile_id: "new-profile" });
     upsertMock.mockReset().mockResolvedValue({ org_id: "o1", profile_id: "p1" });
@@ -56,11 +62,12 @@ describe("VisitkaForm", () => {
     orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner" }], isLoading: false });
     activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner" });
     const { container } = renderForm();
+    await screen.findByPlaceholderText(/How clients will see you/i);
 
     fireEvent.change(screen.getByPlaceholderText(/How clients will see you/i), {
       target: { value: "Builder" },
     });
-    fireEvent.change(screen.getByPlaceholderText("@username"), { target: { value: "@builder" } });
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "@builder" } });
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [new File(["x"], "logo.png", { type: "image/png" })] } });
 
@@ -78,6 +85,7 @@ describe("VisitkaForm", () => {
     orgsMock.mockReturnValue({ data: [], isLoading: false });
     activeOrgMock.mockReturnValue(null);
     renderForm();
+    await screen.findByPlaceholderText(/How clients will see you/i);
 
     // Org-creation section is shown when the user has no org.
     expect(screen.getByText(/Creating your organization/i)).toBeInTheDocument();
@@ -103,13 +111,14 @@ describe("VisitkaForm", () => {
     orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner" }], isLoading: false });
     activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner" });
     renderForm();
+    await screen.findByPlaceholderText(/How clients will see you/i);
 
     expect(screen.queryByText(/Creating your organization/i)).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText(/How clients will see you/i), {
       target: { value: "Builder" },
     });
-    fireEvent.change(screen.getByPlaceholderText("+7 900 000-00-00"), {
+    fireEvent.change(screen.getAllByPlaceholderText("+7 900 000-00-00")[0], {
       target: { value: "+79990000000" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
@@ -123,6 +132,7 @@ describe("VisitkaForm", () => {
     orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner" }], isLoading: false });
     activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner" });
     renderForm();
+    await screen.findByPlaceholderText(/How clients will see you/i);
 
     fireEvent.change(screen.getByPlaceholderText(/How clients will see you/i), {
       target: { value: "Builder" },
@@ -139,16 +149,171 @@ describe("VisitkaForm", () => {
     orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner" }], isLoading: false });
     activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner" });
     renderForm();
+    await screen.findByPlaceholderText(/How clients will see you/i);
 
     fireEvent.change(screen.getByPlaceholderText(/How clients will see you/i), {
       target: { value: "Builder" },
     });
-    fireEvent.change(screen.getByPlaceholderText("@username"), { target: { value: "@builder" } });
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "@builder" } });
     fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
 
     await waitFor(() => expect(screen.getByText("Business card saved")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
     await waitFor(() => expect(submitMock).toHaveBeenCalledWith("o1"));
+  });
+
+  describe("the saved card (rovno#282)", () => {
+    const saved = {
+      id: "p1",
+      org_id: "o1",
+      display_name: "ООО Ремонт",
+      contacts: {
+        email: "a@b.ru",
+        phone: "+7 812 000-00-00",
+        telegram: "@remont",
+        website: "https://remont.ru",
+        whatsapp: "+7 921 000-00-00",
+        vk: "https://vk.com/remont",
+      },
+      region: "Спб",
+      specializations: ["отделка", "электрика"],
+      experience_years: 12,
+      avatar_url: "https://cdn/a.jpg",
+      description: "Ремонт",
+      inn: null,
+      appearance: { shade: "olive", cover_url: "https://cdn/c.jpg", show_requisites: false },
+      status: "draft",
+    };
+
+    beforeEach(() => {
+      orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner" }], isLoading: false });
+      activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner" });
+    });
+
+    it("opens filled with what is saved and sends it back whole", async () => {
+      fetchMock.mockResolvedValue(saved);
+      renderForm();
+      expect(await screen.findByDisplayValue("ООО Ремонт")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("отделка, электрика")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("remont")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("+7 921 000-00-00")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("https://vk.com/remont")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+      await waitFor(() => expect(upsertMock).toHaveBeenCalledTimes(1));
+      const profile = upsertMock.mock.calls[0][1];
+      expect(profile.contacts).toEqual(saved.contacts);
+      expect(profile.appearance).toEqual({ shade: "olive", cover_url: "https://cdn/c.jpg", show_requisites: false });
+    });
+
+    it("sends an emptied field empty, so the server clears it", async () => {
+      fetchMock.mockResolvedValue(saved);
+      renderForm();
+      fireEvent.change(await screen.findByDisplayValue("Спб"), { target: { value: "" } });
+      fireEvent.change(screen.getByDisplayValue("12"), { target: { value: "" } });
+      fireEvent.change(screen.getByDisplayValue("отделка, электрика"), { target: { value: "" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+      await waitFor(() => expect(upsertMock).toHaveBeenCalledTimes(1));
+      expect(upsertMock.mock.calls[0][1]).toEqual(
+        expect.objectContaining({ region: "", experience_years: null, specializations: [] }),
+      );
+    });
+
+    it("does not let an unread card be overwritten", async () => {
+      fetchMock.mockRejectedValue(new Error("boom"));
+      renderForm();
+      const alert = await screen.findByRole("alert");
+      expect(alert).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save as draft" })).toBeDisabled();
+    });
+
+    it("picks a shade, which drops the own cover", async () => {
+      fetchMock.mockResolvedValue(saved);
+      renderForm();
+      fireEvent.click(await screen.findByRole("button", { name: "Brick" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+      await waitFor(() => expect(upsertMock).toHaveBeenCalledTimes(1));
+      expect(upsertMock.mock.calls[0][1].appearance).toEqual({ shade: "brick", show_requisites: false });
+    });
+
+    it("refuses a cover over 5 MB without uploading it", async () => {
+      fetchMock.mockResolvedValue(null);
+      const { container } = renderForm();
+      await screen.findByPlaceholderText(/How clients will see you/i);
+      const coverInput = container.querySelectorAll('input[type="file"]')[1] as HTMLInputElement;
+      const big = new File(["x"], "c.jpg", { type: "image/jpeg" });
+      Object.defineProperty(big, "size", { value: 6 * 1024 * 1024 });
+      fireEvent.change(coverInput, { target: { files: [big] } });
+      expect(uploadAvatarMock).not.toHaveBeenCalled();
+    });
+
+    it("says a first card needs the Brigade plan when the server refuses it", async () => {
+      upsertMock.mockRejectedValue({ message: "business_card_requires_brigade", code: "P0001" });
+      renderForm();
+      fireEvent.change(await screen.findByPlaceholderText(/How clients will see you/i), { target: { value: "Builder" } });
+      fireEvent.change(screen.getByPlaceholderText("mail@example.com"), { target: { value: "a@b.ru" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+      await waitFor(() => expect(upsertMock).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("Brigade") })));
+    });
+
+    it("blocks Save when the organizations arrive late and the card cannot be read", async () => {
+      orgsMock.mockReturnValue({ data: undefined, isLoading: false });
+      activeOrgMock.mockReturnValue(null);
+      fetchMock.mockRejectedValue(new Error("boom"));
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const ui = () => (
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <VisitkaForm onBack={() => {}} onClose={() => {}} />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+      const { rerender } = render(ui());
+      await screen.findByPlaceholderText(/How clients will see you/i);
+      orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner" }], isLoading: false });
+      activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner" });
+      rerender(ui());
+      await screen.findByRole("alert");
+      expect(screen.getByRole("button", { name: "Save as draft" })).toBeDisabled();
+    });
+
+    it("asks the registry once for an entered INN, after a pause", async () => {
+      partyDetailsMock.mockResolvedValue({ status: "unavailable" });
+      renderForm();
+      const input = await screen.findByPlaceholderText(/10 or 12 digits/i);
+      fireEvent.change(input, { target: { value: "7707083893" } });
+      expect(partyDetailsMock).not.toHaveBeenCalled();
+      await waitFor(() => expect(partyDetailsMock).toHaveBeenCalledTimes(1), { timeout: 1500 });
+    });
+
+    it("does not carry one organization's card into another", async () => {
+      fetchMock.mockImplementation(async (orgId: string) => (orgId === "o1" ? saved : null));
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const ui = () => (
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <VisitkaForm onBack={() => {}} onClose={() => {}} />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+      const { rerender } = render(ui());
+      await screen.findByDisplayValue("Спб");
+      orgsMock.mockReturnValue({ data: [{ id: "o2", name: "Second", role: "owner" }], isLoading: false });
+      activeOrgMock.mockReturnValue({ id: "o2", name: "Second", role: "owner" });
+      rerender(ui());
+      await screen.findByDisplayValue("Second");
+      expect(screen.queryByDisplayValue("Спб")).not.toBeInTheDocument();
+    });
+
+    it("rejects a social link that is not a web address", async () => {
+      fetchMock.mockResolvedValue(saved);
+      renderForm();
+      fireEvent.change(await screen.findByDisplayValue("https://vk.com/remont"), { target: { value: "javascript:alert(1)" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+      expect(await screen.findByDisplayValue("javascript:alert(1)")).toHaveAttribute("aria-invalid", "true");
+      expect(upsertMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("INN check against the registry (rovno#243)", () => {
@@ -166,11 +331,12 @@ describe("VisitkaForm", () => {
 
     it("promises the check under the empty field, then shows the tag after the INN is entered", async () => {
       renderForm();
+      await screen.findByPlaceholderText(/How clients will see you/i);
       expect(screen.getByText("We check the organization in the state register (EGRUL) as soon as you enter the tax ID")).toBeInTheDocument();
       const field = screen.getByPlaceholderText("10 or 12 digits");
       fireEvent.change(field, { target: { value: "7809876544" } });
       fireEvent.blur(field);
-      await waitFor(() => expect(screen.getByText("Organization liquidated")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("party-status-tag")).toHaveTextContent("Organization liquidated"));
       expect(partyDetailsMock).toHaveBeenCalledWith("7809876544", null);
       expect(screen.queryByText(/as soon as you enter the tax ID/)).not.toBeInTheDocument();
       fireEvent.click(screen.getByTestId("party-status-tag"));
@@ -179,6 +345,7 @@ describe("VisitkaForm", () => {
 
     it("does not check a short INN and saves the card whatever the status", async () => {
       renderForm();
+      await screen.findByPlaceholderText(/How clients will see you/i);
       const field = screen.getByPlaceholderText("10 or 12 digits");
       fireEvent.change(field, { target: { value: "78098" } });
       fireEvent.blur(field);
@@ -186,9 +353,9 @@ describe("VisitkaForm", () => {
 
       fireEvent.change(field, { target: { value: "7809876544" } });
       fireEvent.blur(field);
-      await waitFor(() => expect(screen.getByText("Organization liquidated")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("party-status-tag")).toHaveTextContent("Organization liquidated"));
       fireEvent.change(screen.getByPlaceholderText(/How clients will see you/i), { target: { value: "Builder" } });
-      fireEvent.change(screen.getByPlaceholderText("@username"), { target: { value: "@builder" } });
+      fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "@builder" } });
       fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
       await waitFor(() => expect(upsertMock).toHaveBeenCalledWith("o1", expect.objectContaining({ inn: "7809876544" })));
     });
@@ -196,6 +363,7 @@ describe("VisitkaForm", () => {
     it("keeps the hint and shows no tag when the check does not answer", async () => {
       partyDetailsMock.mockResolvedValue({ status: "unavailable" });
       renderForm();
+      await screen.findByPlaceholderText(/How clients will see you/i);
       const field = screen.getByPlaceholderText("10 or 12 digits");
       fireEvent.change(field, { target: { value: "7809876544" } });
       fireEvent.blur(field);
@@ -203,5 +371,39 @@ describe("VisitkaForm", () => {
       await waitFor(() => expect(screen.queryByTestId("party-status-tag")).toBeNull());
       expect(screen.getByText(/as soon as you enter the tax ID/)).toBeInTheDocument();
     });
+  });
+});
+
+describe("VisitkaForm preview window", () => {
+  it("closes on Escape and leaves the form's own dialog open", async () => {
+    orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner" }], isLoading: false });
+    activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner" });
+    fetchMock.mockReset().mockResolvedValue(null);
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    const onOpenChange = vi.fn();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <Dialog open onOpenChange={onOpenChange}>
+            <DialogContent>
+              <DialogTitle>Form</DialogTitle>
+              <VisitkaForm onBack={() => {}} onClose={() => {}} />
+            </DialogContent>
+          </Dialog>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "See the reverse side of the card" }));
+    const window = await screen.findByTestId("card-window");
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByTestId("card-window")).not.toBeInTheDocument());
+    expect(onOpenChange).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 
 import {
   Dialog,
@@ -36,6 +37,8 @@ export interface MultiStepUploadModalProps {
   presetProjectId?: string;
   /** Called after a successful save. */
   onComplete?: (result: UploadResult) => void;
+  /** «Назад» in the visitka form closes the modal: it was opened to edit the card. */
+  closeOnBack?: boolean;
 }
 
 function computeInitialState(
@@ -70,6 +73,7 @@ export function MultiStepUploadModal({
   presetScope,
   presetProjectId,
   onComplete,
+  closeOnBack,
 }: MultiStepUploadModalProps) {
   const { t } = useTranslation();
   const [state, setState] = useState<ModalState>(() =>
@@ -138,7 +142,7 @@ export function MultiStepUploadModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : handleClose())}>
-      <DialogContent className="bg-card border border-border rounded-modal max-w-2xl shadow-xl p-0 gap-0 max-h-[88vh] flex flex-col [&>button.absolute]:hidden">
+      <DialogContent className={cn("bg-card border border-border rounded-modal shadow-xl p-0 gap-0 max-h-[88vh] flex flex-col [&>button.absolute]:hidden", state.type === "visitka" ? "max-w-4xl" : "max-w-2xl")}>
         <DialogHeader className="border-b border-border px-4 sm:px-5 py-3 sm:py-4 shrink-0">
           <DialogTitle>{headerTitle}</DialogTitle>
           <DialogDescription
@@ -186,7 +190,7 @@ export function MultiStepUploadModal({
           )}
           {state.step === 3 && state.type === "visitka" && (
             <VisitkaForm
-              onBack={backToStep1}
+              onBack={closeOnBack ? handleClose : backToStep1}
               onClose={handleClose}
               onComplete={handleComplete}
             />

@@ -44,14 +44,16 @@ vi.mock("@/components/home/KnowledgeBaseTab", () => ({
 vi.mock("@/components/home/DocumentTemplatesTab", () => ({
   DocumentTemplatesTab: () => <div data-testid="stub-document-templates">doc templates</div>,
 }));
+const activeOrgRole = vi.hoisted(() => ({ value: null as string | null }));
 vi.mock("@/hooks/use-orgs", () => ({
-  useActiveOrg: () => null,
+  useActiveOrg: () => (activeOrgRole.value ? { id: "o1", role: activeOrgRole.value } : null),
   useUserOrganizations: () => ({ data: [] }),
 }));
 vi.mock("@/components/upload/MultiStepUploadModal", () => ({
   MultiStepUploadModal: () => null,
 }));
 
+import { markFeatureOpened } from "@/lib/new-features";
 import { DocumentsHubTab } from "@/components/home/DocumentsHubTab";
 
 function LocationProbe() {
@@ -139,6 +141,7 @@ describe("DocumentsHubTab", () => {
     });
   });
   it("marks the knowledge base as New until it is opened, and the mark stays gone after a remount", async () => {
+    markFeatureOpened("contractor-card");
     const first = renderHub("/home");
     const kbButton = await screen.findByRole("button", { name: /Knowledge base/i });
     expect(within(kbButton).getByText("New")).toBeInTheDocument();
@@ -157,6 +160,22 @@ describe("DocumentsHubTab", () => {
     await screen.findByRole("button", { name: /Knowledge base/i });
     expect(screen.queryByText("New")).not.toBeInTheDocument();
     expect(screen.queryByText("has something new")).not.toBeInTheDocument();
+  });
+
+  it("gives a member no create button on the card leaf", async () => {
+    activeOrgRole.value = "member";
+    renderHub("/home?docTab=org-contractor-card");
+    await screen.findByTestId("stub-org-contractor-card");
+    expect(screen.queryByRole("button", { name: "Create business card" })).not.toBeInTheDocument();
+    activeOrgRole.value = null;
+  });
+
+  it("gives an owner the create button on the card leaf", async () => {
+    activeOrgRole.value = "owner";
+    renderHub("/home?docTab=org-contractor-card");
+    await screen.findByTestId("stub-org-contractor-card");
+    expect(screen.getAllByRole("button", { name: "Create business card" }).length).toBeGreaterThan(0);
+    activeOrgRole.value = null;
   });
 
   it("clears the New mark when the knowledge base is reached by a link", async () => {

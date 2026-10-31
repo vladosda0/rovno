@@ -34,7 +34,12 @@ export const LEAVES = {
   orgMedia: { slug: "org-media", labelKey: "home.documentsHub.nav.org.media", icon: Image },
   orgEstimates: { slug: "org-estimates", labelKey: "home.documentsHub.nav.org.estimates", icon: Calculator },
   orgCatalogs: { slug: "org-catalogs", labelKey: "home.documentsHub.nav.org.catalogs", icon: Package },
-  orgContractorCard: { slug: "org-contractor-card", labelKey: "home.documentsHub.nav.org.contractorCard", icon: IdCard },
+  orgContractorCard: {
+    slug: "org-contractor-card",
+    labelKey: "home.documentsHub.nav.org.contractorCard",
+    icon: IdCard,
+    newFeatureId: "contractor-card",
+  },
   catalogs: { slug: "catalogs", labelKey: "home.documentsHub.nav.catalogs", icon: Package },
   estimates: { slug: "estimates", labelKey: "home.documentsHub.nav.estimates", icon: Calculator },
   knowledgeBase: {

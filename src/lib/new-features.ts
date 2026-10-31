@@ -19,6 +19,7 @@ export interface NewFeature {
 
 export const NEW_FEATURES: readonly NewFeature[] = [
   { id: "knowledge-base", addedAt: "2026-10-26", homeTab: "documents" },
+  { id: "contractor-card", addedAt: "2026-11-01", homeTab: "documents" },
 ];
 
 export const MAX_ACTIVE_FEATURES = 3;

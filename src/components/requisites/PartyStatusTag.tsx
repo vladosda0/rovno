@@ -57,9 +57,29 @@ interface PartyStatusTagProps {
   /** Show the registry name in the tooltip (the visitka form, frame 5). */
   showName?: boolean;
   className?: string;
+  /** Lifts the tooltip above a window that stands higher than the usual dialogs. */
+  tooltipClassName?: string;
 }
 
-export function PartyStatusTag({ check, inn, advice, showName, className }: PartyStatusTagProps) {
+/** The same tag with no press: for a place that is itself a button, or a row beside the tag's own. */
+export function PartyStatusBadge({ check, inn, className }: { check: PartyCheck | null; inn: string; className?: string }) {
+  const { t } = useTranslation();
+  const kind = partyTagKind(check, inn);
+  if (!kind) return null;
+  const Icon = kind.icon;
+  return (
+    <span
+      data-testid="party-status-badge"
+      data-tone={kind.tone}
+      className={cn(badgeVariants({ variant: "outline" }), "gap-1 font-medium", TONE_CLASS[kind.tone], className)}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      {t(kind.textKey)}
+    </span>
+  );
+}
+
+export function PartyStatusTag({ check, inn, advice, showName, className, tooltipClassName }: PartyStatusTagProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const kind = partyTagKind(check, inn);
@@ -99,7 +119,7 @@ export function PartyStatusTag({ check, inn, advice, showName, className }: Part
     <TooltipProvider delayDuration={200}>
       <Tooltip open={open} onOpenChange={setOpen}>
         <TooltipTrigger asChild>{tag}</TooltipTrigger>
-        <TooltipContent side="bottom" align="start" className="max-w-xs text-caption">
+        <TooltipContent side="bottom" align="start" className={cn("max-w-xs text-caption", tooltipClassName)}>
           {showName && check.phase === "found" ? <div className="font-medium text-foreground">{check.name}</div> : null}
           <div>{t(isIp ? "requisites.partyStatus.asOfIp" : "requisites.partyStatus.asOf", { date: formatExportDate(checkedAt) })}</div>
           {adviceText ? <div className="text-muted-foreground">{adviceText}</div> : null}

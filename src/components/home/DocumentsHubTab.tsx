@@ -12,6 +12,7 @@ import {
 } from "@/components/home/documents-hub/DocumentsLeftNav";
 import { MobileSectionNav } from "@/components/home/documents-hub/MobileSectionNav";
 import { MultiStepUploadModal } from "@/components/upload/MultiStepUploadModal";
+import { useActiveOrg } from "@/hooks/use-orgs";
 import type { UploadType } from "@/components/upload/types";
 import { leafForUploadResult } from "@/components/upload/upload-destination";
 import { markFeatureOpened } from "@/lib/new-features";
@@ -98,6 +99,7 @@ export function DocumentsHubTab() {
     return param && VALID_LEAVES.has(param) ? (param as LeafSlug) : DEFAULT_LEAF;
   });
   const [uploadOpen, setUploadOpen] = useState(false);
+  const activeOrgRole = useActiveOrg()?.role;
 
   useEffect(() => {
     const param = searchParams.get(SUB_TAB_PARAM);
@@ -141,6 +143,8 @@ export function DocumentsHubTab() {
   const presetType = presetForLeaf(activeLeaf);
 
   const handleCtaClick = () => setUploadOpen(true);
+  // A member only looks at the organization's card (rovno#282, frame 5).
+  const hideCta = activeLeaf === "org-contractor-card" && activeOrgRole === "member";
 
   const ctaButtonDesktop = (
     <Button className="w-full justify-start gap-2" size="default" onClick={handleCtaClick}>
@@ -178,7 +182,7 @@ export function DocumentsHubTab() {
         <DocumentsLeftNav
           activeSlug={activeLeaf}
           onSelect={handleSelect}
-          cta={ctaButtonDesktop}
+          cta={hideCta ? null : ctaButtonDesktop}
         />
       </aside>
       <main className="min-w-0 flex-1 px-4 pt-3 pb-20 sm:px-6 md:pb-6 space-y-3">
@@ -199,7 +203,7 @@ export function DocumentsHubTab() {
         }}
       />
       {/* Nothing to add on the knowledge-base reading page (slice 2, frame 7). */}
-      {!(activeLeaf === "knowledge-base" && searchParams.has("kbDoc")) && ctaFabMobile}
+      {!hideCta && !(activeLeaf === "knowledge-base" && searchParams.has("kbDoc")) && ctaFabMobile}
     </div>
   );
 }
