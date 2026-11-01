@@ -683,6 +683,10 @@
     {
       "path": "supabase/migrations/20261101020000_contractor_profile_appearance.sql",
       "sha256": "f5feb600805d09d18f81950673716a223820af2df6645295783190cbab467de1"
+    },
+    {
+      "path": "supabase/migrations/20261101040000_kb_clauses_search_column.sql",
+      "sha256": "64cc873e67a71b76cf833b134416bb0d37f37b9d2126f2e4ca7ca667309ef792"
     }
   ],
   "generated_artifacts": [

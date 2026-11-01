@@ -201,6 +201,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261031010000_briefing_lead_setting.sql`
 - `supabase/migrations/20261031020000_kb_assistant_search_empty_base.sql`
 - `supabase/migrations/20261101020000_contractor_profile_appearance.sql`
+- `supabase/migrations/20261101040000_kb_clauses_search_column.sql`
 
 ## Exclusions
 

@@ -2945,6 +2945,7 @@ export type Database = {
           "number": string | null
           "level": number
           "amendments": unknown
+          "search_v": unknown | null
           }
           Insert: {
           "id"?: string
@@ -2959,6 +2960,7 @@ export type Database = {
           "number"?: string | null
           "level"?: number
           "amendments"?: unknown
+          "search_v"?: unknown | null
           }
           Update: {
           "id"?: string
@@ -2973,6 +2975,7 @@ export type Database = {
           "number"?: string | null
           "level"?: number
           "amendments"?: unknown
+          "search_v"?: unknown | null
           }
           Relationships: []
         }
