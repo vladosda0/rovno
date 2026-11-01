@@ -687,6 +687,14 @@
     {
       "path": "supabase/migrations/20261101040000_kb_clauses_search_column.sql",
       "sha256": "64cc873e67a71b76cf833b134416bb0d37f37b9d2126f2e4ca7ca667309ef792"
+    },
+    {
+      "path": "supabase/migrations/20261102040000_home_ai_chat_sessions.sql",
+      "sha256": "166108dbe1b5653cd075117f937451a741c18f8b3113afe3e6e9dc28d38f6d2e"
+    },
+    {
+      "path": "supabase/migrations/20261102040100_ai_answer_ratings.sql",
+      "sha256": "188136aaa96d9b78783496673903c16464167cf89c36b1cbf0b5d75de69d27b5"
     }
   ],
   "generated_artifacts": [

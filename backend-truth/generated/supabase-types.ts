@@ -3120,6 +3120,63 @@ export type Database = {
           }
           Relationships: []
         }
+        "home_ai_chat_sessions": {
+          Row: {
+          "profile_id": string
+          "recent_turns": Json
+          "rolling_summary": string | null
+          "updated_at": string
+          }
+          Insert: {
+          "profile_id"?: string
+          "recent_turns"?: Json
+          "rolling_summary"?: string | null
+          "updated_at"?: string
+          }
+          Update: {
+          "profile_id"?: string
+          "recent_turns"?: Json
+          "rolling_summary"?: string | null
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "ai_answer_ratings": {
+          Row: {
+          "profile_id": string
+          "message_id": string
+          "rating": "up" | "down"
+          "project_id": string | null
+          "question": string
+          "answer": string
+          "created_at": string
+          "updated_at": string
+          "primary": unknown | null
+          }
+          Insert: {
+          "profile_id": string
+          "message_id": string
+          "rating": "up" | "down"
+          "project_id"?: string | null
+          "question"?: string
+          "answer"?: string
+          "created_at"?: string
+          "updated_at"?: string
+          "primary"?: unknown | null
+          }
+          Update: {
+          "profile_id"?: string
+          "message_id"?: string
+          "rating"?: "up" | "down"
+          "project_id"?: string | null
+          "question"?: string
+          "answer"?: string
+          "created_at"?: string
+          "updated_at"?: string
+          "primary"?: unknown | null
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -3164,6 +3221,14 @@ export type Database = {
           "p_chat_id": string
           "p_user_text": string
           "p_assistant_text": string
+          }
+          Returns: unknown
+        }
+        "append_home_ai_chat_session_turns": {
+          Args: {
+          "p_user_text": string
+          "p_assistant_text": string
+          "p_assistant_meta": unknown
           }
           Returns: unknown
         }
@@ -3432,6 +3497,10 @@ export type Database = {
           Args: {
           "p_template_id": string
           }
+          Returns: Json
+        }
+        "get_home_ai_chat_session": {
+          Args: Record<PropertyKey, never>
           Returns: Json
         }
         "get_hr_operational_summary": {
@@ -3727,6 +3796,16 @@ export type Database = {
         "set_active_org_context": {
           Args: {
           "p_org_id": string
+          }
+          Returns: unknown
+        }
+        "set_ai_answer_rating": {
+          Args: {
+          "p_message_id": string
+          "p_rating": string
+          "p_project_id": unknown
+          "p_question": unknown
+          "p_answer": unknown
           }
           Returns: unknown
         }

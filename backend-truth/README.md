@@ -202,6 +202,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261031020000_kb_assistant_search_empty_base.sql`
 - `supabase/migrations/20261101020000_contractor_profile_appearance.sql`
 - `supabase/migrations/20261101040000_kb_clauses_search_column.sql`
+- `supabase/migrations/20261102040000_home_ai_chat_sessions.sql`
+- `supabase/migrations/20261102040100_ai_answer_ratings.sql`
 
 ## Exclusions
 
