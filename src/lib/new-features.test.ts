@@ -90,7 +90,7 @@ describe("new-features", () => {
   });
 
   it("maps the documents home tab to the knowledge base", () => {
-    expect(newFeatureIdsForHomeTab("documents")).toEqual(NEW_FEATURES.map((f) => f.id));
+    expect(newFeatureIdsForHomeTab("documents")).toEqual(NEW_FEATURES.filter((f) => f.homeTab === "documents").map((f) => f.id));
     expect(newFeatureIdsForHomeTab("tasks")).toEqual([]);
   });
   it("shows nothing once a write fails, so a mark that cannot be cleared never sticks", () => {

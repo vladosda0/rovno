@@ -55,6 +55,8 @@ export interface LiveTextKnowledgeBase {
 
 /** Result returned by `invokeLiveTextAssistant` (mock or hosted edge). */
 export interface LiveTextAssistantResult {
+  /** Outside a project: the question was about a project, the client draws its own answer. */
+  needsProject?: boolean;
   /** Which LLM backend served this turn when hosted (echo from `ai-inference`). */
   llmProvider?: "gigachat" | "qwen";
   /** Resolved UI language for grounding chrome, mock copy, and client-side error sanitization. */

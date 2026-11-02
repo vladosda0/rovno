@@ -127,7 +127,6 @@ const HE_IS_NAMED_KEYS = [
   "ai.sidebar.proposal.statusTitle.declined",
   "ai.sidebar.filter.aiActions",
   "ai.sidebar.composer.placeholderDefault",
-  "ai.sidebar.composer.placeholderLearn",
   "ai.sidebar.consult.actions.addComment",
   "ai.sidebar.consult.analysisCommentPrefix",
   "ai.sidebar.guest.loginHint",

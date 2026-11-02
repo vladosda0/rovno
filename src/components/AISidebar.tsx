@@ -19,7 +19,6 @@ import {
   PanelLeft,
   Plus,
   Paperclip,
-  GraduationCap,
   AtSign,
   Link2,
   Mic,
@@ -27,10 +26,7 @@ import {
   ChevronDown,
   ChevronRight,
   Check,
-  User,
   Copy,
-  ThumbsUp,
-  ThumbsDown,
   BookmarkPlus,
   RefreshCw,
   FileText,
@@ -40,7 +36,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { selectAiUsage, TIER_QUOTA_QUERY_KEY, useTierQuota } from "@/hooks/useTierQuota";
-import { AIQuotaGate } from "@/components/billing/AIQuotaGate";
+import { ShurikAnswerActions, ShurikAnswerTurn, ShurikUserTurn } from "@/components/ai/ShurikChatTurn";
+import { SHURIK_PANEL_CARD_CLASS } from "@/components/ai/shurik-panel-card";
+import { shurikQuoteLine, takeProjectComposerSeed } from "@/lib/shurik-ask";
+import { ShurikSelectionAsk } from "@/components/ai/ShurikSelectionAsk";
+import { saveAnswerToDocuments } from "@/lib/ai-answer-save";
+import { sendAiAnswerRating, toggledRating, type AiAnswerRating } from "@/lib/ai-answer-rating";
+import { AIQuotaGate, ShurikQuotaFigure, useAiQuotaExceeded } from "@/components/billing/AIQuotaGate";
 import { AIQuotaWarning } from "@/components/billing/AIQuotaWarning";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -70,8 +72,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCurrentUser, useEvents, useProject, useProjects, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useWorkspaceProfilePreferences, useWorkspaceProjectState } from "@/hooks/use-workspace-source";
 import { usePlanningProjectTasksState } from "@/hooks/use-planning-source";
-import { supabase } from "@/integrations/supabase/client";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { useEstimateV2FinanceProjectSummaryFromWorkspace } from "@/hooks/use-estimate-v2-data";
 import { useProcurementReadProjectSummary } from "@/hooks/use-procurement-read-model";
 import {
@@ -219,8 +219,6 @@ const GENERAL_MODE_VALUE = "general";
 // for the dead Home branch — lives in #276; do not act on the asymmetries without re-checking
 // reachability first.
 const ACTIONABLE_PROPOSAL_PATTERN = /\b(task|add task|create task|estimate|cost|budget|procurement|buy|purchase|material|document|contract|report|generate)\b|(задач|смет|бюджет|стоимост|закуп|купи|материал|документ|договор|отч[её]т)/i;
-const LEARN_USER_PROMPT_PATTERN = /^\s*(how|what|why|explain|как|что|почему|объясни|объясните)\b/i;
-const LEARN_LIST_PATTERN = /(?:^|\n)\s*(?:[-*•]|\d+\.)\s+/m;
 
 type FeedFilter =
   | "all"
@@ -230,8 +228,7 @@ type FeedFilter =
   | "document"
   | "photo"
   | "member"
-  | "ai_actions"
-  | "learn";
+  | "ai_actions";
 
 type ChatFeedDomainFilter = "task" | "estimate" | "document" | "photo" | "member";
 
@@ -263,44 +260,6 @@ const FEED_CHAT_DOMAIN_MARKERS: Record<ChatFeedDomainFilter, readonly string[]> 
 
 function normalizeChatFeedText(text: string): string {
   return text.toLocaleLowerCase("ru-RU").replace(/\s+/g, " ").trim();
-}
-
-function collectLearnRelatedMessageIds(messages: readonly AIMessage[]): Set<string> {
-  const ids = new Set<string>();
-  const isLearnExplicit = (message: AIMessage) => (
-    message.mode === "learn"
-    || ((message as AIMessage & { meta?: { mode?: string } }).meta?.mode === "learn")
-  );
-  const isLearnLikeUser = (message: AIMessage) => (
-    message.role === "user" && LEARN_USER_PROMPT_PATTERN.test(message.content.trim())
-  );
-  const isLearnLikeAssistant = (message: AIMessage) => (
-    message.role === "assistant"
-    && (message.content.length >= 240 || LEARN_LIST_PATTERN.test(message.content))
-  );
-
-  messages.forEach((message, index) => {
-    const qualifies = isLearnExplicit(message) || isLearnLikeUser(message) || isLearnLikeAssistant(message);
-    if (!qualifies) return;
-
-    ids.add(message.id);
-    if (message.role === "user") {
-      for (let nextIndex = index + 1; nextIndex < messages.length; nextIndex += 1) {
-        if (messages[nextIndex]?.role === "assistant") {
-          ids.add(messages[nextIndex].id);
-          break;
-        }
-      }
-    } else {
-      for (let prevIndex = index - 1; prevIndex >= 0; prevIndex -= 1) {
-        if (messages[prevIndex]?.role === "user") {
-          ids.add(messages[prevIndex].id);
-          break;
-        }
-      }
-    }
-  });
-  return ids;
 }
 
 function messageMatchesChatFeedDomain(message: AIMessage, domain: ChatFeedDomainFilter): boolean {
@@ -360,14 +319,11 @@ function buildPriorTurnsForInference(
 function selectMessagesForActivityFilter(
   filter: FeedFilter,
   allMessages: AIMessage[],
-  learnSubset: AIMessage[],
 ): AIMessage[] {
   switch (filter) {
     case "all":
     case "chats":
       return allMessages;
-    case "learn":
-      return learnSubset;
     case "ai_actions":
       return allMessages.filter(messageHasAiActionSignals);
     case "task":
@@ -390,8 +346,6 @@ function archiveEntryMatchesFeedFilter(
     case "all":
     case "chats":
       return true;
-    case "learn":
-      return collectLearnRelatedMessageIds(snap).size > 0;
     case "ai_actions":
       return (
         transcriptHasAiActionSignals(snap)
@@ -842,7 +796,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   const [inputValue, setInputValue] = useState("");
   const [composerMultiline, setComposerMultiline] = useState(false);
   const [activityFilter, setActivityFilter] = useState<FeedFilter>("all");
-  const [learnMode, setLearnMode] = useState(false);
   const [automationMode, setAutomationMode] = useState<AutomationMode>("manual");
   const [pendingGeneralProposalInput, setPendingGeneralProposalInput] = useState<string | null>(null);
   const [tagPersonCursor, setTagPersonCursor] = useState(0);
@@ -872,7 +825,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   const [expandedStockUsedEventIds, setExpandedStockUsedEventIds] = useState<Set<string>>(new Set());
   const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
   const [visibleDayBucketCount, setVisibleDayBucketCount] = useState(INITIAL_VISIBLE_DAY_BUCKETS);
-  const [messageRatings, setMessageRatings] = useState<Record<string, "good" | "bad" | undefined>>({});
   const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
   const [pendingSaveMessage, setPendingSaveMessage] = useState<AIMessage | null>(null);
   const [savingLearnMessage, setSavingLearnMessage] = useState(false);
@@ -1093,6 +1045,13 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       setSelectedActions(new Set());
     });
   }, [clearPhotoAnalysisTimer, projectId, startPhotoConsult]);
+
+  // A question carried in from outside the project lies in the composer, the person sends it.
+  useEffect(() => {
+    if (!projectId) return;
+    const seed = takeProjectComposerSeed(projectId);
+    if (seed) setInputValue(seed);
+  }, [projectId]);
 
   // Activity events
   const allEvents = useEvents(projectId || "");
@@ -1854,7 +1813,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
         pendingContent,
         `pending-${Date.now()}`,
         nextProjectMode,
-        learnMode ? "learn" : "default",
+        "default",
       );
       return;
     }
@@ -1887,7 +1846,18 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     return false;
   }
 
-  function handleSend(text?: string) {
+  // A question about a selection goes apart from the composer. False when it cannot go now.
+  function sendApartFromComposer(content: string): boolean {
+    if (activeWindow !== "none" || proposalQueue || photoConsult) {
+      toast({ title: t("ai.sidebar.toast.aiBusy.title") });
+      return false;
+    }
+    if (aiSendBlockedByAccessOrQuota()) return false;
+    handleSend(content, { keepComposer: true });
+    return true;
+  }
+
+  function handleSend(text?: string, { keepComposer = false }: { keepComposer?: boolean } = {}) {
     if (activeWindow !== "none" || proposalQueue) return;
     const content = (text ?? inputValue).trim();
     if (!content) return;
@@ -1899,9 +1869,11 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     // Taken together with the composer's contents and dies with them, so the
     // permission and quota returns below cannot leave it pointing at a chip the
     // user can no longer see.
-    const chipSeed = chipSeedRef.current;
-    chipSeedRef.current = null;
-    setInputValue("");
+    const chipSeed = keepComposer ? null : chipSeedRef.current;
+    if (!keepComposer) {
+      chipSeedRef.current = null;
+      setInputValue("");
+    }
 
     // Clear photo consult when sending (prompt was used)
     if (photoConsult) {
@@ -1917,7 +1889,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
         role: "user",
         content,
         timestamp: new Date().toISOString(),
-        mode: learnMode ? "learn" : "default",
+        mode: "default",
       };
       setMessages((prev) => [...prev, userMsg, {
         id: `msg-${Date.now() + 1}`,
@@ -1934,7 +1906,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       role: "user",
       content,
       timestamp: new Date().toISOString(),
-      mode: learnMode ? "learn" : "default",
+      mode: "default",
     };
     setMessages((prev) => [...prev, userMsg]);
 
@@ -2300,7 +2272,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   ), [members]);
 
   const filteredEvents = useMemo(() => {
-    if (activityFilter === "learn" || activityFilter === "chats") return [] as Event[];
+    if (activityFilter === "chats") return [] as Event[];
     if (activityFilter === "all") return events;
     if (activityFilter === "ai_actions") return events.filter((event) => isAIEvent(event));
     return events.filter((event) => event.type.startsWith(activityFilter));
@@ -2325,15 +2297,9 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     return map;
   }, [events]);
 
-  const learnMessageIds = useMemo(() => collectLearnRelatedMessageIds(messages), [messages]);
-  const learnMessages = useMemo(
-    () => messages.filter((message) => learnMessageIds.has(message.id)),
-    [messages, learnMessageIds],
-  );
-
   const activeThreadMessages = useMemo(
-    () => selectMessagesForActivityFilter(activityFilter, messages, learnMessages),
-    [activityFilter, messages, learnMessages],
+    () => selectMessagesForActivityFilter(activityFilter, messages),
+    [activityFilter, messages],
   );
 
   // ── Grounded opener (PRD rovno-ai-sidebar-opener-prd.md) ────────────────────
@@ -2754,7 +2720,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   const filterOptions: { key: FeedFilter; label: string }[] = [
     { key: "all", label: t("ai.sidebar.filter.all") },
     { key: "chats", label: t("ai.sidebar.filter.chats") },
-    { key: "learn", label: t("ai.sidebar.filter.learn") },
     { key: "task", label: t("ai.sidebar.filter.task") },
     { key: "estimate", label: t("ai.sidebar.filter.estimate") },
     { key: "document", label: t("ai.sidebar.filter.document") },
@@ -2788,10 +2753,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       else next.add(dayKey);
       return next;
     });
-  };
-
-  const handleToggleLearnMode = () => {
-    setLearnMode((prev) => !prev);
   };
 
   const handleNewConversation = useCallback(() => {
@@ -2856,12 +2817,23 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     }
   }
 
-  function handleRateLearnMessage(messageId: string, rating: "good" | "bad") {
-    setMessageRatings((prev) => {
-      const current = prev[messageId];
-      const next: Record<string, "good" | "bad" | undefined> = { ...prev };
-      next[messageId] = current === rating ? undefined : rating;
-      return next;
+  function handleRateMessage(message: AIMessage, pressed: AiAnswerRating) {
+    const rating = toggledRating(message.rating, pressed);
+    setMessages((prev) => prev.map((item) => {
+      if (item.id !== message.id) return item;
+      const { rating: _previous, ...rest } = item;
+      return rating ? { ...rest, rating } : rest;
+    }));
+    if (workspaceMode.kind !== "supabase") return;
+    const index = messages.findIndex((item) => item.id === message.id);
+    const question = messages.slice(0, Math.max(index, 0)).reverse().find((item) => item.role === "user");
+    const ratedProjectId = message.liveTextProjectId ?? resolvedPermissionProjectId;
+    void sendAiAnswerRating({
+      messageId: message.id,
+      rating,
+      projectId: isPersistableAiProjectId(ratedProjectId) ? ratedProjectId : null,
+      question: question?.content ?? "",
+      answer: message.content,
     });
   }
 
@@ -2967,61 +2939,15 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       return;
     }
     const message = pendingSaveMessage;
-    const profileId = workspaceMode.profileId;
-    const rawSupabase = supabase as unknown as SupabaseClient;
-    const title = message.content.slice(0, 120).replace(/\n/g, " ").trim()
-      || t("ai.sidebar.learnNote.defaultTitle");
-
     setSavingLearnMessage(true);
     try {
+      await saveAnswerToDocuments(target, message.content, workspaceMode.profileId, t("ai.sidebar.learnNote.defaultTitle"));
       if (target.kind === "personal") {
-        const { error } = await rawSupabase
-          .from("workspace_documents")
-          .insert({
-            owner_profile_id: profileId,
-            title,
-            type: "knowledge_base",
-            origin: "ai_generated",
-            description: message.content,
-            created_by: profileId,
-          });
-        if (error) throw error;
         toast({
           title: t("ai.sidebar.toast.saved.title"),
           description: t("ai.sidebar.toast.saved.description"),
         });
       } else {
-        const { data: docRows, error: docErr } = await rawSupabase
-          .from("documents")
-          .insert({
-            project_id: target.projectId,
-            type: "knowledge_base",
-            title,
-            origin: "ai_generated",
-            description: message.content,
-            created_by: profileId,
-          })
-          .select("id")
-          .single();
-        if (docErr) throw docErr;
-        const newDocId = (docRows as { id: string }).id;
-        const { error: verErr } = await rawSupabase
-          .from("document_versions")
-          .insert({
-            document_id: newDocId,
-            version_number: 1,
-            is_current: true,
-            created_by: profileId,
-          });
-        if (verErr) {
-          // Best-effort cleanup: drop the orphan documents row so a retry
-          // does not duplicate it. PostgREST does not give us a real
-          // transaction across two .insert() calls; the proper fix is a
-          // SECURITY DEFINER RPC that wraps both inserts in one tx
-          // (tracked as a follow-up).
-          await rawSupabase.from("documents").delete().eq("id", newDocId);
-          throw verErr;
-        }
         toast({
           title: t("ai.sidebar.toast.savedToProject.title"),
           description: t("ai.sidebar.toast.savedToProject.description"),
@@ -3078,6 +3004,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       toast({ title: t("ai.sidebar.toast.aiBusy.title"), description: t("ai.sidebar.toast.aiBusy.description"), variant: "destructive" });
       return;
     }
+    if (aiSendBlockedByAccessOrQuota()) return;
 
     const messageIndex = messages.findIndex((item) => item.id === message.id);
     if (messageIndex < 0) return;
@@ -3113,39 +3040,14 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   }
 
   function renderLiveChatMessage(message: AIMessage) {
-    const isLearnMessage = message.mode === "learn";
-    const isLearnContext = isLearnMessage
-      || learnMode
-      || activityFilter === "learn"
-      || ((message as AIMessage & { meta?: { mode?: string } }).meta?.mode === "learn");
-    const isUserMessage = message.role === "user";
-    const rating = messageRatings[message.id];
+    if (message.role === "user") {
+      return <ShurikUserTurn key={`active-chat-${message.id}`} content={message.content} />;
+    }
     const isSaved = savedMessageIds.has(message.id);
     const isRegenerating = regeneratingMessageId === message.id;
-    const body = (
-      <>
-          <div className="flex items-center gap-1.5">
-            {isUserMessage && (
-              <div className="flex h-5 w-5 items-center justify-center rounded-md bg-muted">
-                <User className="h-3 w-3 text-muted-foreground" />
-              </div>
-            )}
-            <p className="text-caption font-medium text-foreground">
-              {isUserMessage ? t("ai.sidebar.chat.you") : t("ai.sidebar.chat.ai")}
-            </p>
-            {isLearnMessage && (
-              <span className="rounded-pill bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-                {t("ai.sidebar.chat.learnBadge")}
-              </span>
-            )}
-            <span className="ml-auto text-[10px] text-muted-foreground whitespace-nowrap">
-              {new Date(message.timestamp).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          </div>
-          <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words [overflow-wrap:anywhere] max-w-full">
-            {message.content}
-          </p>
-          {!isUserMessage && retrySourceMessage(message) ? (
+    return (
+      <ShurikAnswerTurn key={`active-chat-${message.id}`} message={message}>
+          {retrySourceMessage(message) ? (
             <Button
               type="button"
               variant="outline"
@@ -3157,7 +3059,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               {t("ai.sidebar.chat.actions.retry")}
             </Button>
           ) : null}
-          {!isUserMessage && message.liveTextAssistantV1 && message.liveTextProjectId ? (
+          {message.liveTextAssistantV1 && message.liveTextProjectId ? (
             <>
               {message.liveTextAssistantV1.knowledgeBase ? (
                 <KbSourceLine
@@ -3211,77 +3113,18 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               ) : null}
             </>
           ) : null}
-          {!isUserMessage && isLearnContext && !message.failed && !message.retry && (
-            <div className="mt-1.5 flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                title={t("ai.sidebar.chat.actions.copy")}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
-                onClick={() => { void handleCopyLearnMessage(message); }}
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                title={t("ai.sidebar.chat.actions.rateGood")}
-                className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                  rating === "good"
-                    ? "text-accent bg-accent/15"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
-                }`}
-                onClick={() => handleRateLearnMessage(message.id, "good")}
-              >
-                <ThumbsUp className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                title={t("ai.sidebar.chat.actions.rateBad")}
-                className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                  rating === "bad"
-                    ? "text-destructive bg-destructive/15"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
-                }`}
-                onClick={() => handleRateLearnMessage(message.id, "bad")}
-              >
-                <ThumbsDown className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                title={t("ai.sidebar.chat.actions.saveToDocuments")}
-                className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                  isSaved
-                    ? "text-accent bg-accent/15"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
-                }`}
-                onClick={() => handleSaveLearnMessage(message)}
-              >
-                <BookmarkPlus className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                title={isRegenerating ? t("ai.sidebar.chat.actions.regenerating") : t("ai.sidebar.chat.actions.regenerate")}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors disabled:opacity-60"
-                disabled={isRegenerating}
-                onClick={() => handleRegenerateLearnMessage(message)}
-              >
-                {isRegenerating
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <RefreshCw className="h-3.5 w-3.5" />}
-              </button>
-            </div>
+          {!message.failed && !message.retry && (
+            <ShurikAnswerActions
+              rating={message.rating}
+              saved={isSaved}
+              regenerating={isRegenerating}
+              onCopy={() => { void handleCopyLearnMessage(message); }}
+              onRate={(rating) => handleRateMessage(message, rating)}
+              onSave={() => { void handleSaveLearnMessage(message); }}
+              onRegenerate={() => handleRegenerateLearnMessage(message)}
+            />
           )}
-      </>
-    );
-    return (
-      <div key={`active-chat-${message.id}`} className="px-0 py-1.5 min-w-0 max-w-full">
-        {isUserMessage ? (
-          <div className="rounded-md border border-border/60 bg-sidebar-accent/40 px-2 py-1.5 min-w-0 max-w-full">
-            {body}
-          </div>
-        ) : (
-          <ShurikBubble wink={isFreshAssistantReply(message, Date.now())}>{body}</ShurikBubble>
-        )}
-      </div>
+      </ShurikAnswerTurn>
     );
   }
 
@@ -3290,11 +3133,12 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     "bg-success/10", "bg-destructive/10",
   ];
 
-  const composerModeHint = learnMode
-    ? t("ai.sidebar.composer.placeholderLearn")
-    : photoConsult
-      ? t("ai.sidebar.composer.placeholderConsult")
-      : null;
+  const quotaExceeded = useAiQuotaExceeded(currentUsageType);
+  const panelRootRef = useRef<HTMLDivElement>(null);
+  // Only over an empty conversation: a thread with anything in it stays readable above the card.
+  const showQuotaFigure = quotaExceeded && messages.length === 0 && streamRows.length === 0;
+
+  const composerModeHint = photoConsult ? t("ai.sidebar.composer.placeholderConsult") : null;
   // In a project chat the empty composer greets the person by the time of day and by name.
   // The greeting is not an instruction, so the accessible name keeps the default there.
   const composerPlaceholder = composerModeHint ?? (isProjectContext
@@ -3347,11 +3191,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
             <AtSign className="h-4 w-4 shrink-0" />
             {t("ai.sidebar.composer.tag")}
           </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2" onSelect={() => handleToggleLearnMode()}>
-            <GraduationCap className="h-4 w-4 shrink-0" />
-            <span className="flex-1 text-left">{t("ai.sidebar.composer.learnMode")}</span>
-            {learnMode ? <Check className="ml-auto h-4 w-4 shrink-0" /> : null}
-          </DropdownMenuItem>
           <DropdownMenuItem className="gap-2" onSelect={() => handleAttachFilePhoto()}>
             <Paperclip className="h-4 w-4 shrink-0" />
             {t("ai.sidebar.composer.attach")}
@@ -3399,23 +3238,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-
-      {learnMode && (
-        <span className="group inline-flex h-9 items-center rounded-full border border-sidebar-border bg-transparent px-2.5 text-caption font-medium text-foreground shrink-0">
-          <span className="relative mr-1 inline-flex h-3.5 w-3.5 items-center justify-center">
-            <GraduationCap className="h-3.5 w-3.5 text-accent group-hover:hidden" />
-            <button
-              type="button"
-              aria-label={t("ai.sidebar.composer.disableLearn")}
-              onClick={handleToggleLearnMode}
-              className="absolute inset-0 hidden items-center justify-center text-muted-foreground hover:text-foreground group-hover:inline-flex"
-            >
-              <XIcon className="h-3.5 w-3.5" />
-            </button>
-          </span>
-          {t("ai.sidebar.composer.learnBadge")}
-        </span>
-      )}
     </div>
   );
 
@@ -3522,19 +3344,17 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
         />
       )}
       <div
+        ref={panelRootRef}
         onPointerDownCapture={() => {
           if (!aiSidebarClickedInside && !collapsed && !isGuest) {
             setAiSidebarClickedInside(true);
           }
         }}
-        className="glass-sidebar flex flex-col h-[calc(100svh-48px-var(--demo-banner-h,0px))] shrink-0 relative box-border"
+        className={cn(SHURIK_PANEL_CARD_CLASS, "flex flex-col shrink-0 box-border")}
         style={{
           width: panelWidth,
           minWidth: collapsed ? COLLAPSED_WIDTH : (isMobile ? "100%" : MIN_WIDTH),
           maxWidth: collapsed ? COLLAPSED_WIDTH : (isMobile ? "100%" : MAX_WIDTH),
-          top: "calc(48px + var(--demo-banner-h, 0px))",
-          position: "sticky",
-          zIndex: 10,
           overflow: "hidden",
         }}
       >
@@ -3661,7 +3481,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
 
                   {/* Activity feed: day headers stay fixed; only rows + chat scroll */}
                   <div
-                    className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col px-3 box-border"
+                    className={cn("flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col px-3 box-border", showQuotaFigure && "hidden")}
                     style={{ width: "100%" }}
                   >
                     {streamRows.length > 0 ? (
@@ -4053,6 +3873,8 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                     </div>
                   )}
 
+                  {showQuotaFigure && <ShurikQuotaFigure />}
+
                   {!isInputLocked && (
                     <>
                       <AIQuotaWarning usageType={currentUsageType} />
@@ -4074,7 +3896,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                             setInputValue(text);
                           }}
                         />
-                      ) : (
+                      ) : quotaExceeded ? null : (
                         <SuggestionChips
                           suggestions={suggestions}
                           onSelect={(text, index) => {
@@ -4123,10 +3945,10 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
 
                       {isProjectContext && (
                         <p className="w-full min-w-0 px-1 text-[10px] leading-snug text-muted-foreground" data-testid="shurik-disclaimer">
-                          <span className="mr-1 rounded-pill bg-accent/15 px-1.5 py-0.5 font-medium text-accent">
+                          {t("ai.sidebar.composer.disclaimer")}
+                          <span className="ml-1 whitespace-nowrap rounded-pill bg-accent/15 px-1.5 py-0.5 font-medium text-accent">
                             {t("ai.sidebar.composer.beta")}
                           </span>
-                          {t("ai.sidebar.composer.disclaimer")}
                         </p>
                       )}
 
@@ -4176,6 +3998,21 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
           </div>
         )}
       </div>
+
+      <ShurikSelectionAsk
+        containerRef={panelRootRef}
+        within="[data-shurik-answer-text]"
+        onSubmit={(quote, _label, question) => {
+          if (question) return sendApartFromComposer(`${shurikQuoteLine(quote)}${question}`);
+          chipSeedRef.current = null;
+          setInputValue((prev) => `${shurikQuoteLine(quote)}${prev}`);
+          requestAnimationFrame(() => {
+            composerTextareaRef.current?.focus();
+            resizeComposer();
+          });
+          return true;
+        }}
+      />
 
       <SaveLearnTargetDialog
         open={pendingSaveMessage !== null}

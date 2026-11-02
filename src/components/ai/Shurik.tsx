@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
-export type ShurikPose = "default" | "thinking" | "done" | "notice" | "money";
+export type ShurikPose = "default" | "thinking" | "done" | "notice" | "money" | "working";
 export type ShurikMotion = "still" | "wink" | "idle";
 
 export const SHURIK_WINK_MS = 1000;
@@ -14,6 +14,7 @@ const POSE_FILE: Record<ShurikPose, string> = {
   done: "/shurik/wink-ok.png",
   notice: "/shurik/pointing.png",
   money: "/shurik/salute.png",
+  working: "/shurik/working.png",
 };
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";

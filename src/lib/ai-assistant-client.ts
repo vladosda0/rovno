@@ -187,6 +187,8 @@ interface AIInferenceResponseBody {
   workProposal?: BackendWorkProposal | null;
   knowledgeBaseSources?: unknown;
   knowledgeBaseMissing?: unknown;
+  /** Outside a project: the question was about a project (docs-library 6.2). */
+  needsProject?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -436,6 +438,7 @@ export function mapInferenceResponse(
       : undefined,
     sources: mapGroundingSources(body.groundingSources, assistantUiLanguage),
     knowledgeBase: mapKnowledgeBase(body.knowledgeBaseSources, body.knowledgeBaseMissing),
+    needsProject: body.needsProject === true ? true : undefined,
     workProposal: proposal,
     responseVersion: typeof body.responseVersion === "string" ? body.responseVersion : undefined,
     groundingKind,
@@ -660,6 +663,14 @@ async function invokeHosted(
     usageType,
   );
 
+  return postInference(supabase, body, assistantUiLanguage);
+}
+
+async function postInference(
+  supabase: typeof import("@/integrations/supabase/client").supabase,
+  body: object,
+  assistantUiLanguage: AiAssistantUiLanguage,
+): Promise<LiveTextAssistantResult> {
   const { data, error } = await supabase.functions.invoke("ai-inference", { body });
 
   const bodyError = parseEdgeFunctionErrorBody(data);
@@ -837,4 +848,45 @@ export async function invokeLiveTextAssistant(
     );
   }
   return invokeMock(input, assistantUiLanguage);
+}
+
+export const OUTSIDE_PROJECT_TIMEOUT_MS = 120_000;
+
+export interface InvokeOutsideProjectInput {
+  userMessage: string;
+  aiOutputLanguage?: "ru" | "en" | "auto";
+  llmProvider?: AiLlmProvider;
+}
+
+/**
+ * Shurik outside a project (docs-library 6.5): no project, no chat id, no context pack. The server
+ * keeps this conversation itself, one per person and shared with the bot, so no history goes up.
+ */
+export async function invokeAssistantOutsideProject(input: InvokeOutsideProjectInput): Promise<LiveTextAssistantResult> {
+  const assistantUiLanguage = resolveAiAssistantUiLanguage(input.aiOutputLanguage, input.userMessage);
+  const { supabase } = await import("@/integrations/supabase/client");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Only this side stops waiting: the server may still answer, and the history then shows it.
+  const timedOut = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(sanitizeAiInferenceUserMessage(
+        assistantUiLanguage === "ru"
+          ? "Ассистент не смог подготовить устойчивый ответ."
+          : "The assistant could not prepare a reliable reply.",
+        assistantUiLanguage,
+      )));
+    }, OUTSIDE_PROJECT_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([
+      postInference(
+        supabase,
+        { mode: "consult", message: input.userMessage, usageType: "chat", ...(input.llmProvider ? { llmProvider: input.llmProvider } : {}) },
+        assistantUiLanguage,
+      ),
+      timedOut,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

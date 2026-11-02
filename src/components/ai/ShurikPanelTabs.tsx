@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from "react";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ShurikUnreadBadge } from "@/components/ai/ShurikUnreadBadge";
 import { cn } from "@/lib/utils";
@@ -11,15 +11,22 @@ export const SHURIK_PANEL_TAB_IDS = {
   notifications: { tab: "shurik-tab-notifications", panel: "shurik-tabpanel-notifications" },
 } as const satisfies Record<ShurikPanelTab, { tab: string; panel: string }>;
 
+/** Which tab the panel outside a project opens on when no tab was asked for (slice 6, question 3). */
+export function outsidePanelOpeningTab(unreadCount: number): ShurikPanelTab {
+  return unreadCount > 0 ? "notifications" : "chat";
+}
+
 const TAB_ORDER: ShurikPanelTab[] = ["chat", "notifications"];
 
 interface ShurikPanelTabsProps {
   tab: ShurikPanelTab;
   onTabChange: (tab: ShurikPanelTab) => void;
   unreadCount: number;
+  /** Next to «Чат»: the mark of a tab that is new here. */
+  chatMark?: ReactNode;
 }
 
-export function ShurikPanelTabs({ tab, onTabChange, unreadCount }: ShurikPanelTabsProps) {
+export function ShurikPanelTabs({ tab, onTabChange, unreadCount, chatMark }: ShurikPanelTabsProps) {
   const { t } = useTranslation();
   const buttonsRef = useRef<Partial<Record<ShurikPanelTab, HTMLButtonElement | null>>>({});
   const labels: Record<ShurikPanelTab, string> = {
@@ -61,6 +68,7 @@ export function ShurikPanelTabs({ tab, onTabChange, unreadCount }: ShurikPanelTa
           >
             {/* The number stays on the label's line at any width, a phone included. */}
             <span className="truncate">{labels[key]}</span>
+            {key === "chat" && chatMark}
             {key === "notifications" && <ShurikUnreadBadge count={unreadCount} className="shrink-0" />}
           </button>
         );

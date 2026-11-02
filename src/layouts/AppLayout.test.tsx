@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { askShurik, takeShurikAsk } from "@/lib/shurik-ask";
 import AppLayout from "@/layouts/AppLayout";
 import { closePhotoConsult, openPhotoConsult } from "@/lib/photo-consult-store";
 import { __unsafeResetStoreForTests, addMember, addProject, addShurikMessage } from "@/data/store";
@@ -237,7 +238,7 @@ describe("AppLayout", () => {
     expect(screen.queryByRole("button", { name: /^Open Shurik/ })).not.toBeInTheDocument();
     expect(screen.getByRole("main")).not.toHaveClass("md:pb-24");
 
-    fireEvent.click(within(panel).getByRole("button", { name: "Close notifications" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Close Shurik's panel" }));
     expect(screen.queryByRole("complementary", { name: "Notifications" })).not.toBeInTheDocument();
     // Opening the panel read the message, so the number is gone.
     expect(screen.getByRole("button", { name: "Open Shurik" })).toBeInTheDocument();
@@ -310,7 +311,7 @@ describe("AppLayout", () => {
     });
   });
 
-  it("closes the panel outside a project once the message's button has opened its page", () => {
+  it("keeps the panel outside a project open once the message's button has opened its page", () => {
     addUnreadMessage();
     renderOutsideProject("/home");
     fireEvent.click(screen.getByRole("button", { name: /^Open Shurik/ }));
@@ -318,22 +319,37 @@ describe("AppLayout", () => {
     fireEvent.click(screen.getByRole("button", { name: "Обновить карту" }));
 
     expect(screen.getByTestId("location")).toHaveTextContent("/settings?tab=billing");
-    expect(screen.queryByRole("complementary", { name: "Notifications" })).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Notifications" })).toBeInTheDocument();
   });
 
-  it("closes the panel outside a project when the page under it changes, a query string included", () => {
+  it("opens the panel outside a project when a page of the base asks Shurik", () => {
+    renderOutsideProject("/home");
+    act(() => askShurik({ label: "СП 29" }));
+    expect(screen.getByRole("complementary", { name: "Notifications" })).toBeInTheDocument();
+    takeShurikAsk();
+  });
+
+  it("keeps the panel outside a project open across pages on a computer", () => {
     renderWholeApp("/home");
     fireEvent.click(screen.getByRole("button", { name: "Open Shurik" }));
     expect(screen.getByRole("complementary", { name: "Notifications" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "go /settings" }));
-    expect(screen.queryByRole("complementary", { name: "Notifications" })).not.toBeInTheDocument();
-    expect(screen.getByRole("main")).not.toHaveClass("hidden");
-
-    fireEvent.click(screen.getByRole("button", { name: "Open Shurik" }));
     expect(screen.getByRole("complementary", { name: "Notifications" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "go /settings?tab=billing" }));
+    expect(screen.getByRole("complementary", { name: "Notifications" })).toBeInTheDocument();
+  });
+
+  it("stands the panel outside a project after the page, and the project's chat takes over on entry", () => {
+    writeAiSidebarSessionPreference(true);
+    renderWholeApp("/home");
+    fireEvent.click(screen.getByRole("button", { name: "Open Shurik" }));
+    const panel = screen.getByRole("complementary", { name: "Notifications" });
+    expect(screen.getByRole("main").compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "go /project/project-1/dashboard" }));
     expect(screen.queryByRole("complementary", { name: "Notifications" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open Shurik" })).not.toBeInTheDocument();
   });
 
   it("does not bring the panel outside a project back after a trip into a project", () => {
@@ -416,6 +432,15 @@ describe("AppLayout", () => {
 
     afterEach(() => {
       window.innerWidth = desktopWidth;
+    });
+
+    it("a message's button leading into a project opens the page, not the project's chat over it", () => {
+      addUnreadMessage({ payload: { action_label: "Открыть задачу", action_href: "/project/project-1/dashboard" } });
+      renderWholeApp("/home");
+      fireEvent.click(within(screen.getByRole("banner")).getByRole("button", { name: /^Open Shurik/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Открыть задачу" }));
+      expect(screen.getByRole("main")).not.toHaveClass("hidden");
+      expect(screen.queryByRole("textbox", { name: "Ask Shurik..." })).not.toBeInTheDocument();
     });
 
     it("puts a 30px Shurik in the top bar on the right with a 13px number on his corner", () => {

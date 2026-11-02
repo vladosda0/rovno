@@ -13,13 +13,14 @@ export interface NewFeature {
   id: string;
   /** ISO date the feature entered the registry. */
   addedAt: string;
-  /** Home tab (`/home?tab=`) that holds the feature, for the section dot. */
-  homeTab: string;
+  /** Home tab (`/home?tab=`) that holds the feature, for the section dot. None: no tab holds it. */
+  homeTab?: string;
 }
 
 export const NEW_FEATURES: readonly NewFeature[] = [
   { id: "knowledge-base", addedAt: "2026-10-26", homeTab: "documents" },
   { id: "contractor-card", addedAt: "2026-11-01", homeTab: "documents" },
+  { id: "shurik-outside-chat", addedAt: "2026-11-02" },
 ];
 
 export const MAX_ACTIVE_FEATURES = 3;

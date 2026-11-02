@@ -11,6 +11,7 @@ import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { kbKeys, useKbSolution } from "@/hooks/use-knowledge-base";
 import type { KbFactChip, KbSolution } from "@/lib/knowledge-base/kbSolutions.mjs";
+import { KbAskShurikButton, KbSelectionAsk } from "./KbAskShurik";
 import { KbSolutionCard } from "./KbSolutionCard";
 
 /** The reading page's parameter (KnowledgeBaseTab.KB_READ_PARAM), repeated to avoid an import cycle. */
@@ -65,7 +66,13 @@ export function KbSolutionPage({ slug, onBack }: KbSolutionPageProps) {
         </nav>
       </div>
       <h1 className="text-h2 font-semibold text-foreground">{solution.title}</h1>
-      <KbSolutionCard solution={solution} clauseHref={clauseHref} />
+      <KbSelectionAsk label={solution.title} within="[data-kb-solution]">
+        <KbSolutionCard
+          solution={solution}
+          clauseHref={clauseHref}
+          headerExtra={<KbAskShurikButton label={solution.title} />}
+        />
+      </KbSelectionAsk>
     </div>
   );
 }

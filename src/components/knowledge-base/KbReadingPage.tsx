@@ -10,6 +10,7 @@ import { useKbClauses, useKbDocument, useKbSpFullText } from "@/hooks/use-knowle
 import { kbFullTextReadable } from "@/lib/knowledge-base/kbFullText.mjs";
 import { kbHeading } from "@/lib/knowledge-base/kbConfig.mjs";
 import { kbSourceButtons } from "./kb-view";
+import { KbAskShurikButton, KbSelectionAsk } from "./KbAskShurik";
 import { KbReader } from "./KbReader";
 
 interface KbReadingPageProps {
@@ -47,6 +48,9 @@ export function KbReadingPage({ slug, onBack }: KbReadingPageProps) {
   if (clauses.isLoading) return status(t("home.knowledgeBase.reader.loading"));
   if (clauses.isError || !clauses.data?.length) return status(t("home.knowledgeBase.reader.loadError"));
 
+  const docLabel = doc.designation ?? doc.title;
+  const clauseList = clauses.data;
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -57,7 +61,23 @@ export function KbReadingPage({ slug, onBack }: KbReadingPageProps) {
         </nav>
       </div>
       <h1 className="text-h2 font-semibold text-foreground">{kbHeading(doc)}</h1>
-      <KbReader doc={doc} clauses={clauses.data} source={kbSourceButtons(doc, t)[0] ?? null} variant="app" />
+      <KbSelectionAsk
+        label={docLabel}
+        within="section[id]"
+        labelFor={(element) => {
+          const anchor = element.closest("section[id]")?.id;
+          const number = clauseList.find((clause) => clause.anchor === anchor)?.number;
+          return number && /^\d/.test(number) ? `${docLabel}, ${t("ai.kb.sources.clausePrefix")} ${number}` : docLabel;
+        }}
+      >
+        <KbReader
+          doc={doc}
+          clauses={clauseList}
+          source={kbSourceButtons(doc, t)[0] ?? null}
+          variant="app"
+          headerExtra={<KbAskShurikButton label={docLabel} />}
+        />
+      </KbSelectionAsk>
     </div>
   );
 }

@@ -60,11 +60,12 @@ describe("AIQuotaGate", () => {
     billing.enabled = true;
   });
 
-  it("makes the dimmed children inert so the keyboard cannot reach them", () => {
+  it("takes the composer away and stands the card in its place", () => {
     setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
     renderGate();
-    expect(screen.getByText("composer").closest("[inert]")).not.toBeNull();
+    expect(screen.queryByText("composer")).not.toBeInTheDocument();
     expect(screen.getByRole("alertdialog")).not.toHaveAttribute("aria-live");
+    expect(screen.getByRole("alertdialog").className).toContain("rounded-panel");
   });
 
   it("leaves the children interactive while under the limit", () => {
@@ -90,7 +91,7 @@ describe("AIQuotaGate", () => {
     );
     setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
     const { rerender } = render(tree());
-    expect(screen.getByLabelText("composer").closest("[inert]")).not.toBeNull();
+    expect(screen.queryByLabelText("composer")).not.toBeInTheDocument();
     setQuota({ ai_chat_used: 0, ai_chat_limit: 50 });
     rerender(tree());
     expect(screen.getByLabelText("composer").closest("[inert]")).toBeNull();
