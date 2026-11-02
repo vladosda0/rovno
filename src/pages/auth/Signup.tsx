@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { EmailCodeStep } from "@/components/auth/EmailCodeStep";
+import { LegalConsent } from "@/components/auth/LegalConsent";
+import { YandexButton } from "@/components/auth/YandexButton";
 import { isJustConfirmed } from "@/lib/email-code";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -136,30 +138,14 @@ export default function Signup() {
         <Button type="submit" disabled={loading} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
           {loading ? t("auth.code.sending") : t("auth.signup.submit")}
         </Button>
-        <p className="text-center text-caption text-muted-foreground">
-          <Trans
-            i18nKey="auth.signup.consent"
-            components={{
-              offer: (
-                <a
-                  href="/offer"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-foreground"
-                />
-              ),
-              privacy: (
-                <a
-                  href="/privacy"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-foreground"
-                />
-              ),
-            }}
-          />
-        </p>
       </form>
+      <div className="flex items-center gap-2 text-caption text-muted-foreground" aria-hidden="true">
+        <span className="h-px flex-1 bg-border" />
+        {t("auth.login.or")}
+        <span className="h-px flex-1 bg-border" />
+      </div>
+      <YandexButton next={safeNext} />
+      <LegalConsent i18nKey="auth.signup.consent" />
     </AuthCard>
   );
 }

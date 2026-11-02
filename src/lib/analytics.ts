@@ -360,6 +360,7 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/auth/confirm" },
   { pattern: "/auth/email-sent" },
   { pattern: "/auth/callback" },
+  { pattern: "/auth/yandex/callback" },
   { pattern: "/home" },
   { pattern: "/home/catalogs/upload-review/:uploadId" },
   { pattern: "/home/catalogs/:catalogId" },
@@ -490,8 +491,9 @@ export function analyticsReferrer(): string {
  * fallback link in the confirmation e-mail template), and `parseParametersFromURL`
  * reads both.
  *
- * `code` is deliberately absent: PKCE is not in use, and `code` is also the
- * promo-redeem parameter, which must not stall analytics forever.
+ * `code` is deliberately absent: Supabase PKCE is not in use, and `code` is also
+ * the promo-redeem parameter, which must not stall analytics forever. The Yandex
+ * callback carries its `code` on its own path, held back in urlCarriesAuthCredential.
  */
 const AUTH_CREDENTIAL_KEYS = [
   "access_token",
@@ -550,12 +552,15 @@ function carriesSecretRouteValue(params: URLSearchParams): boolean {
   return false;
 }
 
+const YANDEX_CALLBACK_PATH = "/auth/yandex/callback";
+
 function urlCarriesAuthCredential(): boolean {
   const { hash, search, pathname } = window.location;
   const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
   const searchParams = new URLSearchParams(search);
   return (
     matchAnalyticsRoute(pathname)?.secret === true ||
+    pathname === YANDEX_CALLBACK_PATH ||
     carriesCredential(hashParams) ||
     carriesCredential(searchParams) ||
     carriesSecretRouteValue(searchParams) ||
@@ -659,16 +664,18 @@ export function initMetrika(): void {
 /**
  * Start Metrika if it is not running yet and the address bar is clean. Called on
  * every SPA navigation, so a landing whose credential never cleared costs that
- * page view rather than the rest of the session.
+ * page view rather than the rest of the session. Returns whether this call started
+ * it: the init then reports the current page, so no separate hit is due.
  */
-export function ensureMetrikaStarted(): void {
-  if (!import.meta.env.VITE_METRIKA_COUNTER_ID) return;
-  if (METRIKA_COUNTER_ID === null) return;
-  if (typeof window === "undefined" || typeof document === "undefined") return;
-  if (metrikaStarted) return;
-  if (urlCarriesAuthCredential()) return;
+export function ensureMetrikaStarted(): boolean {
+  if (!import.meta.env.VITE_METRIKA_COUNTER_ID) return false;
+  if (METRIKA_COUNTER_ID === null) return false;
+  if (typeof window === "undefined" || typeof document === "undefined") return false;
+  if (metrikaStarted) return false;
+  if (urlCarriesAuthCredential()) return false;
 
   bootstrapMetrika();
+  return metrikaStarted;
 }
 
 function ensureYmQueue(): YandexMetrikaFn {

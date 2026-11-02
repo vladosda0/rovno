@@ -5,11 +5,12 @@ import Login from "@/pages/auth/Login";
 import { getAuthRole, setAuthRole } from "@/lib/auth-state";
 import { toast } from "@/hooks/use-toast";
 
-const { signInWithPasswordMock, signInWithOtpMock, verifyOtpMock, trackEventOncePerUserMock } = vi.hoisted(() => ({
+const { signInWithPasswordMock, signInWithOtpMock, verifyOtpMock, trackEventOncePerUserMock, invokeMock } = vi.hoisted(() => ({
   signInWithPasswordMock: vi.fn(),
   signInWithOtpMock: vi.fn(),
   verifyOtpMock: vi.fn(),
   trackEventOncePerUserMock: vi.fn(),
+  invokeMock: vi.fn(),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -19,6 +20,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       signInWithOtp: signInWithOtpMock,
       verifyOtp: verifyOtpMock,
     },
+    functions: { invoke: invokeMock },
   },
 }));
 
@@ -284,6 +286,57 @@ describe("Login", () => {
       fireEvent.click(screen.getByRole("button", { name: "Get code" }));
       fireEvent.click(await screen.findByRole("button", { name: "Change email" }));
       expect(screen.getByRole("button", { name: "Get code" })).toBeInTheDocument();
+    });
+  });
+
+  describe("Yandex ID", () => {
+    function renderAt(url: string) {
+      render(
+        <MemoryRouter initialEntries={[url]}>
+          <Login />
+          <LocationMarker />
+        </MemoryRouter>,
+      );
+    }
+
+    it("shows the button and the consent in both the password and the code view", () => {
+      renderAt("/auth/login");
+      expect(screen.getByRole("button", { name: "Sign in with Yandex ID" })).toBeInTheDocument();
+      expect(screen.getByText(/By signing in with Yandex for the first time/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Sign in with a code from email" }));
+      expect(screen.getByRole("button", { name: "Sign in with Yandex ID" })).toBeInTheDocument();
+    });
+
+    it("carries next into the attempt", async () => {
+      invokeMock.mockResolvedValue({ data: { outcome: "failed" }, error: null });
+      renderAt("/auth/login?next=%2Finvite%2Faccept%2Fabc");
+      fireEvent.click(screen.getByRole("button", { name: "Sign in with Yandex ID" }));
+      await waitFor(() =>
+        expect(invokeMock).toHaveBeenCalledWith("yandex-auth", {
+          body: { action: "start", mode: "login", next: "/invite/accept/abc" },
+        }),
+      );
+    });
+
+    it("says so when the attempt cannot start", async () => {
+      invokeMock.mockResolvedValue({ data: null, error: new Error("offline") });
+      renderAt("/auth/login");
+      fireEvent.click(screen.getByRole("button", { name: "Sign in with Yandex ID" }));
+      await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" })));
+      expect(screen.getByRole("button", { name: "Sign in with Yandex ID" })).toBeEnabled();
+    });
+
+    it("shows the plaque once and clears the address, so a refresh forgets it", async () => {
+      renderAt("/auth/login?yandex=failed&next=%2Fhome");
+      expect(screen.getByRole("alert")).toHaveTextContent("Yandex sign-in wasn't completed");
+      await waitFor(() => expect(screen.getByTestId("location-marker").textContent).toBe("/auth/login?next=%2Fhome"));
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+    });
+
+    it("the plaque goes away with the next action", () => {
+      renderAt("/auth/login?yandex=failed");
+      fireEvent.click(screen.getByRole("button", { name: "Sign in with a code from email" }));
+      expect(screen.queryByRole("alert")).toBeNull();
     });
   });
 });

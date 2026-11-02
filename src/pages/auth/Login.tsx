@@ -7,38 +7,38 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { EmailCodeStep } from "@/components/auth/EmailCodeStep";
+import { LegalConsent } from "@/components/auth/LegalConsent";
+import { YandexButton } from "@/components/auth/YandexButton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 import { setAnalyticsUserId, trackEventOncePerUser, type AuthMethod } from "@/lib/analytics";
+import { isSameScreenReply } from "@/lib/email-code";
 import { safeNextPath } from "@/lib/safe-next-path";
 
 type LoginMode = "password" | "code" | "code-sent";
 
-/**
- * Replies the screen treats like a sent code, so the page does not tell a
- * stranger whether the account exists: `otp_disabled` for an address without an
- * account (no letter goes out), and the per-address resend cooldown ("…after N
- * seconds"; its earlier code is still valid). The server-wide email limit shares
- * the error code and stays a visible failure. The API itself still answers
- * differently; accepted for now (epic external-login, slice 1).
- */
-function isSameScreenReply(error: { code?: string; message?: string } | null): boolean {
-  if (error?.code === "otp_disabled") return true;
-  return error?.code === "over_email_send_rate_limit" && /after \d+ seconds?/i.test(error.message ?? "");
-}
-
 export default function Login() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<LoginMode>("password");
   const safeNext = safeNextPath(searchParams.get("next"));
   const confirmed = searchParams.get("confirmed") === "1";
+  const [yandexFailed, setYandexFailed] = useState(() => searchParams.get("yandex") === "failed");
+
+  // Read once: a refresh of the page forgets the failed attempt.
+  useEffect(() => {
+    if (!searchParams.has("yandex")) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("yandex");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (confirmed) {
@@ -76,8 +76,14 @@ export default function Login() {
     navigate(resolveDestination(completedOnboarding));
   };
 
+  const changeMode = (next: LoginMode) => {
+    setYandexFailed(false);
+    setMode(next);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setYandexFailed(false);
     if (!email || !password) {
       toast({ title: t("auth.login.validationTitle"), description: t("auth.login.validationDescription"), variant: "destructive" });
       return;
@@ -121,6 +127,7 @@ export default function Login() {
 
   const handleCodeRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    setYandexFailed(false);
     if (!email.trim()) return;
     setLoading(true);
     try {
@@ -171,6 +178,11 @@ export default function Login() {
         </div>
       }
     >
+      {yandexFailed && (
+        <Alert variant="destructive" className="px-sp-2 py-1.5">
+          <AlertDescription className="text-caption">{t("auth.yandex.failed")}</AlertDescription>
+        </Alert>
+      )}
       {mode === "password" ? (
         <>
           <form onSubmit={handleSubmit} className="space-y-sp-2">
@@ -191,7 +203,7 @@ export default function Login() {
             {t("auth.login.or")}
             <span className="h-px flex-1 bg-border" />
           </div>
-          <Button type="button" variant="outline" className="w-full" onClick={() => setMode("code")}>
+          <Button type="button" variant="outline" className="w-full" onClick={() => changeMode("code")}>
             {t("auth.login.useCode")}
           </Button>
         </>
@@ -205,12 +217,19 @@ export default function Login() {
             {loading ? t("auth.code.sending") : t("auth.code.send")}
           </Button>
           <div className="text-center">
-            <button type="button" className="text-body-sm text-accent hover:underline" onClick={() => setMode("password")}>
+            <button type="button" className="text-body-sm text-accent hover:underline" onClick={() => changeMode("password")}>
               {t("auth.login.usePassword")}
             </button>
           </div>
+          <div className="flex items-center gap-2 text-caption text-muted-foreground" aria-hidden="true">
+            <span className="h-px flex-1 bg-border" />
+            {t("auth.login.or")}
+            <span className="h-px flex-1 bg-border" />
+          </div>
         </form>
       )}
+      <YandexButton next={safeNext} onStart={() => setYandexFailed(false)} />
+      <LegalConsent i18nKey="auth.yandex.loginConsent" />
     </AuthCard>
   );
 }

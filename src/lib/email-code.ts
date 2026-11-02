@@ -19,3 +19,16 @@ export function isJustConfirmed(user: Pick<User, "email_confirmed_at" | "last_si
   const signedInAt = Date.parse(user.last_sign_in_at ?? "");
   return Number.isFinite(confirmedAt) && Number.isFinite(signedInAt) && Math.abs(signedInAt - confirmedAt) < 60_000;
 }
+
+/**
+ * Replies the screen treats like a sent code, so the page does not tell a
+ * stranger whether the account exists: `otp_disabled` for an address without an
+ * account (no letter goes out), and the per-address resend cooldown ("…after N
+ * seconds"; its earlier code is still valid). The server-wide email limit shares
+ * the error code and stays a visible failure. The API itself still answers
+ * differently; accepted for now (epic external-login, slice 1).
+ */
+export function isSameScreenReply(error: { code?: string; message?: string } | null): boolean {
+  if (error?.code === "otp_disabled") return true;
+  return error?.code === "over_email_send_rate_limit" && /after \d+ seconds?/i.test(error.message ?? "");
+}

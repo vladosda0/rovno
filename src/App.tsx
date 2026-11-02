@@ -23,6 +23,7 @@ const AuthResetPassword = lazy(() => import("@/pages/auth/AuthResetPassword"));
 const AuthConfirm = lazy(() => import("@/pages/auth/AuthConfirm"));
 const EmailSent = lazy(() => import("@/pages/auth/EmailSent"));
 const AuthCallback = lazy(() => import("@/pages/auth/AuthCallback"));
+const YandexCallback = lazy(() => import("@/pages/auth/YandexCallback"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Home = lazy(() => import("@/pages/Home"));
 const CatalogUploadReview = lazy(() => import("@/pages/catalogs/CatalogUploadReview"));
@@ -132,6 +133,7 @@ const App = () => (
             <Route path="/auth/confirm" element={routeElement(<AuthConfirm />)} />
             <Route path="/auth/email-sent" element={routeElement(<EmailSent />)} />
             <Route path="/auth/callback" element={routeElement(<AuthCallback />)} />
+            <Route path="/auth/yandex/callback" element={routeElement(<YandexCallback />)} />
           </Route>
 
           {/* App layout (sidebar + topbar) */}

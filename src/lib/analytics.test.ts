@@ -271,6 +271,22 @@ describe("initMetrika and the Supabase auth fragment", () => {
     expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
   });
 
+  it("does not start on the Yandex callback, code in the address bar or not", async () => {
+    vi.useFakeTimers();
+    setUrl("/auth/yandex/callback?code=OAUTHCODE&state=STATE");
+    vi.resetModules();
+    vi.stubEnv("VITE_METRIKA_COUNTER_ID", COUNTER_ID);
+    const analytics = await import("./analytics");
+
+    analytics.initMetrika();
+    vi.advanceTimersByTime(1_000);
+    setUrl("/auth/yandex/callback");
+    analytics.ensureMetrikaStarted();
+
+    expect(initCalls(ym)).toHaveLength(0);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
+  });
+
   // The credential also arrives as the VALUE of `next`, where the
   // parameter-NAME check cannot see it. Dropping `next` from the URL we report
   // does not help: tag.js reads location.href itself for its clickmap beacons,

@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SettingsSection } from "@/components/settings/SettingsSection";
+import { ConnectedAccountsSection } from "@/components/settings/panels/ConnectedAccountsSection";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Monitor } from "lucide-react";
@@ -195,13 +196,17 @@ export function SecurityPanel() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title={t("security.connected.title")} description={t("security.connected.description")}>
-        <Card className="bg-muted/30">
-          <CardContent className="p-sp-2">
-            <p className="text-caption text-muted-foreground">{t("security.connected.empty")}</p>
-          </CardContent>
-        </Card>
-      </SettingsSection>
+      {status === "authenticated" ? (
+        <ConnectedAccountsSection />
+      ) : (
+        <SettingsSection title={t("security.connected.title")} description={t("security.connected.description")}>
+          <Card className="bg-muted/30">
+            <CardContent className="p-sp-2">
+              <p className="text-caption text-muted-foreground">{t("security.connected.empty")}</p>
+            </CardContent>
+          </Card>
+        </SettingsSection>
+      )}
     </div>
   );
 }

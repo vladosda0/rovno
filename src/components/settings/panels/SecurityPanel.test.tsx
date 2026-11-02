@@ -1,14 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import type { Session, User } from "@supabase/supabase-js";
 import { SecurityPanel } from "@/components/settings/panels/SecurityPanel";
 import { __unsafeSetRuntimeAuthStateForTests } from "@/hooks/use-runtime-auth";
 
-const { updateUserMock } = vi.hoisted(() => ({ updateUserMock: vi.fn() }));
+const { updateUserMock, rpcMock, invokeMock, toastMock } = vi.hoisted(() => ({
+  updateUserMock: vi.fn(),
+  rpcMock: vi.fn(),
+  invokeMock: vi.fn(),
+  toastMock: vi.fn(),
+}));
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { auth: { updateUser: updateUserMock } },
+  supabase: { auth: { updateUser: updateUserMock }, rpc: rpcMock, functions: { invoke: invokeMock } },
 }));
+
+vi.mock("@/hooks/use-toast", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-toast")>()),
+  toast: toastMock,
+}));
+
+function renderPanel(url = "/settings?tab=security") {
+  return render(
+    <MemoryRouter initialEntries={[url]}>
+      <SecurityPanel />
+    </MemoryRouter>,
+  );
+}
 
 function signInAs(userMetadata: Record<string, unknown>) {
   const user = { id: "u1", email: "a@b.co", user_metadata: userMetadata } as unknown as User;
@@ -20,28 +39,100 @@ function signInAs(userMetadata: Record<string, unknown>) {
   });
 }
 
+describe("SecurityPanel · connected accounts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rpcMock.mockResolvedValue({ data: [], error: null });
+  });
+
+  const linked = { data: [{ provider: "yandex", email: "ivan@yandex.ru", linked_at: "2026-11-02T10:00:00Z" }], error: null };
+
+  it("offers to link Yandex when it is not linked", async () => {
+    signInAs({});
+    renderPanel();
+    expect(await screen.findByRole("button", { name: "Link" })).toBeInTheDocument();
+    expect(screen.getByText("Not linked")).toBeInTheDocument();
+    expect(screen.queryByText(/OAuth integrations/)).toBeNull();
+  });
+
+  it("shows the Yandex address and how to sign in after unlinking", async () => {
+    rpcMock.mockResolvedValue(linked);
+    signInAs({ passwordless: true });
+    renderPanel();
+    expect(await screen.findByText("ivan@yandex.ru")).toBeInTheDocument();
+    expect(screen.getByText("After unlinking, sign in with a code sent to a@b.co.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unlink" })).toBeEnabled();
+  });
+
+  it("unlinks at once, also for an account without a password", async () => {
+    rpcMock.mockResolvedValueOnce(linked);
+    signInAs({ passwordless: true });
+    renderPanel();
+    rpcMock.mockResolvedValue({ data: [], error: null });
+    fireEvent.click(await screen.findByRole("button", { name: "Unlink" }));
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith("unlink_login_identity", { p_provider: "yandex" }));
+    expect(await screen.findByRole("button", { name: "Link" })).toBeInTheDocument();
+    expect(toastMock).toHaveBeenCalledWith({ title: "Yandex ID unlinked" });
+  });
+
+  it("says a failed link in its own words", async () => {
+    signInAs({});
+    renderPanel("/settings?tab=security&yandex=failed");
+    expect(await screen.findByText("Could not link Yandex ID. Please try again.")).toBeInTheDocument();
+  });
+
+  it("says when this Yandex ID belongs to another account", async () => {
+    signInAs({});
+    renderPanel("/settings?tab=security&yandex=taken");
+    expect(await screen.findByText("This Yandex ID is already linked to another Rovno account.")).toBeInTheDocument();
+  });
+
+  it("confirms a finished link", async () => {
+    rpcMock.mockResolvedValue(linked);
+    signInAs({});
+    renderPanel("/settings?tab=security&yandex=linked");
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith({ title: "Yandex ID linked" }));
+  });
+
+  it("names a failed load instead of an empty row", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+    signInAs({});
+    renderPanel();
+    expect(await screen.findByText("Couldn't load. Refresh the page.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Link" })).toBeNull();
+  });
+
+  it("a guest keeps the old text", () => {
+    __unsafeSetRuntimeAuthStateForTests({ status: "guest", session: null, user: null, profileId: null } as never);
+    renderPanel();
+    expect(screen.getByText("No connected accounts. OAuth integrations coming soon.")).toBeInTheDocument();
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("SecurityPanel · password", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    rpcMock.mockResolvedValue({ data: [], error: null });
   });
 
   it("an account registered by code has no password yet", () => {
     signInAs({ passwordless: true });
-    render(<SecurityPanel />);
+    renderPanel();
     expect(screen.getByText("Password not set")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Set password" })).toBeInTheDocument();
   });
 
   it("an account without the marker has a password", () => {
     signInAs({});
-    render(<SecurityPanel />);
+    renderPanel();
     expect(screen.getByText("Password set")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Change password" })).toBeInTheDocument();
   });
 
   it("opens two empty fields in the row itself, without a dialog", () => {
     signInAs({ passwordless: true });
-    render(<SecurityPanel />);
+    renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Set password" }));
 
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -59,7 +150,7 @@ describe("SecurityPanel · password", () => {
 
   it("checks length and match before saving", () => {
     signInAs({ passwordless: true });
-    render(<SecurityPanel />);
+    renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Set password" }));
 
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "12345" } });
@@ -78,7 +169,7 @@ describe("SecurityPanel · password", () => {
   it("saves the password, drops the marker and folds back to «Password set»", async () => {
     updateUserMock.mockResolvedValue({ data: { user: {} }, error: null });
     signInAs({ passwordless: true });
-    render(<SecurityPanel />);
+    renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Set password" }));
 
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "secret12" } });
@@ -95,7 +186,7 @@ describe("SecurityPanel · password", () => {
   it("cancel is locked while saving", async () => {
     updateUserMock.mockReturnValue(new Promise(() => {}));
     signInAs({ passwordless: true });
-    render(<SecurityPanel />);
+    renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Set password" }));
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "secret12" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "secret12" } });
@@ -109,7 +200,7 @@ describe("SecurityPanel · password", () => {
       error: { message: "New password should be different from the old password." },
     });
     signInAs({});
-    render(<SecurityPanel />);
+    renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Change password" }));
 
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "secret12" } });
@@ -122,7 +213,7 @@ describe("SecurityPanel · password", () => {
 
   it("a guest sees no password section", () => {
     __unsafeSetRuntimeAuthStateForTests({ status: "guest", session: null, user: null, profileId: null });
-    render(<SecurityPanel />);
+    renderPanel();
     expect(screen.queryByText("Password")).toBeNull();
   });
 });

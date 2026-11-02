@@ -19,7 +19,13 @@ interface EmailCodeStepProps {
   email: string;
   onVerified: (session: Session) => void | Promise<void>;
   onResend: () => Promise<void>;
-  onChangeEmail: () => void;
+  /** Shown as «Изменить почту»; left out where the address came from Yandex. */
+  onChangeEmail?: () => void;
+  /** Shown as «Отмена» on the Yandex proof steps. */
+  onCancel?: () => void;
+  title?: string;
+  subtitle?: string;
+  submitLabel?: string;
 }
 
 /**
@@ -28,7 +34,16 @@ interface EmailCodeStepProps {
  * not on six boxes), verification on the sixth digit, resend after a minute.
  * `type: "email"` verifies both the sign-in and the sign-up letter.
  */
-export function EmailCodeStep({ email, onVerified, onResend, onChangeEmail }: EmailCodeStepProps) {
+export function EmailCodeStep({
+  email,
+  onVerified,
+  onResend,
+  onChangeEmail,
+  onCancel,
+  title,
+  subtitle,
+  submitLabel,
+}: EmailCodeStepProps) {
   const { t } = useTranslation();
   const [code, setCode] = useState("");
   const [invalid, setInvalid] = useState(false);
@@ -110,7 +125,7 @@ export function EmailCodeStep({ email, onVerified, onResend, onChangeEmail }: Em
   const linkClass = "text-body-sm text-accent hover:underline";
 
   return (
-    <AuthCard title={t("auth.code.title")} subtitle={t("auth.code.subtitle", { email })}>
+    <AuthCard title={title ?? t("auth.code.title")} subtitle={subtitle ?? t("auth.code.subtitle", { email })}>
       <form
         className="space-y-sp-2"
         onSubmit={(e) => {
@@ -139,7 +154,7 @@ export function EmailCodeStep({ email, onVerified, onResend, onChangeEmail }: Em
           )}
         </div>
         <Button type="submit" disabled={verifying} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-          {verifying ? t("auth.code.submitting") : t("auth.code.submit")}
+          {verifying ? t("auth.code.submitting") : (submitLabel ?? t("auth.code.submit"))}
         </Button>
         <div className="flex flex-col items-center gap-1 text-center">
           {secondsLeft > 0 ? (
@@ -151,9 +166,16 @@ export function EmailCodeStep({ email, onVerified, onResend, onChangeEmail }: Em
               {t("auth.code.resend")}
             </button>
           )}
-          <button type="button" className={linkClass} onClick={onChangeEmail}>
-            {t("auth.code.changeEmail")}
-          </button>
+          {onChangeEmail && (
+            <button type="button" className={linkClass} onClick={onChangeEmail}>
+              {t("auth.code.changeEmail")}
+            </button>
+          )}
+          {onCancel && (
+            <button type="button" className={linkClass} onClick={onCancel}>
+              {t("common.cancel")}
+            </button>
+          )}
         </div>
       </form>
     </AuthCard>
