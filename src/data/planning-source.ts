@@ -51,6 +51,7 @@ type TaskUpdateRow = PlanningDatabase["public"]["Tables"]["tasks"]["Update"];
 type TypedSupabaseClient = SupabaseClient<PlanningDatabase>;
 
 const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status";
+const WORKSPACE_TASKS_PAGE_SIZE = 1000;
 const TASK_SELECT = "id, project_id, stage_id, estimate_work_id, title, description, status, assignee_profile_id, created_by, created_at, start_at, due_at";
 const TASK_CHECKLIST_SELECT = "id, task_id, title, is_done, procurement_item_id, estimate_resource_line_id, estimate_work_id, sort_order";
 const TASK_COMMENT_SELECT = "id, task_id, author_profile_id, body, created_at";
@@ -134,6 +135,8 @@ export interface PlanningSource {
   getProjectsStatusSummary: (
     projectIds: string[],
   ) => Promise<Record<string, ProjectStatusSummary>>;
+  /** Task rows of several projects, read page by page; checklists and comments stay empty. */
+  getWorkspaceTasks: (projectIds: string[]) => Promise<Task[]>;
   createProjectStage: (input: CreateProjectStageInput) => Promise<Stage>;
   createProjectTask: (input: CreateProjectTaskInput) => Promise<Task>;
   updateProjectTask: (taskId: string, patch: UpdateProjectTaskInput) => Promise<Task>;
@@ -349,6 +352,10 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
     },
     async getProjectTasks(projectId: string) {
       return store.getTasks(projectId);
+    },
+
+    async getWorkspaceTasks(projectIds: string[]) {
+      return projectIds.flatMap((projectId) => store.getTasks(projectId));
     },
 
     async getProjectsStatusSummary(projectIds: string[]) {
@@ -1170,6 +1177,40 @@ function createSupabasePlanningSource(
         };
         return overlayEstimateLinkedAssigneeFromChecklist(merged);
       });
+    },
+
+    async getWorkspaceTasks(projectIds: string[]) {
+      if (projectIds.length === 0) {
+        return [];
+      }
+
+      const rows: TaskRow[] = [];
+      for (;;) {
+        const last = rows[rows.length - 1];
+        let query = supabase
+          .from("tasks")
+          .select(TASK_SELECT)
+          .in("project_id", projectIds);
+        if (last) {
+          query = query.or(
+            `created_at.gt."${last.created_at}",and(created_at.eq."${last.created_at}",id.gt.${last.id})`,
+          );
+        }
+        const { data, error } = await query
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .limit(WORKSPACE_TASKS_PAGE_SIZE);
+
+        if (error) {
+          throw error;
+        }
+        if (!data || data.length === 0) {
+          break;
+        }
+        rows.push(...(data as TaskRow[]));
+      }
+
+      return rows.map(mapTaskRowToTask);
     },
 
     async getProjectsStatusSummary(projectIds: string[]) {

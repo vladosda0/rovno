@@ -9,7 +9,7 @@ import {
   pickEstimateLinesForTaskAssigneeProjection,
 } from "@/data/planning-source";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
-import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { useWorkspaceMode, useWorkspaceProjectsState } from "@/hooks/use-workspace-source";
 import type { Stage, Task } from "@/types/entities";
 import { countTaskStatuses, type ProjectStatusSummary } from "@/lib/project-status";
 import {
@@ -37,6 +37,8 @@ export const planningQueryKeys = {
     ["planning", "project-tasks", profileId, projectId] as const,
   projectsStatusSummary: (profileId: string, projectIds: string[]) =>
     ["planning", "projects-status-summary", profileId, projectIds] as const,
+  workspaceTasks: (profileId: string, projectIds: string[]) =>
+    ["planning", "workspace-tasks", profileId, projectIds] as const,
 };
 
 function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
@@ -227,6 +229,57 @@ export function usePlanningProjectTasksState(projectId: string): { tasks: Task[]
 
 export function usePlanningProjectTasks(projectId: string): Task[] {
   return usePlanningProjectTasksState(projectId).tasks;
+}
+
+/**
+ * Tasks across the workspace's projects for the home lists.
+ * Rows only: checklists and comments are not loaded here.
+ */
+export function useWorkspaceTasksState(): { tasks: Task[]; isLoading: boolean; isError: boolean } {
+  const mode = useWorkspaceMode();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const isBrowserMode = mode.kind === "demo" || mode.kind === "local";
+  const projectsState = useWorkspaceProjectsState();
+  const projectIds = useStableStringArray(projectsState.projects.map((project) => project.id));
+  const getAllTasks = useCallback(() => store.getAllTasks(), []);
+  const demoTasks = useStoreValue(getAllTasks, isBrowserMode, EMPTY_PLANNING_TASKS);
+  const tasksQuery = useQuery({
+    queryKey: planningQueryKeys.workspaceTasks(supabaseMode?.profileId ?? "demo", projectIds),
+    queryFn: async () => {
+      const source = await getPlanningSource(supabaseMode ?? undefined);
+      return source.getWorkspaceTasks(projectIds);
+    },
+    enabled: Boolean(supabaseMode && projectIds.length > 0),
+    staleTime: PLANNING_QUERY_STALE_TIME_MS,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
+  });
+
+  const remoteTasks = tasksQuery.data;
+  const currentTasks = useMemo(() => {
+    if (!remoteTasks) return EMPTY_PLANNING_TASKS;
+    const projectIdSet = new Set(projectIds);
+    return remoteTasks.filter((task) => projectIdSet.has(task.project_id));
+  }, [projectIds, remoteTasks]);
+
+  if (isBrowserMode) {
+    return { tasks: demoTasks, isLoading: false, isError: false };
+  }
+
+  if (!supabaseMode) {
+    return { tasks: EMPTY_PLANNING_TASKS, isLoading: mode.kind === "pending-supabase", isError: false };
+  }
+
+  if (projectsState.isLoading || projectsState.isError || projectIds.length === 0) {
+    return { tasks: EMPTY_PLANNING_TASKS, isLoading: projectsState.isLoading, isError: projectsState.isError };
+  }
+
+  return {
+    tasks: currentTasks,
+    isLoading: tasksQuery.isPending,
+    isError: tasksQuery.isError && !tasksQuery.data,
+  };
 }
 
 function areStringArraysEqual(left: string[], right: string[]): boolean {
