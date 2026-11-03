@@ -695,6 +695,10 @@
     {
       "path": "supabase/migrations/20261102040100_ai_answer_ratings.sql",
       "sha256": "188136aaa96d9b78783496673903c16464167cf89c36b1cbf0b5d75de69d27b5"
+    },
+    {
+      "path": "supabase/migrations/20261103120000_project_chat_turn_meta.sql",
+      "sha256": "653da1713bd6d64fce5c9434fbf05740127720e5b96475a8ae383cddb071e16d"
     }
   ],
   "generated_artifacts": [

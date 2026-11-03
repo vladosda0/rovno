@@ -3221,6 +3221,7 @@ export type Database = {
           "p_chat_id": string
           "p_user_text": string
           "p_assistant_text": string
+          "p_assistant_meta": unknown
           }
           Returns: unknown
         }
