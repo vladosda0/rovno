@@ -205,6 +205,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261102040000_home_ai_chat_sessions.sql`
 - `supabase/migrations/20261102040100_ai_answer_ratings.sql`
 - `supabase/migrations/20261103120000_project_chat_turn_meta.sql`
+- `supabase/migrations/20261104020000_contractor_portfolio_objects.sql`
 
 ## Exclusions
 

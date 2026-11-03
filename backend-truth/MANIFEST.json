@@ -699,6 +699,10 @@
     {
       "path": "supabase/migrations/20261103120000_project_chat_turn_meta.sql",
       "sha256": "653da1713bd6d64fce5c9434fbf05740127720e5b96475a8ae383cddb071e16d"
+    },
+    {
+      "path": "supabase/migrations/20261104020000_contractor_portfolio_objects.sql",
+      "sha256": "4feb35979e3afbc4b5d584df75bbc33ec4ec851d9a0dc906a74a04685ec2418d"
     }
   ],
   "generated_artifacts": [

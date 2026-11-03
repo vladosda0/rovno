@@ -3177,6 +3177,39 @@ export type Database = {
           }
           Relationships: []
         }
+        "contractor_portfolio_objects": {
+          Row: {
+          "id": string
+          "org_id": string
+          "title": string
+          "photos": Json
+          "position": number
+          "created_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "org_id": string
+          "title": string
+          "photos": Json
+          "position"?: number
+          "created_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "org_id"?: string
+          "title"?: string
+          "photos"?: Json
+          "position"?: number
+          "created_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -3773,6 +3806,13 @@ export type Database = {
           "p_new_name": string
           }
           Returns: Json
+        }
+        "reorder_contractor_portfolio_objects": {
+          Args: {
+          "p_org_id": string
+          "p_ids": unknown
+          }
+          Returns: unknown
         }
         "resolve_ai_chat_key": {
           Args: {
