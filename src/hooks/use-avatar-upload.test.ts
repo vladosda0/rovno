@@ -53,6 +53,16 @@ describe("useAvatarUpload", () => {
     expect(out).toEqual({ url: "https://cdn/avatars/x.jpg", path: expect.stringMatching(/^user-123\//) });
   });
 
+  it("passes a smaller longest edge through to the optimizer", async () => {
+    optimizeMock.mockResolvedValue({ file: new File(["x"], "out.jpg", { type: "image/jpeg" }), optimized: true });
+    const input = new File(["raw"], "photo.jpg", { type: "image/jpeg" });
+
+    const { result } = renderHook(() => useAvatarUpload());
+    await result.current.uploadAvatar(input, { maxDimension: 2048 });
+
+    expect(optimizeMock).toHaveBeenCalledWith(input, { forceReencode: true, maxDimension: 2048 });
+  });
+
   it("throws when not authenticated", async () => {
     getSessionMock.mockResolvedValue({ data: { session: null } });
     const { result } = renderHook(() => useAvatarUpload());

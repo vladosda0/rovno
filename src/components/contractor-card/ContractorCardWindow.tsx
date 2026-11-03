@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Globe, Mail, Phone, X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType } from "react";
 import { Button } from "@/components/ui/button";
 import { PartyStatusBadge, PartyStatusTag, partyTagKind } from "@/components/requisites/PartyStatusTag";
 import type { ContractorProfileContacts } from "@/data/contractor-profile-source";
@@ -11,7 +11,9 @@ import type { PartyCheck } from "@/hooks/use-party-status";
 import { linkLabel, mailLink, requisiteLines, telLink, telegramLink, webLink, whatsappLink } from "@/lib/contractor-card";
 import { formatExportDate } from "@/lib/estimate-export-data";
 import { MaxIcon, TelegramIcon, VkIcon, WhatsappIcon, YoutubeIcon } from "./brand-icons";
+import { CardSection } from "./CardSection";
 import { CardCover, CardMonogram, useExperienceLine, type ContractorCardData } from "./ContractorCardFace";
+import { PortfolioSection } from "./PortfolioSection";
 
 interface LinkRowSpec {
   key: keyof ContractorProfileContacts;
@@ -34,18 +36,6 @@ const SOCIAL_ROWS: LinkRowSpec[] = [
   { key: "max", labelKey: "contractorCard.contacts.max", Icon: MaxIcon, href: webLink, text: linkLabel },
   { key: "youtube", labelKey: "contractorCard.contacts.youtube", Icon: YoutubeIcon, href: webLink, text: linkLabel },
 ];
-
-function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-caption font-semibold uppercase tracking-wider text-muted-foreground">{title}</h4>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 const ROWS_CLASS = "flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border";
 
@@ -99,11 +89,14 @@ export function ContractorCardWindow({
   check,
   details,
   onEdit,
+  portfolio,
 }: {
   card: ContractorCardData;
   check: PartyCheck | null;
   details: PartyDetails | null;
   onEdit?: () => void;
+  /** The org whose portfolio the window shows (rovno#294); absent in places without one. */
+  portfolio?: { orgId: string; canEdit: boolean };
 }) {
   const { t } = useTranslation();
   const experience = useExperienceLine(card);
@@ -148,31 +141,32 @@ export function ContractorCardWindow({
           </div>
         </div>
         {card.description ? (
-          <Section title={t("contractorCard.about")}>
+          <CardSection title={t("contractorCard.about")}>
             <p className="whitespace-pre-line text-body-sm [overflow-wrap:anywhere]">{card.description}</p>
-          </Section>
+          </CardSection>
         ) : null}
         {specs.length > 0 ? (
-          <Section title={t("contractorCard.specializations")}>
+          <CardSection title={t("contractorCard.specializations")}>
             <div className="flex flex-wrap gap-1.5">
               {specs.map((spec) => (
                 <span key={spec} className="max-w-full rounded-pill bg-secondary px-3 py-1 text-[13px] [overflow-wrap:anywhere]">{spec}</span>
               ))}
             </div>
-          </Section>
+          </CardSection>
         ) : null}
         {hasContacts ? (
-          <Section title={t("contractorCard.contactsHeading")}>
+          <CardSection title={t("contractorCard.contactsHeading")}>
             <LinkRows specs={CONTACT_ROWS} contacts={card.contacts} />
-          </Section>
+          </CardSection>
         ) : null}
         {hasSocial ? (
-          <Section title={t("contractorCard.socialHeading")}>
+          <CardSection title={t("contractorCard.socialHeading")}>
             <LinkRows specs={SOCIAL_ROWS} contacts={card.contacts} />
-          </Section>
+          </CardSection>
         ) : null}
+        {portfolio ? <PortfolioSection orgId={portfolio.orgId} canEdit={portfolio.canEdit} /> : null}
         {showRequisites ? (
-          <Section
+          <CardSection
             title={t("contractorCard.requisitesHeading")}
             action={
               <Button type="button" variant="outline" size="sm" onClick={() => void copyRequisites()}>
@@ -197,7 +191,7 @@ export function ContractorCardWindow({
                 </div>
               ) : null}
             </div>
-          </Section>
+          </CardSection>
         ) : null}
       </div>
       {onEdit ? (

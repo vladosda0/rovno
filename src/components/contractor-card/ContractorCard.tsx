@@ -53,6 +53,7 @@ export interface ContractorCardProps {
   onEdit?: () => void;
   ariaLabel: string;
   className?: string;
+  portfolio?: { orgId: string; canEdit: boolean };
 }
 
 /**
@@ -60,7 +61,7 @@ export interface ContractorCardProps {
  * while it grows, and the reverse side is the window. Closing plays the same
  * back. With «reduce motion» the window only fades in.
  */
-export function ContractorCard({ card, check, details, onEdit, ariaLabel, className }: ContractorCardProps) {
+export function ContractorCard({ card, check, details, onEdit, ariaLabel, className, portfolio }: ContractorCardProps) {
   const { t } = useTranslation();
   const sourceRef = useRef<HTMLButtonElement>(null);
   const afterClose = useRef<(() => void) | null>(null);
@@ -199,6 +200,7 @@ export function ContractorCard({ card, check, details, onEdit, ariaLabel, classN
                   check={check}
                   details={details}
                   onEdit={onEdit ? () => closeWindow(onEdit) : undefined}
+                  portfolio={portfolio}
                 />
               </div>
             </div>

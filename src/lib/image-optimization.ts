@@ -71,7 +71,7 @@ export interface ImageOptimizationResult {
  */
 export async function optimizeImageForUpload(
   file: File,
-  options?: { forceReencode?: boolean },
+  options?: { forceReencode?: boolean; maxDimension?: number },
 ): Promise<ImageOptimizationResult> {
   if (!isImage(file)) {
     return { file, optimized: false };
@@ -96,7 +96,7 @@ export async function optimizeImageForUpload(
   );
   const compressed = await imageCompression(working, {
     maxSizeMB: TARGET_MAX_SIZE_MB,
-    maxWidthOrHeight: TARGET_MAX_DIMENSION_PX,
+    maxWidthOrHeight: options?.maxDimension ?? TARGET_MAX_DIMENSION_PX,
     initialQuality: TARGET_JPEG_QUALITY,
     fileType: "image/jpeg",
     useWebWorker: true,

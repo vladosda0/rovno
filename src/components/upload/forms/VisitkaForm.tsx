@@ -23,6 +23,7 @@ import { PHONE_PREFILL, phoneIsFilled } from "@/lib/phone";
 import type { UploadResult } from "@/components/upload/types";
 import { PartyStatusTag, partyTagKind } from "@/components/requisites/PartyStatusTag";
 import { useContractorProfile } from "@/hooks/use-contractor-profile";
+import { VisitkaPortfolioBlock } from "./VisitkaPortfolioBlock";
 import { ContractorCard } from "@/components/contractor-card/ContractorCard";
 import { type CardRegistry, useCardRegistry } from "@/components/contractor-card/use-card-registry";
 import type { ContractorCardData } from "@/components/contractor-card/ContractorCardFace";
@@ -120,12 +121,18 @@ function DesignTile({
   );
 }
 
-function FormPreview({ card, registry }: { card: ContractorCardData; registry: CardRegistry }) {
+function FormPreview({ card, registry, orgId }: { card: ContractorCardData; registry: CardRegistry; orgId: string | null }) {
   const { t } = useTranslation();
   const { check, details } = registry;
   return (
     <div className="flex flex-col items-center gap-2">
-      <ContractorCard card={card} check={check} details={details} ariaLabel={t("upload.modal.step3.visitka.previewAria")} />
+      <ContractorCard
+        card={card}
+        check={check}
+        details={details}
+        ariaLabel={t("upload.modal.step3.visitka.previewAria")}
+        portfolio={orgId ? { orgId, canEdit: false } : undefined}
+      />
       <span className="text-center text-caption text-muted-foreground">{t("upload.modal.step3.visitka.previewHint")}</span>
     </div>
   );
@@ -608,7 +615,7 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
               </div>
             </div>
           </div>
-          <FormPreview card={previewCard} registry={registry} />
+          <FormPreview card={previewCard} registry={registry} orgId={existingProfile?.org_id ?? null} />
         </div>
 
         <div className="space-y-3 border-t border-border pt-4">
@@ -846,6 +853,11 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
             </p>
           )}
         </div>
+
+        <VisitkaPortfolioBlock
+          orgId={existingProfile ? existingProfile.org_id : null}
+          canEdit={!hasOrg || targetOrg?.role === "owner" || targetOrg?.role === "admin"}
+        />
 
         <p className="text-caption text-amber-600 dark:text-amber-500">
           {t("upload.modal.step3.visitka.moderationNote")}

@@ -37,6 +37,7 @@ function SavedCard({ profile, canEdit, onEdit }: { profile: ContractorProfile; c
           check={check}
           details={details}
           onEdit={canEdit ? onEdit : undefined}
+          portfolio={{ orgId: profile.org_id, canEdit }}
           ariaLabel={t("contractorCard.openAria", { name: profile.display_name })}
           className="pb-2 pt-4"
         />
