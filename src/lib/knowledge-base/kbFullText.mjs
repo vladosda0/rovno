@@ -6,6 +6,8 @@
 // rovno-docs/audit/mockups/docs-library-s2.html (v2, 20.10) and
 // docs-library-label.html (v2, 21.10). Types live in kbFullText.d.mts.
 
+import { normalizeUpcomingAmendments } from "./kbHistory.mjs";
+
 // kbConfig.mjs imports this module (normalizeKbRow), so the date helper is not
 // imported back from there.
 function formatKbDate(value) {
@@ -53,6 +55,7 @@ export function normalizeKbFullTextFields(row) {
       .map((p) => ({ no: Number(p.no), url: httpUrlOrNull(p.url) }))
       .sort((a, b) => a.no - b.no),
     recognizedFromScan: r.recognized_from_scan === true,
+    upcomingAmendments: normalizeUpcomingAmendments(r.upcoming_amendments),
   };
 }
 

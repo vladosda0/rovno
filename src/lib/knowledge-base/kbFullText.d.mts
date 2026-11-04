@@ -1,6 +1,7 @@
 // Type surface for the full-text helpers (kbFullText.mjs).
 
 import type { KbTranslate } from "./kbConfig.mjs";
+import type { KbUpcomingAmendment } from "./kbHistory.mjs";
 
 export type KbDocStatus = "active" | "replaced" | "cancelled";
 export type KbLabelKind = "verified" | "checking" | "inactive";
@@ -24,6 +25,8 @@ export interface KbFullTextFields {
   appliedAmendments: number[];
   pendingAmendments: KbPendingAmendment[];
   recognizedFromScan: boolean;
+  /** Approved amendments not in force yet (slice 7): the clock in the green label. */
+  upcomingAmendments: KbUpcomingAmendment[];
 }
 
 export interface KbClause {

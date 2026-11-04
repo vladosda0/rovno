@@ -15,7 +15,7 @@ export const KB_SOLUTIONS_PATH = "/baza/resheniya/";
  * published cards and only their facts.
  */
 export const KB_SOLUTION_SELECT =
-  "slug, title, body, checked_at, reviewed_at, updated_at, " +
+  "slug, title, body, checked_at, reviewed_at, updated_at, recheck_since, " +
   "kb_solution_facts(position, fact, doc_id, clause_anchor, quote, kb_documents(slug, designation))";
 
 export function kbSolutionPath(slug) {
@@ -113,6 +113,9 @@ export function normalizeKbSolution(row) {
     // The date the card was last checked against its sources: the review when
     // there was one, else the quote check.
     checkedAt: text(r.reviewed_at) ?? text(r.checked_at),
+    // A document under the card changed (slice 7): «Проверяется» until the
+    // pipeline publishes the card again.
+    recheckSince: text(r.recheck_since),
     updatedAt: text(r.updated_at),
     conditions,
     steps: list(body.steps).map((s) => item(s, ctx)).filter((s) => s.text),

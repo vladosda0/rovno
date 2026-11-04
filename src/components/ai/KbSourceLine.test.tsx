@@ -33,6 +33,23 @@ const CHECKING: KbAnswerSource = {
 };
 
 describe("KbSourceLine", () => {
+  it("adds the date when an approved amendment changes the clause (docs-library 7.4)", () => {
+    const upcoming: KbAnswerSource = { ...CHECKING, checking: false, pendingAmendments: [],
+      upcomingAmendments: [{ no: 6, effectiveFrom: "2099-09-01" }, { no: 5, effectiveFrom: "2099-06-01" }, { no: 4, effectiveFrom: "2020-01-01" }] };
+    render(<KbSourceLine knowledgeBase={{ sources: [upcoming], missing: false }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Based on:/ }));
+    expect(screen.getByText("· from 01.06.2099 this clause changes (Amendment No. 5)")).toBeInTheDocument();
+  });
+
+  it("reads upcoming amendments from the answer and drops malformed ones", () => {
+    const kb = mapKnowledgeBase(
+      [{ kind: "knowledge_base", docId: "SP-1", docLabel: "СП 1", checking: false, pendingAmendments: [],
+         upcomingAmendments: [{ no: 5, effectiveFrom: "2027-06-01" }, { no: "x", effectiveFrom: "2027-01-01" }, { no: 7 }] }],
+      false,
+    );
+    expect(kb?.sources[0].upcomingAmendments).toEqual([{ no: 5, effectiveFrom: "2027-06-01" }]);
+  });
+
   it("collapsed: the first clause and «and N more»; open: the card, then clauses with the checking note", () => {
     render(<KbSourceLine knowledgeBase={{ sources: [CARD_FACT, CHECKING], missing: false }} />);
     const trigger = screen.getByRole("button", { name: /Based on: СП 163\.1325800, cl\. 6\.4\.2\.8 and 2 more/ });

@@ -43,6 +43,8 @@ export interface KbAnswerSource {
   solutionTitle?: string;
   checking: boolean;
   pendingAmendments: number[];
+  /** Approved amendments to the clause's document not in force yet (docs-library 7.4). */
+  upcomingAmendments?: Array<{ no: number; effectiveFrom: string }>;
   /** Verbatim text of the clause or the card fact's quote, for the clause popover. */
   quote?: string;
 }

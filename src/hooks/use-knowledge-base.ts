@@ -6,11 +6,13 @@ import {
   fetchKbClauses,
   fetchKbDocumentById,
   fetchKbDocumentBySlug,
+  fetchKbDocumentHistory,
   fetchKbSpFullTextEnabled,
   fetchKbDocumentPage,
   fetchKbFolderCounts,
   fetchKbSolutionBySlug,
   fetchKbSolutions,
+  fetchKbSolutionHistory,
   type KbDocument,
   type KbDocumentPageParams,
   type KbSolution,
@@ -29,6 +31,7 @@ export const kbKeys = {
   spFullText: () => [...kbKeys.all, "sp-full-text"] as const,
   solutions: () => [...kbKeys.all, "solutions"] as const,
   solution: (slug: string) => [...kbKeys.all, "solution", slug] as const,
+  history: (kind: "doc" | "solution", slug: string) => [...kbKeys.all, "history", kind, slug] as const,
 };
 
 export function useKbFolderCounts() {
@@ -121,5 +124,15 @@ export function useKbSolution(slug: string | undefined, initialData?: KbSolution
     staleTime: STALE,
     initialData,
     initialDataUpdatedAt,
+  });
+}
+
+/** History for the label window (slice 7); fetched only once the window opens. */
+export function useKbHistory(kind: "doc" | "solution", slug: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: kbKeys.history(kind, slug ?? ""),
+    queryFn: () => (kind === "doc" ? fetchKbDocumentHistory(slug!) : fetchKbSolutionHistory(slug!)),
+    enabled: enabled && !!slug,
+    staleTime: STALE,
   });
 }

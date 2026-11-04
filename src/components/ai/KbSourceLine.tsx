@@ -13,6 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { KbAnswerSource, LiveTextKnowledgeBase } from "@/lib/ai-assistant-contract";
+import { kbMoscowToday } from "@/lib/knowledge-base/kbHistory.mjs";
 
 const KB_TAB = "/home?tab=documents&docTab=knowledge-base";
 
@@ -50,6 +51,20 @@ export function kbClauseLabel(source: KbAnswerSource, clausePrefix = "п."): str
   return /^\d/.test(source.clause)
     ? `${source.docLabel}, ${clausePrefix} ${source.clause}`
     : `${source.docLabel}, ${source.clause}`;
+}
+
+/** «· с 01.06.2027 пункт меняется (Изменение № 5)» for the nearest approved amendment (docs-library 7.4). */
+function useUpcomingNote() {
+  const { t } = useTranslation();
+  return (source: KbAnswerSource): string | null => {
+    const today = kbMoscowToday();
+    const next = [...(source.upcomingAmendments ?? [])]
+      .filter((a) => a.effectiveFrom > today)
+      .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))[0];
+    if (!next) return null;
+    const [y, m, d] = next.effectiveFrom.split("-");
+    return t("ai.kb.sources.upcoming", { date: `${d}.${m}.${y}`, no: next.no });
+  };
 }
 
 function useCheckingNote() {
@@ -128,6 +143,7 @@ export interface KbSourceLineProps {
 export function KbSourceLine({ knowledgeBase, onAskAboutClause }: KbSourceLineProps) {
   const { t } = useTranslation();
   const checkingNote = useCheckingNote();
+  const upcomingNote = useUpcomingNote();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const { sources } = knowledgeBase;
@@ -185,10 +201,12 @@ export function KbSourceLine({ knowledgeBase, onAskAboutClause }: KbSourceLinePr
           ))}
           {sources.map((s, i) => {
             const note = checkingNote(s);
+            const upcoming = upcomingNote(s);
             return (
               <li key={`${s.docId}-${s.anchor ?? i}`} className="break-words">
                 <ClauseButton source={s} onAsk={onAskAboutClause} />
                 {note ? <span className="ml-1 text-[hsl(38_70%_38%)] dark:text-[hsl(42_80%_65%)]">{note}</span> : null}
+                {upcoming ? <span className="ml-1" data-kb-upcoming>{upcoming}</span> : null}
               </li>
             );
           })}

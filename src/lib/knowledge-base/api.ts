@@ -26,7 +26,7 @@ export const KB_DOCUMENT_COLUMNS =
   "doc_id, slug, designation, title, category, folder, display_mode, object_types, domains, " +
   "applicability_note, publisher, country, edition, effective_from, last_checked_at, source_links, full_text_available, " +
   "doc_status, doc_status_since, replaced_by, edition_date, text_checked_at, text_source_url, text_pdf_url, " +
-  "text_label, text_base_year, applied_amendments, pending_amendments, recognized_from_scan";
+  "text_label, text_base_year, applied_amendments, pending_amendments, recognized_from_scan, upcoming_amendments";
 
 const FOLDER_SET: ReadonlySet<string> = new Set(KB_FOLDERS);
 
@@ -166,4 +166,18 @@ export async function fetchKbSolutionBySlug(slug: string): Promise<KbSolution | 
     .maybeSingle();
   if (error) throw error;
   return data ? normalizeKbSolution(data as unknown as Record<string, unknown>) : null;
+}
+
+/** History rows for the «Сведения / История» window of a document (slice 7, `kb_document_history`). */
+export async function fetchKbDocumentHistory(slug: string): Promise<Record<string, unknown>[]> {
+  const { data, error } = await rawSupabase.rpc("kb_document_history", { p_slug: slug });
+  if (error) throw error;
+  return (data ?? []) as Record<string, unknown>[];
+}
+
+/** History rows for the same window on a solution card (`kb_solution_history`). */
+export async function fetchKbSolutionHistory(slug: string): Promise<Record<string, unknown>[]> {
+  const { data, error } = await rawSupabase.rpc("kb_solution_history", { p_slug: slug });
+  if (error) throw error;
+  return (data ?? []) as Record<string, unknown>[];
 }

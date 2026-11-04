@@ -10,6 +10,7 @@ import {
   DEFAULT_LEAF,
   type LeafSlug,
 } from "@/components/home/documents-hub/DocumentsLeftNav";
+import { KbNavContents } from "@/components/home/documents-hub/KbNavContents";
 import { MobileSectionNav } from "@/components/home/documents-hub/MobileSectionNav";
 import { MultiStepUploadModal } from "@/components/upload/MultiStepUploadModal";
 import { useActiveOrg } from "@/hooks/use-orgs";
@@ -139,6 +140,7 @@ export function DocumentsHubTab() {
   );
 
   const ActiveSection = LEAF_RENDERERS[activeLeaf] ?? MyAllDocsLeaf;
+  const kbReading = activeLeaf === "knowledge-base" ? searchParams.get("kbDoc") : null;
   const ctaLabel = t(ctaLabelForLeaf(activeLeaf));
   const presetType = presetForLeaf(activeLeaf);
 
@@ -183,6 +185,20 @@ export function DocumentsHubTab() {
           activeSlug={activeLeaf}
           onSelect={handleSelect}
           cta={hideCta ? null : ctaButtonDesktop}
+          knowledgeBaseExtra={
+            kbReading ? (
+              <KbNavContents
+                slug={kbReading}
+                onFolder={() =>
+                  setSearchParams((current) => {
+                    const next = new URLSearchParams(current);
+                    next.delete("kbDoc");
+                    return next;
+                  })
+                }
+              />
+            ) : null
+          }
         />
       </aside>
       <main className="min-w-0 flex-1 px-4 pt-3 pb-20 sm:px-6 md:pb-6 space-y-3">

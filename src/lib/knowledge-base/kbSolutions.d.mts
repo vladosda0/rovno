@@ -42,6 +42,7 @@ export interface KbSolution {
   title: string;
   summary: string | null;
   checkedAt: string | null;
+  recheckSince: string | null;
   updatedAt: string | null;
   conditions: KbSolutionCondition[];
   steps: KbSolutionItem[];

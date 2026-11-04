@@ -107,11 +107,33 @@ export default function KbDocumentPage() {
     );
   }
 
+  // A readable document: the reader carries the title, the site icon and the
+  // label (slice 7); the facts and buttons above it are for records without a text.
+  const readingHere = view.readable && !!clauses.data && clauses.data.length > 0;
+
   return (
     <BlogShell>
       <article className="rv-kb-doc">
         <section className="rv-section" style={{ padding: "64px 48px 96px" }}>
           <Breadcrumbs trail={kbBreadcrumbTrail(tr, { doc })} />
+          {readingHere ? (
+            <div className="rv-kb-reader">
+              <KbReader
+                doc={doc}
+                clauses={clauses.data!}
+                source={view.buttons[0] ?? null}
+                variant="guest"
+                headerExtra={
+                  showAskShurik ? (
+                    <Link className="rv-btn rv-btn--primary rv-kb-ask" to={SIGN_UP_PATH}>
+                      {t("home.knowledgeBase.askShurik")}
+                    </Link>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <>
           <header className="rv-article-header">
             <h1 className="rv-article-title">{view.heading}</h1>
             {doc.category && <p className="rv-article-subtitle">{doc.category}</p>}
@@ -150,10 +172,7 @@ export default function KbDocumentPage() {
             )}
           </div>
 
-          {view.readable && clauses.data && clauses.data.length > 0 && (
-            <div className="rv-kb-reader">
-              <KbReader doc={doc} clauses={clauses.data} source={null} variant="guest" />
-            </div>
+            </>
           )}
         </section>
       </article>

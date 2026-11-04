@@ -116,7 +116,11 @@ export function KbSolutionsPage() {
                 <li key={s.slug} className="rv-kb-doc-item">
                   <Link to={kbSolutionPath(s.slug)}>{s.title}</Link>
                   <span>
-                    {checked && <KbLabelBadge kind="verified" text={t("home.knowledgeBase.checkedOn", { date: checked })} />}{" "}
+                    {s.recheckSince ? (
+                      <KbLabelBadge kind="checking" text={t("home.knowledgeBase.label.checking")} />
+                    ) : (
+                      checked && <KbLabelBadge kind="verified" text={t("home.knowledgeBase.checkedOn", { date: checked })} />
+                    )}{" "}
                     {s.summary}
                   </span>
                 </li>

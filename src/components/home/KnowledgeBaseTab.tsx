@@ -118,6 +118,13 @@ export function KnowledgeBaseTab() {
     setSearch("");
   }
 
+  // A document with its full text opens straight on the reading page (slice 7,
+  // frame 1a); records without a text keep the document window.
+  function openTile(doc: KbDocument) {
+    if (kbFullTextReadable(doc, sp.data)) setReading(doc.slug);
+    else setOpenDoc(doc);
+  }
+
   function tileMeta(doc: KbDocument) {
     if (!kbFullTextReadable(doc, sp.data)) return null;
     const label = kbTextLabel(doc, (key, vars) => t(key, vars) as string);
@@ -142,7 +149,13 @@ export function KnowledgeBaseTab() {
         icon={Lightbulb}
         iconColor="text-success"
         tone="success"
-        meta={checked ? <KbLabelBadge kind="verified" text={t("home.knowledgeBase.checkedOn", { date: checked })} /> : null}
+        meta={
+          solution.recheckSince ? (
+            <KbLabelBadge kind="checking" text={t("home.knowledgeBase.label.checking")} />
+          ) : checked ? (
+            <KbLabelBadge kind="verified" text={t("home.knowledgeBase.checkedOn", { date: checked })} />
+          ) : null
+        }
         onClick={() => setSolution(solution.slug)}
         viewLabel=""
         downloadLabel=""
@@ -260,8 +273,8 @@ export function KnowledgeBaseTab() {
                   icon={FileText}
                   dateAdded={checked ? t("home.knowledgeBase.checkedOn", { date: checked }) : null}
                   meta={tileMeta(doc)}
-                  onClick={() => setOpenDoc(doc)}
-                  onView={() => setOpenDoc(doc)}
+                  onClick={() => openTile(doc)}
+                  onView={() => openTile(doc)}
                   viewLabel={t("home.knowledgeBase.viewDocument")}
                   onOpenExternal={firstSource ? () => openKbSource(firstSource.href) : undefined}
                   openExternalLabel={firstSource?.label}

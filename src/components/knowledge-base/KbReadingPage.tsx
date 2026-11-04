@@ -1,6 +1,6 @@
-// The in-app reading page (docs-library slice 2, frame 2, variant A): inside
-// «Документы → База знаний», the left menu stays, «Назад» and the crumbs read as
-// when entering a folder. The page has its own address
+// The in-app reading page (docs-library slice 2; slice 7 header): inside
+// «Документы → База знаний», the left menu stays and carries the path and the
+// contents; «Назад» only on the phone. The page has its own address
 // (?docTab=knowledge-base&kbDoc=<slug>#p-…) to send to a colleague.
 
 import { useTranslation } from "react-i18next";
@@ -8,7 +8,6 @@ import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useKbClauses, useKbDocument, useKbSpFullText } from "@/hooks/use-knowledge-base";
 import { kbFullTextReadable } from "@/lib/knowledge-base/kbFullText.mjs";
-import { kbHeading } from "@/lib/knowledge-base/kbConfig.mjs";
 import { kbSourceButtons } from "./kb-view";
 import { KbAskShurikButton, KbSelectionAsk } from "./KbAskShurik";
 import { KbReader } from "./KbReader";
@@ -53,14 +52,8 @@ export function KbReadingPage({ slug, onBack }: KbReadingPageProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {back}
-        <nav aria-label={t("home.knowledgeBase.title")} className="text-caption text-muted-foreground">
-          {t("home.knowledgeBase.title")} › {t(`home.knowledgeBase.folders.${doc.folder}.title`)} ›{" "}
-          <span className="text-foreground">{doc.designation ?? doc.title}</span>
-        </nav>
-      </div>
-      <h1 className="text-h2 font-semibold text-foreground">{kbHeading(doc)}</h1>
+      {/* The path lives in the left menu from md up (slice 7); the phone keeps «Назад». */}
+      <div className="md:hidden">{back}</div>
       <KbSelectionAsk
         label={docLabel}
         within="section[id]"

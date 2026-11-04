@@ -1,7 +1,8 @@
 // Reading a knowledge-base document in full (docs-library slice 2, mockup v2
-// approved 20.10, label v2 approved 21.10). One reader for the in-app page
-// inside «Документы» (frame 2, variant A) and for the guest page /baza/<slug>/
-// (frame 6): header with the label and the edition line, the source button,
+// approved 20.10, label v2 approved 21.10, header v6 of slice 7 approved
+// 03.11). One reader for the in-app page inside «Документы» and for the guest
+// page /baza/<slug>/: the title with the source icon, one label under it (its
+// window holds the edition, the details and the history),
 // the «recognised from a scan» line (frame 8), the «not in force» plate
 // (frame 5), the contents, search in the document (frame 2a) and the clauses
 // with their own link (frame 3) and the «Пункт изменён» note (frame 4).
@@ -10,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, ExternalLink, Link2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "@/hooks/use-toast";
@@ -20,7 +22,6 @@ import { kbDocPath, kbHeading } from "@/lib/knowledge-base/kbConfig.mjs";
 import {
   kbAnchorFromHash,
   kbClauseUrl,
-  kbEditionLine,
   kbHighlight,
   kbSearchMatches,
   kbSectionAnchor,
@@ -52,8 +53,6 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
   const { t } = useTranslation();
   const tr = (key: string, vars?: Record<string, unknown>) => t(key, vars) as string;
   const label = kbTextLabel(doc, tr);
-  const edition = kbEditionLine(doc, tr);
-  const editionShort = kbEditionLine(doc, tr, { short: true });
   const toc = useMemo(() => kbToc(clauses), [clauses]);
   const replacement = useKbDocumentById(doc.docStatus !== "active" ? doc.replacedBy : null);
 
@@ -226,31 +225,34 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
 
   return (
     <div className="space-y-4">
-      {doc.docStatus !== "active" && (
-        <div className="rounded-panel border border-destructive/30 bg-destructive/10 px-4 py-3 text-body-sm text-destructive">
-          {since ? t("home.knowledgeBase.reader.inactiveSince", { date: since }) : t("home.knowledgeBase.reader.inactive")}
-          {replacement.data && (
-            <>
-              {" "}
-              {t("home.knowledgeBase.reader.replacedBy")}{" "}
-              <a className="font-medium underline" href={kbDocPath(replacement.data.slug)}>
-                {kbHeading(replacement.data)}
-              </a>
-            </>
-          )}
-        </div>
-      )}
-
       <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {label && <KbTextLabel doc={doc} kind={label.kind} text={label.text} />}
-          {edition && (
-            <span className="text-body-sm text-muted-foreground">
-              <span className="hidden sm:inline">{edition}</span>
-              <span className="sm:hidden">{editionShort ?? edition}</span>
-            </span>
+        <div className="flex items-start gap-2">
+          <h1 className="text-h2 font-semibold text-foreground">{kbHeading(doc)}</h1>
+          {source && (
+            <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={source.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={source.label}
+                  className="mt-1.5 shrink-0 text-muted-foreground transition hover:text-accent"
+                  data-kb-source-icon
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>{source.label}</TooltipContent>
+            </Tooltip>
+            </TooltipProvider>
           )}
         </div>
+        {label && (
+          <div>
+            <KbTextLabel doc={doc} kind={label.kind} text={label.text} />
+          </div>
+        )}
         {doc.recognizedFromScan && (
           <p className="text-caption text-muted-foreground">
             {t(
@@ -268,37 +270,25 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
             .
           </p>
         )}
-        <div className="flex flex-wrap gap-2">
-          {source && (
-            <Button asChild variant="outline" size="sm">
-              <a href={source.href} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-1.5 h-4 w-4" />
-                {source.label}
-              </a>
-            </Button>
-          )}
-          {headerExtra}
-        </div>
+        {headerExtra && <div className="flex flex-wrap gap-2">{headerExtra}</div>}
       </header>
 
-      <div className={cn(variant === "app" && "md:grid md:grid-cols-[15rem_1fr] md:gap-6")}>
-        {variant === "app" && (
-          <nav aria-label={t("home.knowledgeBase.reader.toc")} className="hidden md:block">
-            <div className="sticky top-4 max-h-[calc(100vh-6rem)] space-y-0.5 overflow-y-auto">
-              <p className="px-2 pb-1 text-caption font-semibold text-muted-foreground">{t("home.knowledgeBase.reader.toc")}</p>
-              {tocList(toc.main)}
-              {toc.back.length > 0 && (
-                <>
-                  <p className="px-2 pt-3 pb-1 text-caption font-semibold text-muted-foreground">
-                    {t("home.knowledgeBase.reader.appendices")}
-                  </p>
-                  {tocList(toc.back)}
-                </>
-              )}
-            </div>
-          </nav>
-        )}
+      {doc.docStatus !== "active" && (
+        <div className="rounded-panel border border-destructive/30 bg-destructive/10 px-4 py-3 text-body-sm text-destructive">
+          {since ? t("home.knowledgeBase.reader.inactiveSince", { date: since }) : t("home.knowledgeBase.reader.inactive")}
+          {replacement.data && (
+            <>
+              {" "}
+              {t("home.knowledgeBase.reader.replacedBy")}{" "}
+              <a className="font-medium underline" href={kbDocPath(replacement.data.slug)}>
+                {kbHeading(replacement.data)}
+              </a>
+            </>
+          )}
+        </div>
+      )}
 
+      <div>
         <div className="min-w-0 space-y-3">
           <div className={cn(variant === "app" && "md:hidden")}>{tocDropdown}</div>
           {searchBar}

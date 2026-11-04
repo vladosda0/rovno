@@ -303,6 +303,12 @@ export function mapKnowledgeBase(
       pendingAmendments: Array.isArray(s.pendingAmendments)
         ? s.pendingAmendments.filter((n): n is number => typeof n === "number" && Number.isFinite(n))
         : [],
+      upcomingAmendments: Array.isArray(s.upcomingAmendments)
+        ? s.upcomingAmendments
+            .map((a) => (a && typeof a === "object" ? (a as Record<string, unknown>) : {}))
+            .filter((a) => typeof a.no === "number" && typeof a.effectiveFrom === "string" && /^\d{4}-\d{2}-\d{2}/.test(a.effectiveFrom))
+            .map((a) => ({ no: a.no as number, effectiveFrom: (a.effectiveFrom as string).slice(0, 10) }))
+        : [],
       quote: kbString(s.quote),
     });
   }

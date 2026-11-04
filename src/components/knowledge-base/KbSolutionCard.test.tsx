@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { normalizeKbSolution, type KbFactChip } from "@/lib/knowledge-base/kbSolutions.mjs";
 import { SEAMS_ROW, SOLUTION_ROW } from "@/lib/knowledge-base/kbSolutions.fixture";
@@ -16,6 +16,11 @@ if (typeof Element.prototype.scrollIntoView !== "function") {
 
 let mobile = false;
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => mobile }));
+let historyRows: Record<string, unknown>[] = [];
+vi.mock("@/hooks/use-knowledge-base", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-knowledge-base")>()),
+  useKbHistory: () => ({ data: historyRows, isLoading: false, isError: false }),
+}));
 
 import { KbSolutionCard } from "./KbSolutionCard";
 
@@ -36,18 +41,69 @@ const item = (text: string) => screen.getByText(text).closest("[data-kb-item]") 
 beforeEach(() => {
   window.sessionStorage.clear();
   mobile = false;
+  historyRows = [];
 });
 
 describe("KbSolutionCard", () => {
-  it("shows the label, the documents, the sections and the check line", () => {
+  it("shows the label and the sections; the documents and the check date live in the label window (slice 7)", () => {
     renderCard();
     expect(screen.getByText("Checked 25.10.2026")).toBeInTheDocument();
-    expect(screen.getByText("Documents: СП 163.1325800, СП 71.13330")).toBeInTheDocument();
     for (const name of ["Steps", "Where the sources differ", "Numbers", "What to check on acceptance"]) {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
     }
-    expect(screen.getByText("Checked against the sources, 25.10.2026")).toBeInTheDocument();
+    expect(screen.queryByText("Checked against the sources, 25.10.2026")).not.toBeInTheDocument();
+    expect(screen.queryByText("Documents: СП 163.1325800, СП 71.13330")).not.toBeInTheDocument();
     expect(screen.getByText(/The card retells the codes in its own words/)).toBeInTheDocument();
+  });
+
+  it("opens one window under the label: details on top, history below", () => {
+    historyRows = [{ occurred_on: "2026-10-25", event: "checked" }];
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Checked 25.10.2026" }));
+    const win = document.querySelector("[data-kb-window]") as HTMLElement;
+    expect(within(win).getByText("Details")).toBeInTheDocument();
+    expect(within(win).getByText("СП 163.1325800, СП 71.13330")).toBeInTheDocument();
+    expect(within(win).getByText("History")).toBeInTheDocument();
+    expect(within(win).getByText("25.10.2026")).toBeInTheDocument();
+    expect(within(win).getByText("published, checked against the sources")).toBeInTheDocument();
+  });
+
+  it("on a computer, hover opens the window and a press keeps it open; leaving closes it", async () => {
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: q === "(hover: hover)", media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false })) as typeof window.matchMedia;
+    vi.useFakeTimers();
+    try {
+      renderCard();
+      const label = screen.getByRole("button", { name: "Checked 25.10.2026" });
+      fireEvent.mouseEnter(label);
+      expect(document.querySelector("[data-kb-window]")).not.toBeNull();
+      fireEvent.click(label);
+      expect(document.querySelector("[data-kb-window]")).not.toBeNull();
+      fireEvent.mouseLeave(label);
+      act(() => vi.advanceTimersByTime(200));
+      expect(document.querySelector("[data-kb-window]")).toBeNull();
+      // After a hover that ended by leaving, a keyboard press opens and the next one closes.
+      fireEvent.mouseEnter(label);
+      fireEvent.mouseLeave(label);
+      act(() => vi.advanceTimersByTime(200));
+      expect(document.querySelector("[data-kb-window]")).toBeNull();
+      fireEvent.click(label);
+      expect(document.querySelector("[data-kb-window]")).not.toBeNull();
+      fireEvent.click(label);
+      expect(document.querySelector("[data-kb-window]")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+      window.matchMedia = matchMedia;
+    }
+  });
+
+  it("turns yellow «Being checked» while a document under the card changed", () => {
+    historyRows = [{ occurred_on: "2027-06-01", event: "solution_checking", doc_designation: "СП 71.13330" }];
+    renderCard({ ...solution, recheckSince: "2027-06-01" });
+    const label = screen.getByRole("button", { name: "Being checked" });
+    expect(label).toHaveAttribute("data-kb-label", "checking");
+    fireEvent.click(label);
+    expect(screen.getByText("СП 71.13330 changed, the solution is being rechecked")).toBeInTheDocument();
   });
 
   it("opens on the first option of each condition; the toggles change steps, numbers and acceptance", () => {

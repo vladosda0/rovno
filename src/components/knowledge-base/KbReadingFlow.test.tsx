@@ -13,6 +13,7 @@ const fetchKbDocumentPage = vi.fn();
 const fetchKbDocumentBySlug = vi.fn();
 const fetchKbClauses = vi.fn();
 const fetchKbSpFullTextEnabled = vi.fn();
+const fetchKbDocumentHistory = vi.fn();
 
 const fetchKbSolutions = vi.fn().mockResolvedValue([]);
 const fetchKbSolutionBySlug = vi.fn().mockResolvedValue(null);
@@ -26,6 +27,7 @@ vi.mock("@/lib/knowledge-base/api", () => ({
   fetchKbClauses: (docId: string) => fetchKbClauses(docId),
   fetchKbSpFullTextEnabled: () => fetchKbSpFullTextEnabled(),
   fetchKbDocumentById: vi.fn().mockResolvedValue(null),
+  fetchKbDocumentHistory: (slug: string) => fetchKbDocumentHistory(slug),
 }));
 
 import { KnowledgeBaseTab } from "@/components/home/KnowledgeBaseTab";
@@ -82,6 +84,7 @@ beforeEach(() => {
   fetchKbDocumentBySlug.mockReset().mockResolvedValue(SP71);
   fetchKbClauses.mockReset().mockResolvedValue(CLAUSES);
   fetchKbSpFullTextEnabled.mockReset().mockResolvedValue(true);
+  fetchKbDocumentHistory.mockReset().mockResolvedValue([{ occurred_on: "2026-10-22", event: "text_checked" }]);
 });
 
 afterEach(() => {
@@ -104,38 +107,42 @@ describe("knowledge base full text (slice 2)", () => {
     expect(screen.queryByText("Checked 13.10.2026")).not.toBeInTheDocument();
   });
 
-  it("shows Status, the text edition and «Read the full text» first in the window (frame 1, label frame 3)", async () => {
-    const dialog = await openWindow();
-    expect(within(dialog).getByText("Status")).toBeInTheDocument();
-    expect(within(dialog).getByText("Being checked")).toBeInTheDocument();
-    expect(within(dialog).getByText("2017 text, without amendments No. 1-4")).toBeInTheDocument();
-    expect(within(dialog).queryByText("The full text will appear in the base later.")).not.toBeInTheDocument();
-    const footer = within(dialog).getAllByRole("button").map((b) => b.textContent);
-    expect(footer).toContain("Read the full text");
-    expect(within(dialog).getByRole("link", { name: /Open on the Ministry of Construction site/ })).toBeInTheDocument();
+  it("opens a document with its full text straight on the reading page (slice 7, frame 1a)", async () => {
+    renderKB();
+    fireEvent.click(await screen.findByText("Codes of practice (SP)"));
+    fireEvent.click(await screen.findByText("СП 71.13330 Изоляционные и отделочные покрытия"));
+    expect(await screen.findByRole("heading", { level: 1, name: "СП 71.13330 · Изоляционные и отделочные покрытия" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("opens the reading page with contents, clauses, the label window and Back", async () => {
-    const dialog = await openWindow();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Read the full text" }));
-
+  it("reading page: title with the site icon, one label, the clauses; the label opens Details and History; Back", async () => {
+    renderKB("/home?docTab=knowledge-base&kbDoc=sp-71-13330");
     expect(await screen.findByRole("heading", { level: 1, name: "СП 71.13330 · Изоляционные и отделочные покрытия" })).toBeInTheDocument();
     expect(fetchKbClauses).toHaveBeenCalledWith("SP-012");
-    expect(screen.getAllByText("7.1 Общие требования").length).toBeGreaterThan(0);
     expect(screen.getByText("Учет работ ведут в журнале.")).toBeInTheDocument();
     expect(screen.getByText("Clause amended: Amendment No. 2")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "official PDF" })).toHaveAttribute(
       "href",
       "https://minstroyrf.gov.ru/upload/iblock/a94/sp-71.pdf",
     );
-    expect(screen.getByText("2017 text, without amendments No. 1-4")).toBeInTheDocument();
+    // The edition line and the source button left the header; the source is an icon by the title.
+    expect(screen.queryByText("2017 text, without amendments No. 1-4")).not.toBeInTheDocument();
+    expect(document.querySelector("[data-kb-source-icon]")).toHaveAttribute("href", "https://minstroyrf.gov.ru/docs/14844/");
 
     fireEvent.click(screen.getByRole("button", { name: "Being checked" }));
-    expect(await screen.findByText("Amendments not yet in the text")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Amendment No. 3" })).toHaveAttribute("href", "https://minstroyrf.gov.ru/docs/419098/");
+    const win = (await waitFor(() => {
+      const el = document.querySelector("[data-kb-window]");
+      if (!el) throw new Error("no window");
+      return el;
+    })) as HTMLElement;
+    expect(within(win).getByText("Details")).toBeInTheDocument();
+    expect(await within(win).findByText("22.10.2026")).toBeInTheDocument();
+    expect(within(win).getByRole("link", { name: "Amendment No. 3" })).toHaveAttribute("href", "https://minstroyrf.gov.ru/docs/419098/");
+    expect(screen.queryByText("Amendments not yet in the text")).not.toBeInTheDocument();
+    expect(fetchKbDocumentHistory).toHaveBeenCalledWith("sp-71-13330");
 
     fireEvent.click(screen.getAllByRole("button", { name: /Back/ })[0]);
-    expect(await screen.findByText("СП 71.13330 Изоляционные и отделочные покрытия")).toBeInTheDocument();
+    expect(await screen.findByText("Codes of practice (SP)")).toBeInTheDocument();
   });
 
   it("searches the document: counts matches and steps between them (frame 2a)", async () => {

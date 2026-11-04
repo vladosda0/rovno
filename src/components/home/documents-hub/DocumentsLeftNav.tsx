@@ -102,6 +102,8 @@ interface DocumentsLeftNavProps {
   activeSlug: string;
   onSelect: (slug: LeafSlug) => void;
   cta: ReactNode;
+  /** Rendered under «База знаний»: the open document and its contents (knowledge base, slice 7). */
+  knowledgeBaseExtra?: ReactNode;
 }
 
 interface NavRowProps {
@@ -175,7 +177,7 @@ function Group({ headingKey, items, activeSlug, onSelect, defaultOpen = true }: 
   );
 }
 
-export function DocumentsLeftNav({ activeSlug, onSelect, cta }: DocumentsLeftNavProps) {
+export function DocumentsLeftNav({ activeSlug, onSelect, cta, knowledgeBaseExtra }: DocumentsLeftNavProps) {
   return (
     <aside className="w-full space-y-3">
       {cta}
@@ -195,15 +197,17 @@ export function DocumentsLeftNav({ activeSlug, onSelect, cta }: DocumentsLeftNav
         />
         <div className="pt-1 space-y-0.5">
           {FLAT_LEAVES.map((leaf) => (
-            <NavRow
-              key={leaf.slug}
-              slug={leaf.slug}
-              labelKey={leaf.labelKey}
-              icon={leaf.icon}
-              activeSlug={activeSlug}
-              onSelect={onSelect}
-              newFeatureId={leaf.newFeatureId}
-            />
+            <div key={leaf.slug} className="space-y-0.5">
+              <NavRow
+                slug={leaf.slug}
+                labelKey={leaf.labelKey}
+                icon={leaf.icon}
+                activeSlug={activeSlug}
+                onSelect={onSelect}
+                newFeatureId={leaf.newFeatureId}
+              />
+              {leaf.slug === LEAVES.knowledgeBase.slug && activeSlug === leaf.slug && knowledgeBaseExtra}
+            </div>
           ))}
         </div>
       </nav>

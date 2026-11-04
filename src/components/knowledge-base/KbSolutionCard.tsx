@@ -27,7 +27,7 @@ import {
   type KbSolutionChoice,
   type KbSolutionItem,
 } from "@/lib/knowledge-base/kbSolutions.mjs";
-import { KbLabelBadge } from "./KbTextLabel";
+import { KbLabelWindow } from "./KbTextLabel";
 
 interface KbSolutionCardProps {
   solution: KbSolution;
@@ -133,9 +133,21 @@ export function KbSolutionCard({ solution, clauseHref, headerExtra }: KbSolution
   return (
     <div className="space-y-5" data-kb-solution={solution.slug}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground">
-        {checked && <KbLabelBadge kind="verified" text={t("home.knowledgeBase.checkedOn", { date: checked })} />}
-        {documents.length > 0 && (
-          <span>{t("home.knowledgeBase.solutions.documents", { list: documents.join(", ") })}</span>
+        {(checked || solution.recheckSince) && (
+          <KbLabelWindow
+            kind={solution.recheckSince ? "checking" : "verified"}
+            text={
+              solution.recheckSince
+                ? t("home.knowledgeBase.label.checking")
+                : t("home.knowledgeBase.checkedOn", { date: checked })
+            }
+            rows={
+              documents.length > 0
+                ? [{ key: "documents", label: t("home.knowledgeBase.window.documents"), value: documents.join(", ") }]
+                : []
+            }
+            history={{ kind: "solution", slug: solution.slug }}
+          />
         )}
       </div>
       {headerExtra}
@@ -238,7 +250,6 @@ export function KbSolutionCard({ solution, clauseHref, headerExtra }: KbSolution
         )}
 
       <footer className="space-y-1 border-t border-border pt-4 text-caption text-muted-foreground">
-        {checked && <p>{t("home.knowledgeBase.solutions.checkedWithSources", { date: checked })}</p>}
         <p>{t("home.knowledgeBase.solutions.disclaimer")}</p>
       </footer>
     </div>
