@@ -703,6 +703,14 @@
     {
       "path": "supabase/migrations/20261104020000_contractor_portfolio_objects.sql",
       "sha256": "4feb35979e3afbc4b5d584df75bbc33ec4ec851d9a0dc906a74a04685ec2418d"
+    },
+    {
+      "path": "supabase/migrations/20261104030000_knowledge_base_updates.sql",
+      "sha256": "ceb3ff99e427830a5c9c97f4b0d5c3671722d78b39e8aa4977bca930eaf4b98b"
+    },
+    {
+      "path": "supabase/migrations/20261104030100_kb_solutions_recheck.sql",
+      "sha256": "6346a58cc3600a97002274a4f68c39c04cca7b71bc82840402c483603c715204"
     }
   ],
   "generated_artifacts": [

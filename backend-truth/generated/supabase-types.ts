@@ -2858,6 +2858,7 @@ export type Database = {
           "applied_amendments": unknown
           "text_base_year": number | null
           "recognized_from_scan": boolean
+          "upcoming_amendments": Json
           }
           Insert: {
           "doc_id"?: string
@@ -2893,6 +2894,7 @@ export type Database = {
           "applied_amendments"?: unknown
           "text_base_year"?: number | null
           "recognized_from_scan"?: boolean
+          "upcoming_amendments"?: Json
           }
           Update: {
           "doc_id"?: string
@@ -2928,6 +2930,7 @@ export type Database = {
           "applied_amendments"?: unknown
           "text_base_year"?: number | null
           "recognized_from_scan"?: boolean
+          "upcoming_amendments"?: Json
           }
           Relationships: []
         }
@@ -2992,6 +2995,8 @@ export type Database = {
           "reviewed_by": string | null
           "reviewed_at": string | null
           "status_reason": string | null
+          "recheck_since": unknown | null
+          "recheck_reason": string | null
           }
           Insert: {
           "id"?: string
@@ -3005,6 +3010,8 @@ export type Database = {
           "reviewed_by"?: string | null
           "reviewed_at"?: string | null
           "status_reason"?: string | null
+          "recheck_since"?: unknown | null
+          "recheck_reason"?: string | null
           }
           Update: {
           "id"?: string
@@ -3018,6 +3025,8 @@ export type Database = {
           "reviewed_by"?: string | null
           "reviewed_at"?: string | null
           "status_reason"?: string | null
+          "recheck_since"?: unknown | null
+          "recheck_reason"?: string | null
           }
           Relationships: []
         }
@@ -3207,6 +3216,87 @@ export type Database = {
           "created_by"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_clauses_next": {
+          Row: {
+          "doc_id": string
+          "amendment_no": number
+          "anchor": string
+          "number": string | null
+          "heading": string | null
+          "body": string
+          "level": number
+          "position": number
+          "amendments": unknown
+          "created_at": string
+          "primary": unknown | null
+          }
+          Insert: {
+          "doc_id": string
+          "amendment_no": number
+          "anchor": string
+          "number"?: string | null
+          "heading"?: string | null
+          "body": string
+          "level"?: number
+          "position": number
+          "amendments"?: unknown
+          "created_at"?: string
+          "primary"?: unknown | null
+          }
+          Update: {
+          "doc_id"?: string
+          "amendment_no"?: number
+          "anchor"?: string
+          "number"?: string | null
+          "heading"?: string | null
+          "body"?: string
+          "level"?: number
+          "position"?: number
+          "amendments"?: unknown
+          "created_at"?: string
+          "primary"?: unknown | null
+          }
+          Relationships: []
+        }
+        "kb_change_log": {
+          Row: {
+          "id": string
+          "doc_id": string | null
+          "solution_id": string | null
+          "event": "amendment_approved" | "amendment_effective" | "amendment_pending" | "cancelled" | "replaced" | "document_added" | "solution_checking" | "solution_rechecked"
+          "occurred_on": unknown
+          "amendment_no": number | null
+          "link_url": string | null
+          "replaced_by": string | null
+          "dedupe_key": string
+          "created_at": string
+          }
+          Insert: {
+          "id"?: string
+          "doc_id"?: string | null
+          "solution_id"?: string | null
+          "event": "amendment_approved" | "amendment_effective" | "amendment_pending" | "cancelled" | "replaced" | "document_added" | "solution_checking" | "solution_rechecked"
+          "occurred_on": unknown
+          "amendment_no"?: number | null
+          "link_url"?: string | null
+          "replaced_by"?: string | null
+          "dedupe_key": string
+          "created_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "doc_id"?: string | null
+          "solution_id"?: string | null
+          "event"?: "amendment_approved" | "amendment_effective" | "amendment_pending" | "cancelled" | "replaced" | "document_added" | "solution_checking" | "solution_rechecked"
+          "occurred_on"?: unknown
+          "amendment_no"?: number | null
+          "link_url"?: string | null
+          "replaced_by"?: string | null
+          "dedupe_key"?: string
+          "created_at"?: string
           }
           Relationships: []
         }
@@ -3661,8 +3751,20 @@ export type Database = {
           }
           Returns: Json
         }
+        "kb_document_history": {
+          Args: {
+          "p_slug": string
+          }
+          Returns: unknown
+        }
         "kb_folder_counts": {
           Args: Record<PropertyKey, never>
+          Returns: unknown
+        }
+        "kb_solution_history": {
+          Args: {
+          "p_slug": string
+          }
           Returns: unknown
         }
         "kb_sp_full_text_enabled": {
