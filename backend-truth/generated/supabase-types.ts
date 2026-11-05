@@ -2997,6 +2997,7 @@ export type Database = {
           "status_reason": string | null
           "recheck_since": unknown | null
           "recheck_reason": string | null
+          "recheck_docs": unknown | null
           }
           Insert: {
           "id"?: string
@@ -3012,6 +3013,7 @@ export type Database = {
           "status_reason"?: string | null
           "recheck_since"?: unknown | null
           "recheck_reason"?: string | null
+          "recheck_docs"?: unknown | null
           }
           Update: {
           "id"?: string
@@ -3027,6 +3029,7 @@ export type Database = {
           "status_reason"?: string | null
           "recheck_since"?: unknown | null
           "recheck_reason"?: string | null
+          "recheck_docs"?: unknown | null
           }
           Relationships: []
         }
