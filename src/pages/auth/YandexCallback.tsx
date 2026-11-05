@@ -17,7 +17,22 @@ import {
   takeStartedAttempt,
   type YandexMode,
   type YandexProof,
+  type YandexResult,
 } from "@/lib/yandex-login";
+
+type SignedInResult = Extract<YandexResult, { outcome: "verify" | "session" }>;
+
+// Only the two types yandex-auth mints; anything else is not spent.
+async function signInWith(result: SignedInResult): Promise<User | null> {
+  if (result.outcome === "session") {
+    const { data, error } = await supabase.auth.setSession(result.session);
+    return error ? null : data.user;
+  }
+  const { token_hash, type } = result.verify ?? {};
+  if (typeof token_hash !== "string" || !token_hash || (type !== "signup" && type !== "magiclink")) return null;
+  const { data, error } = await supabase.auth.verifyOtp({ token_hash, type });
+  return error || !data.session ? null : data.user;
+}
 
 function settingsPath(notice: "linked" | "taken" | "has_yandex" | "failed"): string {
   return `/settings?tab=security&yandex=${notice}`;
@@ -99,17 +114,17 @@ export default function YandexCallback() {
         return;
       }
 
-      if (result.outcome !== "session") {
+      if (result.outcome !== "verify" && result.outcome !== "session") {
         fail("login", attempt.next);
         return;
       }
 
-      const { data, error } = await supabase.auth.setSession(result.session);
-      if (error || !data.user) {
+      const user = await signInWith(result).catch(() => null);
+      if (!user) {
         fail("login", attempt.next);
         return;
       }
-      await finishSignIn(data.user, result.created, result.next ?? attempt.next);
+      await finishSignIn(user, result.created, result.next ?? attempt.next);
     })();
     // finishSignIn closes over stable helpers; this runs once per callback URL.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -40,6 +40,7 @@ vi.mock("@/hooks/use-toast", () => ({ toast: mocks.toast }));
 
 const USER = { id: "u1", email: "ivan@yandex.ru" };
 const SESSION = { access_token: "at", refresh_token: "rt" };
+const VERIFY = { token_hash: "th1", type: "magiclink" };
 
 function Marker() {
   const location = useLocation();
@@ -68,6 +69,7 @@ describe("YandexCallback", () => {
     vi.clearAllMocks();
     sessionStorage.clear();
     mocks.setSession.mockResolvedValue({ data: { user: USER }, error: null });
+    mocks.verifyOtp.mockResolvedValue({ data: { user: USER, session: { user: USER } }, error: null });
     mocks.signInWithOtp.mockResolvedValue({ error: null });
     mocks.hasCompletedOnboarding.mockResolvedValue(true);
   });
@@ -94,12 +96,17 @@ describe("YandexCallback", () => {
 
   it("a new person lands on onboarding and registers with method yandex", async () => {
     startedAttempt();
-    mocks.invoke.mockResolvedValue({ data: { outcome: "session", session: SESSION, created: true, next: null }, error: null });
+    mocks.invoke.mockResolvedValue({
+      data: { outcome: "verify", verify: { token_hash: "th1", type: "signup" }, created: true, next: null },
+      error: null,
+    });
     renderCallback();
     expect((await location()).textContent).toBe("/onboarding");
     expect(mocks.invoke).toHaveBeenCalledTimes(1);
     expect(mocks.invoke).toHaveBeenCalledWith("yandex-auth", { body: { action: "callback", code: "c1", state: "s1" } });
-    expect(mocks.setSession).toHaveBeenCalledWith(SESSION);
+    // The browser spends the token itself, so Auth counts the check against its own address.
+    expect(mocks.verifyOtp).toHaveBeenCalledWith({ token_hash: "th1", type: "signup" });
+    expect(mocks.setSession).not.toHaveBeenCalled();
     expect(mocks.trackEventOncePerUser).toHaveBeenCalledWith(
       "registration_complete",
       expect.objectContaining({ method: "yandex", user_id: "u1" }),
@@ -108,7 +115,7 @@ describe("YandexCallback", () => {
 
   it("a returning person goes home", async () => {
     startedAttempt();
-    mocks.invoke.mockResolvedValue({ data: { outcome: "session", session: SESSION, created: false, next: null }, error: null });
+    mocks.invoke.mockResolvedValue({ data: { outcome: "verify", verify: VERIFY, created: false, next: null }, error: null });
     renderCallback();
     expect((await location()).textContent).toBe("/home");
   });
@@ -116,7 +123,7 @@ describe("YandexCallback", () => {
   it("the function's next wins over the attempt's", async () => {
     startedAttempt("login", "/invite/accept/from-attempt");
     mocks.invoke.mockResolvedValue({
-      data: { outcome: "session", session: SESSION, created: false, next: "/invite/accept/from-function" },
+      data: { outcome: "verify", verify: VERIFY, created: false, next: "/invite/accept/from-function" },
       error: null,
     });
     renderCallback();
@@ -125,7 +132,7 @@ describe("YandexCallback", () => {
 
   it("the attempt's next stands in when the function has none", async () => {
     startedAttempt("login", "/invite/accept/from-attempt");
-    mocks.invoke.mockResolvedValue({ data: { outcome: "session", session: SESSION, created: false, next: null }, error: null });
+    mocks.invoke.mockResolvedValue({ data: { outcome: "verify", verify: VERIFY, created: false, next: null }, error: null });
     renderCallback();
     expect((await location()).textContent).toBe("/invite/accept/from-attempt");
   });
@@ -133,7 +140,7 @@ describe("YandexCallback", () => {
   it("takes the code out of the address bar", async () => {
     startedAttempt();
     window.history.replaceState(null, "", "/auth/yandex/callback?code=c1&state=s1");
-    mocks.invoke.mockResolvedValue({ data: { outcome: "session", session: SESSION, created: false, next: null }, error: null });
+    mocks.invoke.mockResolvedValue({ data: { outcome: "verify", verify: VERIFY, created: false, next: null }, error: null });
     renderCallback();
     await location();
     expect(window.location.search).toBe("");
@@ -142,11 +149,83 @@ describe("YandexCallback", () => {
   it("drops a foreign next from the function", async () => {
     startedAttempt();
     mocks.invoke.mockResolvedValue({
-      data: { outcome: "session", session: SESSION, created: false, next: "https://evil.example/" },
+      data: { outcome: "verify", verify: VERIFY, created: false, next: "https://evil.example/" },
       error: null,
     });
     renderCallback();
     expect((await location()).textContent).toBe("/home");
+  });
+
+  it("a function still answering with a session signs in with it", async () => {
+    startedAttempt();
+    mocks.invoke.mockResolvedValue({ data: { outcome: "session", session: SESSION, created: false, next: null }, error: null });
+    renderCallback();
+    expect((await location()).textContent).toBe("/home");
+    expect(mocks.setSession).toHaveBeenCalledWith(SESSION);
+    expect(mocks.verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it("a refused token shows the plaque", async () => {
+    startedAttempt();
+    mocks.invoke.mockResolvedValue({ data: { outcome: "verify", verify: VERIFY, created: false, next: null }, error: null });
+    mocks.verifyOtp.mockResolvedValue({ data: { user: null, session: null }, error: Object.assign(new Error("Too many"), { status: 429 }) });
+    renderCallback();
+    expect((await location()).textContent).toBe("/auth/login?yandex=failed");
+    expect(mocks.verifyOtp).toHaveBeenCalledWith({ token_hash: "th1", type: "magiclink" });
+  });
+
+  it("a token that yields no session shows the plaque", async () => {
+    startedAttempt();
+    mocks.invoke.mockResolvedValue({ data: { outcome: "verify", verify: VERIFY, created: false, next: null }, error: null });
+    mocks.verifyOtp.mockResolvedValue({ data: { user: USER, session: null }, error: null });
+    renderCallback();
+    expect((await location()).textContent).toBe("/auth/login?yandex=failed");
+  });
+
+  it("a verify answer without a token shows the plaque", async () => {
+    startedAttempt();
+    mocks.invoke.mockResolvedValue({ data: { outcome: "verify", created: false, next: null }, error: null });
+    renderCallback();
+    expect((await location()).textContent).toBe("/auth/login?yandex=failed");
+    expect(mocks.verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it("an empty token is not spent", async () => {
+    startedAttempt();
+    mocks.invoke.mockResolvedValue({
+      data: { outcome: "verify", verify: { token_hash: "", type: "magiclink" }, created: false, next: null },
+      error: null,
+    });
+    renderCallback();
+    expect((await location()).textContent).toBe("/auth/login?yandex=failed");
+    expect(mocks.verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it("a throwing verifyOtp shows the plaque", async () => {
+    startedAttempt();
+    mocks.invoke.mockResolvedValue({ data: { outcome: "verify", verify: VERIFY, created: false, next: null }, error: null });
+    mocks.verifyOtp.mockRejectedValue(new Error("listener threw"));
+    renderCallback();
+    expect((await location()).textContent).toBe("/auth/login?yandex=failed");
+  });
+
+  it("a session the client refuses shows the plaque", async () => {
+    startedAttempt();
+    mocks.invoke.mockResolvedValue({ data: { outcome: "session", session: SESSION, created: false, next: null }, error: null });
+    mocks.setSession.mockResolvedValue({ data: { user: USER }, error: new Error("x") });
+    renderCallback();
+    expect((await location()).textContent).toBe("/auth/login?yandex=failed");
+  });
+
+  it("a token of an unknown type is not spent", async () => {
+    startedAttempt();
+    mocks.invoke.mockResolvedValue({
+      data: { outcome: "verify", verify: { token_hash: "th1", type: "recovery" }, created: false, next: null },
+      error: null,
+    });
+    renderCallback();
+    expect((await location()).textContent).toBe("/auth/login?yandex=failed");
+    expect(mocks.verifyOtp).not.toHaveBeenCalled();
   });
 
   it("a failed exchange shows the plaque", async () => {

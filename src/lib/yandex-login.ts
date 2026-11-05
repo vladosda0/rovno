@@ -22,6 +22,16 @@ export interface YandexProof {
 
 export type YandexResult =
   | {
+      // The function hands over a one-time token and the browser spends it with
+      // verifyOtp, so Auth counts the check against the person's own address.
+      outcome: "verify";
+      verify: { token_hash: string; type: string };
+      created: boolean;
+      next: string | null;
+    }
+  | {
+      // What yandex-auth answered before step 2.8; kept while a deploy of the two
+      // repositories is in flight.
       outcome: "session";
       session: { access_token: string; refresh_token: string };
       created: boolean;
