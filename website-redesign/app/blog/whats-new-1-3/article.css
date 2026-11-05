@@ -1,0 +1,82 @@
+main.article-main{width:calc(100% - 64px);max-width:1209px;margin:104px auto 0;padding:0 0 72px;color:var(--blue)}
+.article-breadcrumbs{margin-bottom:72px}
+.article-breadcrumbs ol{flex-wrap:wrap;row-gap:0}
+.article-breadcrumbs a{font-size:16px;padding:8px 0}
+.article-breadcrumbs [aria-current]{font-size:18px;padding:12px 0}
+.article-intro{display:flex;flex-direction:column;align-items:flex-start;gap:24px;max-width:791px;margin:0 auto 72px}
+.article-intro h1{font:400 48px/48px var(--font-display);letter-spacing:0}
+.article-intro p{font:400 18px/24px var(--font-body)}
+.article-labels{display:flex;gap:8px;flex-wrap:wrap}
+.article-labels>*{padding:8px 12px;border-radius:8px;background:var(--blue-6);font:400 14px/18px var(--font-body)}
+.article-cover{width:100%;aspect-ratio:1209/680;background:var(--blue-6)}
+@media(min-width:1280px) and (max-width:1320px){main.article-main{width:calc(100% - 72px)}}
+@media(max-width:1279px){
+main.article-main{width:calc(100% - 48px);margin-top:72px}
+.article-breadcrumbs [aria-current]{font-size:16px;padding:8px 0}
+.article-intro{max-width:none}
+.article-intro h1{font-size:32px;line-height:32px;letter-spacing:-.64px}
+.article-intro p{font-size:16px;line-height:24px}
+.article-labels>*{padding:4px 8px;border-radius:6px;font-size:12px;line-height:16px}
+}
+@media(max-width:599px){
+.article-breadcrumbs ol{flex-wrap:nowrap;gap:24px}
+.article-breadcrumbs li:last-child{min-width:0}
+.article-breadcrumbs [aria-current]{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+
+.article-body{display:flex;flex-direction:column;gap:40px;max-width:791px;margin:72px auto 0;font:400 18px/24px var(--font-body);text-align:justify;overflow-wrap:break-word}
+.article-body>*{width:100%;min-width:0}
+.article-body-headings,.article-body-subsection{display:flex;flex-direction:column;gap:24px}
+.article-body h2{font:400 40px/40px var(--font-display);letter-spacing:0}
+.article-body h3{font:400 32px/32px var(--font-display);letter-spacing:0}
+.article-body .article-paragraph{margin-bottom:16px}
+.article-body ul{list-style:disc;padding-left:27px}
+.article-body li:last-child{margin-bottom:0}
+.article-strong{font-weight:700}
+.article-body a{text-decoration:underline;text-underline-offset:2px}
+.article-body-image{aspect-ratio:791/444;background:var(--blue-6)}
+@media(max-width:1279px){
+.article-body{max-width:none;font-size:16px}
+.article-body>p:first-child{text-align:left}
+.article-body h2{font-size:28px;line-height:32px;letter-spacing:-.42px}
+.article-body h3{font-size:24px;line-height:24px;letter-spacing:-.24px}
+.article-body ul{padding-left:24px}
+.article-body-image{aspect-ratio:1209/680}
+}
+
+/* Post image component: Figma 658:3894. */
+.article-cover,.article-body-image{border-radius:32px;overflow:clip}
+
+.article-related{padding:0;margin:208px 0 0}
+.article-related-heading{display:flex;gap:40px;align-items:flex-start;justify-content:space-between;margin-bottom:72px}
+.article-related-heading h2{font:400 40px/40px var(--font-display);letter-spacing:0}
+@media(min-width:1280px){
+.article-related-posts{overflow:visible;padding-bottom:0}
+.article-related-posts>.blog-card{width:calc((100% - 41px)/2)}
+.article-related-posts>.blog-card:nth-child(n+3){display:none}
+}
+@media(max-width:1279px){
+.article-related-heading{flex-direction:column;gap:24px}
+.article-related-heading h2{font-size:28px;line-height:32px;letter-spacing:-.42px}
+}
+
+main.article-main{padding-bottom:0}
+.article-main>.final-cta{width:100%;max-width:none;margin-top:208px}
+
+/* Updated 1280px article frame: Figma 660:4211. */
+@media(min-width:1280px) and (max-width:1320px){
+main.article-main{width:calc(100% - 64px);max-width:none}
+.article-intro{max-width:none;margin-left:206px;margin-right:206px}
+.article-cover{aspect-ratio:16/9}
+.article-body-image{aspect-ratio:791/445}
+.article-shell>.landing-footer{margin-left:32px;margin-right:auto}
+}
+@media(min-width:1280px) and (max-width:1320px){
+.article-related-heading{width:1209px;max-width:100%}
+.article-related-posts>.blog-card{width:584px;max-width:calc((100% - 40px)/2)}
+}
+
+/* Updated tablet illustrations: Figma 663:4455, 696 × 392px. */
+@media(min-width:600px) and (max-width:1279px){
+.article-cover,.article-body-image{aspect-ratio:696/392}
+}

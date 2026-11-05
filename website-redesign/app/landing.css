@@ -1,0 +1,550 @@
+/* Exact source dimensions: Figma Landing page / 1728, 1440, 1280, 744, 360. */
+.landing-shell{position:relative;min-height:100vh;overflow-x:clip;padding-top:1px}
+.site-header{position:relative;z-index:5;width:855px;height:56px;margin:23px auto 0;display:flex;align-items:center;gap:24px;padding:4px;border-radius:16px;background:var(--white-6);backdrop-filter:blur(30px);box-shadow:0 0 0 8px var(--olive-6)}
+.header-start,.header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.site-logo{display:flex;align-items:center;justify-content:center;width:48px;height:48px;padding:8px;background:var(--white);border-radius:12px;flex-shrink:0}
+.logo-window{display:block;width:32px;height:32px;overflow:hidden;position:relative}
+.logo-window img{position:absolute;left:-53.12%;top:-53.13%;width:206.25%;height:206.25%;max-width:none}
+.desktop-navigation{display:flex;align-items:center;gap:24px;padding:0 12px}
+.desktop-navigation button,.mobile-navigation button{border:0;background:transparent;color:var(--blue);padding:12px 0;font:400 18px/24px var(--font-body);white-space:nowrap}
+@media(hover:hover){.desktop-navigation button:hover,.mobile-navigation button:hover{opacity:.72}}
+.menu-toggle{display:none;border:0;background:transparent;color:var(--blue);align-items:center;justify-content:center;padding:0 0 0 12px;height:40px;flex-shrink:0}
+.desktop-copy{display:contents}.compact-copy{display:none}
+main.landing-page{max-width:none;margin:0;padding:0}
+.hero{position:relative;width:calc(100% - 64px);max-width:1209px;margin:clamp(184px,min(calc(100.625vw - 1104px),calc(1150px - 55.9027778vw)),345px) auto 0;padding:0 0 440px}
+/* Header and Hero are positioned independently in the source frames. */
+.site-header + .landing-page .hero{margin-top:calc(clamp(184px,min(calc(100.625vw - 1104px),calc(1150px - 55.9027778vw)),345px) - 80px)}
+.hero-copy{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px;min-height:144px}
+.hero h1{font:400 48px/48px var(--font-display);letter-spacing:0;min-width:0;min-height:144px;margin:0;text-align:left}
+.hero h1>span{display:block}
+.hero-title-first{text-align:justify;text-align-last:justify}
+.hero-description{display:flex;flex-direction:column;align-items:flex-end;gap:24px;min-width:0}
+.hero-description>p{font:400 18px/24px var(--font-body);text-align:right}
+.hero-actions{display:flex;align-items:flex-start;gap:8px}
+.hero-illustration{position:relative;margin:72px auto 0;width:100%;max-width:1208px;height:670px;isolation:isolate}
+.hero-shadows{position:absolute;left:calc(50% - .5px);top:-269px;transform:translateX(-50%);z-index:-1;pointer-events:none}
+.hero-shadows img{display:block;max-width:none}
+.hero-screen{position:relative;width:100%;aspect-ratio:1208/677.6976318359375;border-radius:32px;box-shadow:0 17px 38px rgb(71 68 36 / 9%),0 69px 69px rgb(71 68 36 / 8%),0 154px 93px rgb(71 68 36 / 5%),0 274px 110px rgb(71 68 36 / 1%)}
+.hero-screen>img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.hero-screen:after{content:'';position:absolute;inset:-4px;border:8px solid var(--olive-6);border-radius:36px;pointer-events:none}
+.mobile-navigation{position:absolute;left:0;right:0;top:calc(100% + 16px);display:flex;flex-direction:column;align-items:stretch;padding:16px 24px;background:var(--white);border-radius:16px;box-shadow:0 8px 32px rgb(71 68 36 / 12%)}
+.mobile-navigation button{text-align:left}
+.preview-notice{position:fixed;z-index:10;bottom:24px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 48px);display:flex;align-items:center;gap:16px;padding:16px 20px;background:var(--white);color:var(--blue);border-radius:16px;box-shadow:0 8px 32px rgb(71 68 36 / 12%);font-size:16px}
+.preview-notice button{display:flex;border:0;background:transparent;padding:4px;flex-shrink:0}
+@media(min-width:1280px) and (max-width:1320px){.hero{max-width:none}}
+@media(max-width:1279px){
+ .site-header{width:673px;height:48px;gap:24px}
+ .site-logo{width:40px;height:40px}.logo-window{width:24px;height:24px}
+ .desktop-navigation button{font-size:16px;padding:8px 0}
+ .button--responsive{min-height:40px;font-size:16px;padding:8px 12px}
+ .desktop-copy{display:none}.compact-copy{display:contents}
+ .hero{width:calc(100% - 48px);max-width:none}
+ .site-header + .landing-page .hero{margin-top:104px}
+ .hero-copy{min-height:184px}
+ .hero h1{font-size:32px;line-height:32px;letter-spacing:-.02em;min-height:0}
+ .hero-description>p{font-size:16px;line-height:24px;text-align:left}
+ .hero-actions{width:100%}.hero-actions .button:last-child{flex:1}
+ .hero-illustration{height:auto;aspect-ratio:696/386;max-width:none}
+ .hero-shadows{top:-246px}
+ .hero-screen{border-radius:24px;aspect-ratio:696/390.4615478515625}.hero-screen:after{border-radius:28px}
+}
+@media(max-width:743px){
+ .site-header{width:calc(100% - 48px);max-width:none;justify-content:space-between;gap:8px}
+ .menu-toggle{display:flex}.desktop-navigation{display:none}
+ .site-header + .landing-page .hero{margin-top:72px}
+ .hero-copy{display:flex;flex-direction:column;gap:24px;min-height:0}
+ .hero h1{width:100%}.hero-title-first{text-align:left;text-align-last:auto}
+ .hero-description{width:100%;gap:24px}
+ .hero-illustration{aspect-ratio:312/174}.hero-screen{aspect-ratio:312/174}
+ .hero-shadows{top:-244px}
+}
+
+.landing-shell .button{text-decoration:none}
+
+/* Figma uses whole-pixel auto-sized labels; reserve those same slots. */
+.landing-shell{-webkit-font-smoothing:antialiased}
+.site-header{left:-.5px}
+.desktop-navigation{width:467px;flex-shrink:0}
+.desktop-navigation button:nth-child(1){width:121px}
+.desktop-navigation button:nth-child(2){width:79px}
+.desktop-navigation button:nth-child(3){width:70px}
+.desktop-navigation button:nth-child(4){width:38px}
+.desktop-navigation button:nth-child(5){width:39px}
+.header-actions .button:first-child{width:83px}
+.header-actions .button:last-child,.hero-actions .button:last-child{width:193px}
+.hero-actions .button:first-child{width:197px}
+.hero h1>.hero-title-first{display:flex;justify-content:space-between;width:calc(100% - 54px);text-align:left;text-align-last:auto}
+@media(max-width:1279px){
+ .site-header{left:0}.desktop-navigation{width:428px}
+ .desktop-navigation button:nth-child(1){width:108px}
+ .desktop-navigation button:nth-child(2){width:70px}
+ .desktop-navigation button:nth-child(3){width:62px}
+ .desktop-navigation button:nth-child(4){width:34px}
+ .desktop-navigation button:nth-child(5){width:34px}
+ .header-actions .button:first-child{width:70px}.header-actions .button:last-child{width:71px}
+ .hero-actions .button:first-child{width:171px}.hero-actions .button:last-child{width:auto}
+ .hero h1>.hero-title-first{width:100%}
+}
+@media(max-width:743px){.hero h1>.hero-title-first{display:block}}
+
+/* Section 02 — Figma Problem, with 208 px between section frames. */
+.hero{padding-bottom:0}
+.problem{width:calc(100% - 64px);max-width:1209px;margin:208px auto 0;padding:0 0 208px}
+.problem h2{width:584px;max-width:100%;font:400 40px/40px var(--font-display);letter-spacing:0;text-align:justify}
+.problem-content{margin-top:72px}
+.problem-cards{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:40px}
+.problem-card{position:relative;min-width:0;height:200px;padding-right:40px}
+.problem-card:last-child{padding-right:0}
+.problem-card-content{height:100%;display:flex;flex-direction:column;justify-content:space-between;gap:24px}
+.problem-icon{width:48px;height:48px;padding:12px;background:var(--blue-6);border-radius:99px;flex-shrink:0}
+.problem-icon img{display:block}
+.problem-text{display:flex;flex-direction:column;gap:8px;font:400 18px/24px var(--font-body);text-align:justify}
+.problem-text h3{font:700 18px/24px var(--font-body);text-align:justify}
+.problem-divider{position:absolute;right:0;top:0;width:1px;height:100%;background:url('/images/problem/divider.svg') center/100% 100% no-repeat}
+.problem-card:last-child .problem-divider{display:none}
+.problem-caption{margin-top:40px;padding:12px;background:var(--blue-6);border-radius:0 0 12px 12px;text-align:center;font:400 16px/24px var(--font-body)}
+.problem-caption strong{font-weight:700}.problem-caption-break{display:none}
+@media(min-width:1280px) and (max-width:1320px){.problem{max-width:none}}
+@media(max-width:1279px){
+ .problem{width:calc(100% - 48px);max-width:none}
+ .problem h2{width:100%;font-size:32px;line-height:32px;letter-spacing:-.02em}
+ .problem-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:40px}
+ .problem-card{padding-right:0}.problem-card:nth-child(odd) .problem-divider{display:block}
+ .problem-card:nth-child(even) .problem-divider{display:none}
+ .problem-text,.problem-text h3{font-size:16px;line-height:24px}
+}
+@media(max-width:743px){
+ .problem-content{margin-top:40px}
+ .problem-cards{grid-template-columns:1fr;gap:calc(160px / 3)}
+ .problem-card{height:168px}.problem-card:first-child{height:144px}
+ .problem-card:not(:last-child) .problem-divider{display:block;left:0;right:auto;top:calc(100% + 80px / 3);width:100%;height:1px}
+ .problem-caption{margin-top:24px}.problem-caption-break{display:block}
+}
+.problem-divider{background:none;container-type:size}
+.problem-divider:before{content:'';position:absolute;left:0;top:0;width:100cqh;height:1px;background:url('/images/problem/divider.svg') center/100% 100% no-repeat;transform:rotate(90deg);transform-origin:0 0}
+@media(max-width:743px){.problem-divider:before{width:100%;transform:none}}
+/* The tablet screenshot extends 4 px beyond its Figma illustration frame. */
+@media(min-width:744px) and (max-width:1279px){.hero-illustration{height:calc((100vw - 48px) * .5545977011)}}
+@media(max-width:350px){.problem-card{height:auto;min-height:168px}.problem-card:first-child{height:auto;min-height:144px}}
+/* Section 03: static before/after compositions; motion is a later stage. */
+.problem{padding-bottom:0}
+.resources-block{width:calc(100% - 64px);max-width:1209px;margin:208px auto 0;padding-bottom:208px}
+.resources-scattered{height:876px;position:relative;padding:0}
+.resources-explanation{position:absolute;left:calc(50% - 292.5px);top:345px;width:584px;margin:0;font:400 0/0 var(--font-body);text-align:justify;z-index:1}
+.resources-explanation span,.resources-explanation strong,.resources-summary span span,.resources-summary strong{font:400 40px/40px var(--font-body)}
+.resources-explanation strong,.resources-summary strong{font-family:var(--font-display)}
+.scattered-cards{padding:0;margin:0;list-style:none}
+.scattered-item{position:absolute;display:flex;align-items:center;justify-content:center;width:200.581px;height:186.439px}
+.resource-card{background:var(--blue-6);padding:8px;display:flex;flex-direction:column;gap:8px;border-radius:12px;width:168px;flex-shrink:0}
+.resource-card--contractors{width:166px}
+.resource-image{height:100px;position:relative;background:var(--white);border-radius:4px;overflow:clip}
+.resource-art{position:absolute;left:calc(50% + .5px);top:50%;width:83px;height:82px;transform:translate(-50%,-50%)}
+.resource-art-crop{height:82px;position:absolute;left:50%;transform:translateX(-50%);overflow:hidden}
+.resource-art-crop>img{position:absolute;max-width:none}
+.resource-label{display:flex;align-items:center;justify-content:center;gap:8px;padding:0 4px;font:400 16px/24px var(--font-body);white-space:nowrap}
+.resource-label picture,.resource-label img{display:block}
+.scattered-item--tasks{left:calc(50% + 503.5px);top:293.78px}.scattered-item--tasks .resource-card{transform:rotate(15deg)}
+.scattered-item--documents{left:calc(50% + 147.21px);top:579px}.scattered-item--documents .resource-card{transform:rotate(-15deg)}
+.scattered-item--estimate{left:calc(50% - 292.25px);top:664px;width:219.492px;height:212.172px}.scattered-item--estimate .resource-card{transform:rotate(30deg)}
+.scattered-item--photos{left:calc(50% + 145.75px);top:0;width:219.492px;height:212.172px}.scattered-item--photos .resource-card{transform:rotate(-30deg)}
+.scattered-item--team{left:calc(50% - 398.59px);top:84px;width:212.172px;height:219.492px}.scattered-item--team .resource-card{transform:rotate(60deg)}
+.scattered-item--contractors{left:calc(50% - 701.5px);top:325.78px;width:198.649px;height:185.921px}.scattered-item--contractors .resource-card{transform:rotate(-15deg)}
+.resources-unified{margin-top:208px;padding:0}
+.resources-summary{width:586px;margin:0 auto 72px;font:400 0/0 var(--font-body);text-align:justify}
+.summary-mobile{display:none}
+.resource-strip{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--blue-32) transparent;overscroll-behavior-x:contain}
+.resource-strip:focus-visible{outline:2px solid var(--blue);outline-offset:6px}
+.resource-row{list-style:none;display:flex;gap:40px;width:max-content;min-width:100%;padding:0;margin:0}
+.resource-row>li{position:relative;flex-shrink:0}
+.resource-connector{position:absolute;left:calc(100% + 19.5px);top:calc(50% - 12px);transform:rotate(-90deg)}
+@media(min-width:1280px) and (max-width:1320px){.resources-block{max-width:none}}
+@media(max-width:1279px){
+ .resources-block{width:calc(100% - 48px);max-width:none}
+ .resources-scattered{height:800px}
+ .resources-explanation{left:calc(50% - 225px);top:279px;width:450px;letter-spacing:-.02em}
+ .resources-explanation span,.resources-explanation strong,.resources-summary span span,.resources-summary strong{font-size:32px;line-height:32px}
+ .resource-card,.resource-card--contractors{width:134px}
+ .resource-label{font-size:14px;line-height:18px}
+ .scattered-item{width:166.186px;height:171.843px}
+ .scattered-item--tasks{left:calc(50% + 267px);top:276px}
+ .scattered-item--documents{left:calc(50% + 153px);top:540.8px}
+ .scattered-item--estimate{left:calc(50% - 144px);top:506px;width:187.047px;height:189.976px}
+ .scattered-item--photos{left:calc(50% + 14px);top:28px;width:187.047px;height:189.976px}
+ .scattered-item--team{left:calc(50% - 345px);top:38px;width:189.976px;height:187.047px}
+ .scattered-item--contractors{left:calc(50% - 418px);top:401px}
+ .resources-summary{width:450px;letter-spacing:-.02em}
+ .resource-row{min-width:0}
+}
+@media(min-width:744px) and (max-width:1279px){.resource-strip{margin:0 -24px}.resource-row{margin-left:0}}
+@media(max-width:743px){
+ .resources-explanation{left:0;width:100%;top:279px}
+ .scattered-item--tasks{left:calc(50% - 60px);top:42px}
+ .scattered-item--documents{left:calc(50% + 53px);top:540.8px}
+ .scattered-item--estimate{left:calc(50% - 91px);top:593px}
+ .scattered-item--photos{left:calc(50% + 25px);top:86px}
+ .scattered-item--team{left:calc(50% - 205px);top:92px}
+ .scattered-item--contractors{left:calc(50% - 228px);top:565px}
+ .resources-summary{width:100%}.summary-desktop{display:none}.summary-mobile{display:inline}
+ .resource-strip{margin-right:-24px;padding-right:24px}
+}
+@media(max-width:350px){.resources-scattered{height:900px}.scattered-item--documents{top:640.8px}.scattered-item--estimate{top:693px}.scattered-item--contractors{top:665px}}
+
+@media(max-width:1279px){.resources-explanation,.resources-summary{letter-spacing:-.64px}}
+/* First feature only: the original screen fill is enlarged and cropped in Figma. */
+.workspace-feature{width:calc(100% - 64px);max-width:1209px;margin:0 auto;padding:0 0 208px}
+.workspace-copy{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px;align-items:start}
+.workspace-copy h2{font:400 40px/40px var(--font-display);text-align:justify;letter-spacing:0}
+.workspace-copy>p{font:400 18px/24px var(--font-body);text-align:right}
+.workspace-screen{position:relative;width:100%;aspect-ratio:1206/677;margin-top:72px;border-radius:32px}
+.workspace-screen-crop{position:absolute;inset:0;overflow:hidden;border-radius:inherit}
+.workspace-screen-crop img{position:absolute;width:133.34%;height:133.28%;left:-33.36%;top:-6.68%;max-width:none}
+.workspace-screen:after{content:'';position:absolute;inset:-4px;border:8px solid var(--olive-6);border-radius:36px;pointer-events:none}
+@media(min-width:1280px) and (max-width:1320px){.workspace-feature{max-width:none}}
+@media(max-width:1279px){
+ .workspace-feature{width:calc(100% - 48px);max-width:none}
+ .workspace-copy{display:flex;flex-direction:column;gap:24px}
+ .workspace-copy h2{width:100%;font-size:28px;line-height:32px;letter-spacing:-.42px}
+ .workspace-copy>p{font-size:16px;line-height:24px;text-align:left}
+ .workspace-screen{margin-top:40px;border-radius:24px}
+ .workspace-screen:after{border-radius:28px}
+}
+/* One pinned section, six persistent cards, reversible scroll-driven transforms. */
+.resources-block{height:250svh;padding-bottom:0;position:relative}
+.resources-pin{position:sticky;top:0;height:100svh}
+.resources-stage{position:absolute;top:50%;left:0;width:100%;height:876px;transform:translateY(-50%);transform-origin:center center}
+.resources-stage .resources-scattered{height:100%;position:absolute;inset:0}
+.resources-stage .resources-unified{position:absolute;top:50%;left:0;width:100%;margin:0;padding:0;transform:translateY(-50%)}
+.resources-stage .resources-summary{opacity:0}
+.resources-stage .resource-row{position:relative}
+.resource-slot{height:148px;visibility:hidden}
+.resources-stage .scattered-cards{position:absolute;inset:0;z-index:2;pointer-events:none}
+.resources-stage .resources-explanation{z-index:3;pointer-events:none}
+.resources-stage .resource-connector{opacity:0}
+.resources-block:not([data-ready]) .resources-unified{visibility:hidden}
+.workspace-feature{margin-top:208px}
+@media(max-width:1279px){.resources-stage{height:800px}.resource-slot{height:142px}}
+@media(prefers-reduced-motion:reduce){.resources-block{height:100svh}}
+/* Figma update: center the complete card row inside its available container. */
+.resource-row{justify-content:center}
+/* Second feature: reuse the approved layout, with the task-board image crop. */
+.workspace-feature:has(+ .planning-feature){padding-bottom:104px}
+.planning-feature{margin-top:0}
+.planning-feature h2>span{display:block}
+.planning-first-line{text-align-last:justify}
+.planning-screen .workspace-screen-crop img{width:103.33%;height:130.75%;left:-.02%;top:-2.08%}
+/* Third feature: the complete original screenshot, without an enlarged crop. */
+.planning-feature:has(+ .issues-feature){padding-bottom:104px}
+.issues-feature{margin-top:0}
+.issues-screen .workspace-screen-crop img{inset:0;width:100%;height:100%;object-fit:cover}
+
+/* Fourth feature: the budget screenshot uses its original Figma crop. */
+.issues-feature:has(+ .budget-feature){padding-bottom:104px}
+.budget-feature{margin-top:0}
+.budget-screen .workspace-screen-crop img{width:100%;height:126.44%;left:0;top:.06%}
+
+/* Fifth feature: original document list and its Figma crop. */
+.budget-feature:has(+ .documents-feature){padding-bottom:104px}
+.documents-feature{margin-top:0}
+.documents-screen .workspace-screen-crop img{width:100%;height:126.63%;left:0;top:-.04%}
+
+/* Sixth feature: shared project participants. */
+.documents-feature:has(+ .team-feature){padding-bottom:104px}
+.team-feature{margin-top:0}
+.team-screen .workspace-screen-crop img{width:100%;height:126.36%;left:0;top:-.03%}
+/* Shurik: three compositions from the desktop, tablet and phone frames. */
+.shurik-section{width:calc(100% - 64px);max-width:1209px;margin:0 auto 208px;padding:40px 24px;min-height:664px;box-sizing:border-box;border:8px solid var(--white-6,rgba(237,235,215,.06));border-radius:32px;background:var(--olive-main,#8e9174);color:var(--white,#edebd7);box-shadow:0 17px 19px rgba(71,68,36,.09),0 69px 34.5px rgba(71,68,36,.08),0 154px 46.5px rgba(71,68,36,.05),0 274px 55px rgba(71,68,36,.01)}
+.shurik-copy{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px}
+.shurik-copy h2{font:400 40px/40px var(--font-display);text-align:justify}
+.shurik-description{display:flex;flex-direction:column;gap:24px;align-items:flex-end}
+.shurik-description>p{font:400 18px/24px var(--font-body);text-align:right}
+.shurik-scene{position:relative;height:400px;margin:24px 16px 0}
+.shurik-character{position:absolute;width:400px;height:400px;left:calc(50% - 184px);top:25px;object-fit:cover}
+.shurik-bubble{position:absolute;padding:24px;border-radius:24px;background:var(--white,#edebd7);color:var(--olive-main,#8e9174);font:400 18px/24px var(--font-body);box-sizing:border-box}
+.shurik-bubble strong{font-weight:700}
+.shurik-bubble--chat{width:358px;left:6.38%;top:16px}
+.shurik-bubble--project{left:67.65%;top:78px;white-space:nowrap}
+.shurik-bubble--learn{width:388px;left:3.77%;top:304px}
+.shurik-icon{position:absolute;left:-24px;top:-24px;padding:12px;border:2px solid var(--olive-main,#8e9174);border-radius:99px;background:var(--white,#edebd7)}
+.shurik-icon img,.shurik-tail img{display:block;max-width:none}
+.shurik-tail{position:absolute;right:-32px;bottom:0}
+.shurik-bubble--project .shurik-tail{right:auto;left:-32px;transform:scaleX(-1)}
+.shurik-bubble--learn .shurik-tail{right:-24px;bottom:auto;top:-16px;transform:rotate(-60deg)}
+.shurik-description .shurik-notice{font-size:14px;line-height:20px}
+@media(max-width:1279px){
+.shurik-section{width:calc(100% - 48px);max-width:none;min-height:800px;padding:40px;border-radius:24px}
+.shurik-copy{display:flex;flex-direction:column;gap:24px}
+.shurik-copy h2{font-size:28px;line-height:32px;letter-spacing:-.42px;width:100%}
+.shurik-description{align-items:flex-start;width:100%}
+.shurik-description>p{font-size:16px;text-align:left}
+.shurik-scene{height:496px;margin:24px 0 0}
+.shurik-character{width:362px;height:362px;left:calc(50% - 181px);top:calc(50% - 162.24px);z-index:1}
+.shurik-bubble{padding:12px;border-radius:16px;font-size:14px;line-height:18px}
+.shurik-icon{left:-20px;top:-20px;padding:9px 8px}
+.shurik-bubble--chat{width:266px;left:-17px;top:46px;transform:rotate(15deg)}
+.shurik-bubble--project{left:auto;right:-20px;top:92px;transform:rotate(-15deg)}
+.shurik-bubble--learn{width:206.482px;left:12px;top:365px;transform:rotate(-15deg)}
+.shurik-tail{right:-21px}
+.shurik-bubble--project .shurik-tail{left:-22px;bottom:-1px}
+.shurik-bubble--learn .shurik-tail{right:-16px;top:-12px}
+}
+@media(max-width:599px){
+.shurik-section{padding:24px;min-height:800px}
+.shurik-scene{height:440px}
+.shurik-character{width:248px;height:248px;left:calc(50% - 124px);top:96.13px;z-index:0}
+.shurik-bubble{z-index:1}
+.shurik-bubble--chat{left:calc(50% - 133px);top:50px}
+.shurik-bubble--learn{left:calc(50% - 103.241px);top:250px}
+.shurik-bubble--project{left:calc(50% - 124px);right:auto;top:344px;transform:rotate(15deg)}
+.shurik-description .button{max-width:100%;white-space:normal;text-align:center}
+}
+@media(max-width:349px){.shurik-scene{transform:scale(.84);transform-origin:top center;margin-bottom:-70px}}
+.shurik-copy{align-items:start}
+@media(min-width:1280px) and (max-width:1320px){.shurik-section{max-width:none}}
+@media(max-width:599px){.shurik-bubble--learn{top:198px}}
+/* Audience: original illustrations and the two-column Figma grid. */
+.audience-section{width:calc(100% - 64px);max-width:1209px;margin:0 auto 208px;color:var(--blue-main,#1c55ab)}
+.audience-section>h2{width:584px;max-width:100%;font:400 40px/40px var(--font-display);text-align:justify;margin-bottom:72px}
+.audience-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px;width:calc(100% - 1px)}
+.audience-card{min-width:0;display:flex;flex-direction:column;gap:24px}
+.audience-image{position:relative;aspect-ratio:584/300;border-radius:32px;overflow:hidden}
+.audience-image img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.audience-image--supervision img{width:114.9%;height:149.11%;top:-36.79%;left:0;max-width:none;object-fit:fill}
+.audience-copy{text-align:justify}
+.audience-copy h3{font:400 32px/32px var(--font-display);margin-bottom:8px}
+.audience-copy p{font:400 18px/24px var(--font-body)}
+@media(min-width:1280px) and (max-width:1320px){.audience-section{max-width:none}}
+@media(max-width:1279px){
+.audience-section{width:calc(100% - 48px);max-width:none}
+.audience-section>h2{width:100%;font-size:28px;line-height:32px;letter-spacing:-.42px}
+.audience-grid{width:100%}
+.audience-image{border-radius:24px}
+.audience-copy h3{font-size:24px;line-height:24px;letter-spacing:-.24px}
+.audience-copy p{font-size:16px;line-height:24px}
+.audience-image--supervision img{width:115.06%;height:149.33%;top:-34.44%}
+}
+@media(max-width:599px){.audience-grid{grid-template-columns:minmax(0,1fr)}.audience-section>h2{margin-bottom:40px}}
+/* Pricing: original check icon and dashed SVG divider from Figma. */
+.pricing-section{width:calc(100% - 64px);max-width:1209px;margin:0 auto 208px;color:var(--blue-main,#1c55ab)}
+.pricing-copy{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px;align-items:start;margin-bottom:72px}
+.pricing-copy h2{font:400 40px/40px var(--font-display);text-align:justify}
+.pricing-copy>p{font:400 18px/24px var(--font-body);text-align:right}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:40px;align-items:start}
+.plan-card{position:relative;display:flex;flex-direction:column;gap:24px;padding-right:48px;min-width:0}
+.plan-top{display:flex;flex-direction:column;justify-content:space-between;height:240px}
+.plan-intro{display:flex;flex-direction:column;gap:16px}
+.plan-title{display:flex;align-items:center;gap:16px}
+.plan-title h3{font:400 32px/32px var(--font-display)}
+.plan-badge{padding:4px 6px 2px;border:1px solid var(--blue-6,rgba(28,85,171,.06));border-radius:6px;background:var(--blue-6,rgba(28,85,171,.06));font:400 14px/18px var(--font-body);color:rgba(28,85,171,.56);white-space:nowrap}
+.plan-intro>p,.plan-bottom li{font:400 16px/24px var(--font-body)}
+.plan-price{display:flex;gap:16px;align-items:baseline;white-space:nowrap}
+.plan-price>span{font:400 48px/48px var(--font-display)}
+.plan-price small{font:400 14px/18px var(--font-body);opacity:.56}
+.plan-rule{height:1px;margin-bottom:-1px;background:url('/images/pricing/2cfd9.svg') repeat-x left top}
+.plan-bottom{display:flex;flex-direction:column;justify-content:space-between;gap:40px;height:336px;align-items:flex-start}
+.plan-bottom ul{display:flex;flex-direction:column;gap:16px;list-style:none;padding:0;margin:0;width:100%}
+.plan-bottom li{display:flex;gap:16px;align-items:center}
+.plan-bottom li img{flex:none}
+.plan-vertical{position:absolute;right:0;top:0;bottom:0;width:1px;container-type:size}
+.plan-vertical>span{position:absolute;left:0;top:0;height:1px;width:100cqh;transform-origin:top left;transform:rotate(90deg);background:url('/images/pricing/2cfd9.svg') repeat-x}
+.plan-card--2 .plan-vertical{display:none}
+@media(min-width:1280px) and (max-width:1320px){.pricing-section{max-width:none}}
+@media(max-width:1279px){
+.pricing-section{width:calc(100% - 48px);max-width:none}
+.pricing-copy{display:flex;flex-direction:column;gap:24px}
+.pricing-copy h2{font-size:28px;line-height:32px;letter-spacing:-.42px;width:100%}
+.pricing-copy>p{font-size:16px;text-align:left}
+.pricing-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(624px,auto);align-items:stretch}
+.plan-title h3{font-size:24px;line-height:24px;letter-spacing:-.24px}
+.plan-top{height:auto;gap:24px}
+.plan-price>span{font-size:32px;line-height:32px;letter-spacing:-.64px}
+.plan-bottom{height:auto;flex:1;gap:24px}
+.plan-card--2 .plan-vertical{display:block}
+}
+@media(max-width:599px){
+.pricing-grid{grid-template-columns:minmax(0,1fr);grid-auto-rows:auto;gap:80px}
+.plan-card .plan-vertical{display:none}
+.plan-card:not(:last-child):after{content:'';position:absolute;bottom:-40px;left:0;right:0;height:1px;background:url('/images/pricing/2cfd9.svg') repeat-x}
+}
+@media(max-width:349px){.plan-title{flex-wrap:wrap;gap:8px}.plan-card{padding-right:24px}.plan-price{gap:12px}}
+/* Keep pricing actions visible against the cream page in hover states. */
+@media(hover:hover){
+}
+/* FAQ: open answers, original divider shared with pricing. */
+.faq-section{width:calc(100% - 64px);max-width:1209px;margin:0 auto 208px;color:var(--blue)}
+.faq-heading{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px;align-items:start;margin-bottom:72px}
+.faq-heading h2{font:400 40px/40px var(--font-display);text-align:justify}
+.faq-contact{display:flex;flex-direction:column;gap:24px;align-items:flex-end}
+.faq-contact>p{font:400 18px/24px var(--font-body);text-align:right}
+.faq-list{display:flex;flex-direction:column;gap:80px}
+.faq-item{display:flex;justify-content:space-between;align-items:flex-start;position:relative;gap:40px}
+.faq-item:not(:last-child):after{content:'';position:absolute;left:0;right:0;bottom:-40px;height:1px;background:url('/images/pricing/2cfd9.svg') repeat-x}
+.faq-answer{width:calc((100% - 40px)/2);order:0;min-width:0}
+.faq-answer h3{font:400 32px/32px var(--font-display);margin-bottom:16px}
+.faq-answer p{font:400 18px/24px var(--font-body)}
+.faq-number{order:1;flex:none;padding:8px 12px;border-radius:8px;background:var(--blue-6);font:400 14px/18px var(--font-body)}
+@media(hover:hover){}
+@media(min-width:1280px) and (max-width:1320px){.faq-section{max-width:none}}
+@media(max-width:1279px){
+.faq-section{width:calc(100% - 48px);max-width:none}
+.faq-heading{display:flex;flex-direction:column;gap:24px}
+.faq-heading h2{font-size:28px;line-height:32px;letter-spacing:-.42px;width:100%}
+.faq-contact{width:100%;align-items:flex-start}
+.faq-contact>p{font-size:16px;text-align:left}
+.faq-contact .button{min-width:160px}
+.faq-item{gap:83px}
+.faq-answer{width:auto;flex:1}
+.faq-answer h3{font-size:24px;line-height:24px;letter-spacing:-.24px}
+.faq-answer p{font-size:16px;line-height:24px}
+.faq-number{padding:4px 8px;border-radius:6px;font-size:12px;line-height:16px}
+}
+@media(max-width:599px){.faq-item{flex-direction:column;gap:24px}.faq-number{order:0}.faq-answer{order:1;width:100%}}
+/* Blog preview: empty covers and editorial copy are retained from Figma. */
+.blog-section{width:calc(100% - 64px);max-width:1209px;margin:0 auto 208px;color:var(--blue)}
+.blog-heading{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px;align-items:start;margin-bottom:72px}
+.blog-heading h2{font:400 40px/40px var(--font-display);text-align:justify}
+.blog-intro{display:flex;flex-direction:column;align-items:flex-end;gap:24px}
+.blog-intro>p{font:400 18px/24px var(--font-body);text-align:right}
+.blog-posts{display:flex;gap:40px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding-bottom:8px;scrollbar-width:thin;scrollbar-color:var(--blue-6) transparent}
+.blog-card{width:calc((100% - 40px)/2);flex:none;min-width:0;scroll-snap-align:start}
+.blog-card-link{display:flex;flex-direction:column;gap:24px;text-decoration:none;border-radius:32px}
+.blog-cover{width:100%;aspect-ratio:584/300;border-radius:32px;background:var(--blue-6)}
+.blog-card-copy{display:flex;flex-direction:column;gap:16px}
+.blog-labels{display:flex;flex-wrap:wrap;gap:8px;font:400 14px/18px var(--font-body)}
+.blog-labels>*{padding:8px 12px;background:var(--blue-6);border-radius:8px}
+.blog-text{text-align:justify}
+.blog-text h3{font:400 32px/32px var(--font-display);margin-bottom:8px}
+.blog-text p{font:400 18px/24px var(--font-body)}
+@media(hover:hover){}
+@media(min-width:1280px) and (max-width:1320px){.blog-section{max-width:none}}
+@media(max-width:1279px){
+.blog-section{width:calc(100% - 48px);max-width:none}
+.blog-heading{display:flex;flex-direction:column;gap:24px}
+.blog-heading h2{font-size:28px;line-height:32px;letter-spacing:-.42px;width:100%}
+.blog-intro{align-items:flex-start;width:100%}
+.blog-intro>p{font-size:16px;text-align:left}
+.blog-card{width:573px}
+.blog-cover,.blog-card-link{border-radius:24px}
+.blog-labels{font-size:12px;line-height:16px}
+.blog-labels>*{padding:4px 8px;border-radius:6px}
+.blog-text h3{font-size:24px;line-height:24px;letter-spacing:-.24px}
+.blog-text p{font-size:16px;line-height:24px}
+}
+@media(max-width:599px){.blog-posts{flex-direction:column;overflow:visible;padding-bottom:0}.blog-card{width:100%}.blog-card:nth-child(n+3){display:none}}
+
+/* Clip the cover zoom to its original rounded slot. */
+.blog-cover-frame{overflow:hidden;border-radius:32px;aspect-ratio:584/300;isolation:isolate}
+.blog-cover{transition:transform 200ms cubic-bezier(0.23,1,0.32,1)}
+@media(max-width:1279px){.blog-cover-frame{border-radius:24px}}
+@media(prefers-reduced-motion:reduce){.blog-cover{transition:none}.blog-card-link:hover .blog-cover{transform:none}}
+
+@media(hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference){.blog-card-link:hover .blog-cover{transform:scale(1.025)}}
+/* Final CTA: the decorative assets extend beyond the blue panel. */
+.final-cta{position:relative;width:calc(100% - 64px);max-width:1209px;height:600px;margin:0 auto 208px;padding:8px;border:8px solid rgba(237,235,215,.06);border-radius:32px;background:var(--blue);color:var(--white);display:flex;align-items:center;justify-content:center;box-shadow:0 17px 19px rgba(71,68,36,.09),0 69px 34.5px rgba(71,68,36,.08),0 154px 46.5px rgba(71,68,36,.05),0 274px 55px rgba(71,68,36,.01)}
+.final-cta-content{width:569px;max-width:100%;display:flex;flex-direction:column;align-items:center;gap:40px;position:relative;z-index:1}
+.final-cta-copy{display:flex;flex-direction:column;gap:24px;text-align:justify;width:100%}
+.final-cta-copy h2{font:400 48px/48px var(--font-display)}
+.final-cta-copy p{font:400 18px/24px var(--font-body)}
+.final-cta-buttons{display:flex;gap:8px;justify-content:center}
+.final-cta-bricks{position:absolute;width:469px;height:313px;right:-109px;top:-152px;object-fit:cover;pointer-events:none}
+.final-cta-shurik{position:absolute;width:363px;height:436px;left:-119px;top:214px;object-fit:cover;pointer-events:none}
+.final-cta .button:focus-visible{outline-color:var(--white)}
+@media(min-width:1280px) and (max-width:1320px){.final-cta{max-width:none}}
+@media(max-width:1279px){
+.final-cta{width:calc(100% - 48px);max-width:none;border-radius:24px;padding:8px 40px}
+.final-cta-content{width:450px}
+.final-cta-copy h2{font-size:32px;line-height:32px;letter-spacing:-.64px}
+.final-cta-copy p{font-size:16px;line-height:24px}
+.final-cta-buttons .button:first-child{min-width:197px}
+.final-cta-shurik{width:227.5px;height:273px;left:-42px;top:358.43px}
+.final-cta-bricks{width:263px;height:176px;left:auto;right:-54px;top:-57.57px}
+}
+@media(max-width:599px){
+.final-cta{padding:24px;height:600px}
+.final-cta-buttons{flex-direction:column;width:100%}
+.final-cta-buttons .button{width:100%;min-width:0}
+.final-cta-shurik{width:189px;height:226.8px;left:-55px;top:464.21px}
+.final-cta-bricks{width:229px;height:153px;left:auto;right:-67px;top:-62.92px}
+}
+@media(max-width:349px){.final-cta{height:648px}.final-cta-shurik{top:512.21px}}
+/* Footer: shared divider and original payment/logo assets from Figma. */
+.landing-footer{width:calc(100% - 64px);max-width:1209px;margin:0 auto;padding:0 0 24px;display:flex;flex-direction:column;gap:40px;font:400 18px/24px var(--font-body);color:var(--blue)}
+.footer-top{display:flex;justify-content:space-between;align-items:flex-start;gap:40px;width:100%}
+.footer-navigation{display:grid;grid-template-columns:repeat(3,272px);gap:40px}
+.footer-column{min-width:0}
+.footer-column h2{font:700 18px/24px var(--font-body);margin-bottom:24px}
+.footer-column ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.footer-column a,.footer-column button{display:block;width:100%;padding:12px 0;min-height:48px;text-align:left;color:inherit;font:inherit;text-decoration:none;background:none;border:0;cursor:pointer}
+.footer-logo{display:flex;width:48px;height:48px;padding:8px;border-radius:12px;background:var(--white);flex:none}
+.footer-logo>span{position:relative;display:block;width:32px;height:32px;overflow:hidden}
+.footer-logo img{position:absolute;width:206.25%;height:206.25%;left:-53.12%;top:-53.13%;max-width:none}
+.footer-rule{width:100%;height:1px;margin-bottom:-1px;background:url('/images/pricing/2cfd9.svg') repeat-x}
+.footer-payments{display:flex;justify-content:space-between;align-items:center;gap:24px;width:100%}
+.footer-payment-logos{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.footer-payment-logos img,.footer-processor img{display:block;height:24px;object-fit:contain;flex:none}
+.footer-processor{display:flex;align-items:center;gap:24px;white-space:nowrap}
+.footer-bottom{display:flex;align-items:center;justify-content:space-between;gap:24px;width:100%}
+.footer-copyright,.footer-requisites{display:flex;align-items:center;gap:24px}
+.footer-bottom-logo{display:none}
+.footer-notice{display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:14px}
+.footer-notice button{background:none;border:0;color:inherit;padding:8px;font-size:24px}
+@media(hover:hover){.footer-column a:hover,.footer-column button:hover{opacity:.72}}
+@media(min-width:1280px) and (max-width:1320px){.landing-footer{max-width:none}}
+@media(max-width:1279px){
+.landing-footer{width:calc(100% - 48px);max-width:none;font-size:16px}
+.footer-navigation{grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
+.footer-column h2{font-size:16px}
+.footer-column a,.footer-column button{padding:8px 0;min-height:40px}
+.footer-top-logo{display:none}
+.footer-payments{flex-direction:column;gap:24px}
+.footer-payment-logos{justify-content:center}
+.footer-bottom-logo{display:block}
+.footer-logo{width:40px;height:40px}
+.footer-logo>span{width:24px;height:24px}
+.footer-copyright{gap:8px}
+}
+@media(max-width:599px){
+.footer-navigation{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:40px}
+.footer-legal{grid-column:1/-1}
+.footer-bottom{flex-direction:column;align-items:stretch;gap:24px}
+.footer-copyright,.footer-requisites{justify-content:space-between}
+.footer-requisites{gap:16px;flex-wrap:wrap}
+}
+@media(max-width:349px){.footer-processor{gap:12px;font-size:14px}.footer-navigation{column-gap:24px}}
+
+.footer-column button:disabled{opacity:.4;cursor:default}
+@media(hover:hover){.footer-column button:disabled:hover{opacity:.4}}
+/* Keep the existing header in flow while pinning it during page scrolling. */
+.site-header{position:sticky;top:24px;z-index:50}
+.landing-page section{scroll-margin-top:104px}
+@media(max-width:1279px){.landing-page section{scroll-margin-top:96px}}
+/* Keep the compact hero demo action at the Figma tablet size. */
+@media(max-width:1279px){.hero-actions{justify-content:flex-end}.hero-actions .button:last-child{max-width:149px}}
+
+/* Hero update: right-aligned actions and tablet description from Figma. */
+.hero-actions{width:100%;justify-content:flex-end}
+@media(min-width:744px) and (max-width:1279px){.hero-description>p{text-align:right}}
+@media(max-width:743px){.hero-actions{justify-content:flex-start}}
+
+/* Figma Light header: activated over the two colored panels. */
+.site-header[data-surface=light] .desktop-navigation button{color:var(--white)}
+.site-header[data-surface=light] .desktop-navigation button:focus-visible{outline-color:var(--white)}
+.site-header[data-surface=light] .header-actions .button:focus-visible{outline-color:var(--white)}
+.site-header[data-surface=light] .menu-toggle[aria-expanded=true]{background:var(--white);border-radius:8px;padding-right:12px}
+
+/* Full-height phone navigation, Figma 817:7105. Render outside the blurred header. */
+.mobile-menu-layer{position:fixed;inset:0;z-index:99;overscroll-behavior:none}
+.site-header[data-menu-open=true]{z-index:100}
+.mobile-menu-layer .mobile-navigation{position:absolute;left:24px;right:24px;top:max(96px,calc(env(safe-area-inset-top) + 96px));bottom:max(24px,env(safe-area-inset-bottom));height:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:4px;border:0;border-radius:16px;background:var(--white-6);backdrop-filter:blur(30px);box-shadow:0 0 0 8px var(--olive-6);overflow-y:auto;overscroll-behavior:contain}
+.mobile-menu-layer .mobile-navigation button{font:400 16px/24px var(--font-body);text-align:center;padding:8px 0;flex:none}
+@media(max-height:460px){.mobile-menu-layer .mobile-navigation{justify-content:flex-start;padding:16px 4px}}
+
+/* Keep the open-menu header in the viewport even when scroll locking changes sticky containment. */
+.mobile-header-placeholder{height:71px}
+@media(max-width:743px){
+.site-header[data-menu-open=true]{position:fixed;top:24px;left:24px;right:24px;width:auto;margin:0;z-index:100}
+}
+
+/* Menu surface settles from glass to the opaque cream in Figma. */
+.mobile-menu-layer .mobile-navigation{background:var(--white);animation:mobile-menu-surface 300ms cubic-bezier(.23,1,.32,1) both}
+@keyframes mobile-menu-surface{from{background-color:var(--white-6)}to{background-color:var(--white)}}
+@media(prefers-reduced-motion:reduce){.mobile-menu-layer .mobile-navigation{animation:none}}
