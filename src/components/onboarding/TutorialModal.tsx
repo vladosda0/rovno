@@ -56,8 +56,9 @@ export function TutorialModal({
     }
   }, [hasSeen, shouldOpen, openDelayMs]);
 
-  async function handleClose() {
-    await markSeen(tutorialKey);
+  // markSeen records the tutorial locally before its server write, so closing never waits on the network.
+  function handleClose() {
+    void markSeen(tutorialKey);
     setOpen(false);
     onDone?.();
   }
