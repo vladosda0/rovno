@@ -1,0 +1,29 @@
+/* Blog stage 1: navigation and introduction from the new Figma frames. */
+main.blog-index-main{width:calc(100% - 64px);max-width:1209px;margin:104px auto 0;padding:0;min-height:calc(100svh - 184px)}
+.blog-index-intro{padding:0 0 72px;color:var(--blue)}
+.blog-breadcrumbs{margin-bottom:24px;font:400 18px/24px var(--font-body)}
+.blog-breadcrumbs ol{list-style:none;display:flex;gap:24px;align-items:center;padding:0;margin:0}
+.blog-breadcrumbs a,.blog-breadcrumbs [aria-current]{display:block;padding:12px 0;text-decoration:none}
+.blog-breadcrumbs a{opacity:.32}
+.blog-index-heading{display:grid;grid-template-columns:minmax(0,585fr) minmax(0,584fr);gap:40px;align-items:start}
+.blog-index-heading h1{font:400 40px/40px var(--font-display);text-align:justify;letter-spacing:0}
+.blog-index-heading p{font:400 18px/24px var(--font-body);text-align:right}
+@media(hover:hover){.blog-breadcrumbs a:hover{opacity:.72}}
+@media(min-width:1280px) and (max-width:1320px){main.blog-index-main{width:calc(100% - 72px);max-width:1209px}}
+@media(max-width:1279px){
+main.blog-index-main{width:calc(100% - 48px);margin-top:72px;min-height:calc(100svh - 144px)}
+.blog-breadcrumbs{font-size:16px}
+.blog-breadcrumbs a,.blog-breadcrumbs [aria-current]{padding:8px 0}
+.blog-index-heading{display:flex;flex-direction:column;gap:24px}
+.blog-index-heading h1{font-size:28px;line-height:32px;letter-spacing:-.42px;width:100%}
+.blog-index-heading p{font-size:16px;line-height:24px;text-align:left}
+}
+/* Blog stage 2: reuse the approved article card in the Figma grid. */
+.blog-index-articles{padding:0;margin:0 0 208px}
+.blog-index-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px;width:calc(100% - 1px);align-items:start}
+.blog-index-grid>.blog-card{width:100%;display:block}
+@media(max-width:1279px){.blog-index-grid{grid-template-columns:minmax(0,1fr);width:100%}}
+
+/* Shared closing sections retain the blog container and Figma spacing. */
+.blog-index-main>.final-cta{width:100%;max-width:none}
+@media(min-width:1280px){.blog-index-articles{margin-bottom:248px}}

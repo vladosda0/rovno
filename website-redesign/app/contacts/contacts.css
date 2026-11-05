@@ -1,0 +1,12 @@
+.contact-data-list{display:flex;flex-direction:column;gap:24px}
+.contact-data{display:flex;gap:24px;align-items:flex-start}
+.contact-data>img{flex:none}
+.contact-data-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.contact-value{font:700 18px/24px var(--font-body);overflow-wrap:break-word}
+.contact-value a{text-decoration:none}
+.contact-caption{font:400 14px/18px var(--font-body);display:flex;flex-direction:column;gap:8px}
+@media(max-width:1279px){.contact-value{font-size:16px}}
+.contacts-document .legal-prose ul{margin:0}
+.contact-icon{width:24px;height:24px;flex:none;opacity:.56}
+.contact-icon img{display:block}
+.contact-icon--file img{transform:scale(.75);transform-origin:top left}
