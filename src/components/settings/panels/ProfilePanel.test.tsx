@@ -53,6 +53,25 @@ describe("ProfilePanel", () => {
     expect(screen.queryByDisplayValue("real-user@example.com")).not.toBeInTheDocument();
   });
 
+  it("names every field by its visible label", () => {
+    setAuthRole("owner");
+    enterDemoSession("project-1");
+    __unsafeResetStoreForTests();
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <ProfilePanel />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByLabelText("Full name")).toHaveValue("Алексей Петров");
+    expect(screen.getByLabelText("Email")).toHaveValue("alex@rovno.ai");
+    expect(screen.getByLabelText("Role title")).toBeInstanceOf(HTMLInputElement);
+    expect(screen.getByLabelText("Phone")).toBeInstanceOf(HTMLInputElement);
+    expect(screen.getByRole("combobox", { name: "Timezone" })).toBeInTheDocument();
+    expect(screen.getByLabelText("About me")).toBeInstanceOf(HTMLTextAreaElement);
+    expect(screen.getByLabelText("Signature block")).toBeInstanceOf(HTMLTextAreaElement);
+  });
+
   describe("the gender field", () => {
     function renderDemoPanel() {
       setAuthRole("owner");

@@ -86,6 +86,7 @@ import {
   toInventoryKey,
 } from "@/lib/procurement-fulfillment";
 import { fmtCost } from "@/lib/procurement-utils";
+import { formatProcurementDate, parseProcurementDate } from "@/lib/procurement-dates";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { OrderModal } from "@/components/procurement/OrderModal";
@@ -193,24 +194,6 @@ function readListState(projectId: string): ProcurementListState | null {
 function writeListState(projectId: string, state: ProcurementListState) {
   if (typeof window === "undefined") return;
   window.sessionStorage.setItem(listStateKey(projectId), JSON.stringify(state));
-}
-
-// Parse a stored required-by date. A bare YYYY-MM-DD (what the picker writes) must be read as a
-// LOCAL date so write and read agree in every timezone; a full ISO timestamp (estimate-synced
-// dates) keeps its instant semantics.
-function parseProcurementDate(value: string): Date {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [year, month, day] = value.split("-").map(Number);
-    return new Date(year, month - 1, day);
-  }
-  return new Date(value);
-}
-
-function formatDate(value: string | null | undefined, dash: string): string {
-  if (!value) return dash;
-  const parsed = parseProcurementDate(value);
-  if (Number.isNaN(parsed.getTime())) return dash;
-  return parsed.toLocaleDateString();
 }
 
 // Format a picked calendar date as a local YYYY-MM-DD string. Using toISOString() here would
@@ -2068,7 +2051,7 @@ export default function ProjectProcurement() {
                                       )}
                                     </td>
                                     <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>
-                                      {formatDate(item.requiredByDate, dash)}
+                                      {formatProcurementDate(item.requiredByDate, dash)}
                                     </td>
                                     <td className="px-2 py-2 text-right tabular-nums text-foreground">{remaining}</td>
                                     <td className="px-2 py-2 text-foreground">{item.unit}</td>
@@ -2163,7 +2146,7 @@ export default function ProjectProcurement() {
                                     </div>
                                   )}
                                 </td>
-                                <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>{formatDate(item.requiredByDate, dash)}</td>
+                                <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>{formatProcurementDate(item.requiredByDate, dash)}</td>
                                 <td className="px-2 py-2 text-right tabular-nums text-foreground">{remaining}</td>
                                 <td className="px-2 py-2 text-foreground">{item.unit}</td>
                                 {canViewSensitiveDetail && (
@@ -2243,8 +2226,8 @@ export default function ProjectProcurement() {
                     : latest;
                 }, null) ?? order.updatedAt;
                 const deliveryLabel = isReceived
-                  ? formatDate(transferReceivedAt, dash)
-                  : formatDate(order.deliveryDeadline, dash);
+                  ? formatProcurementDate(transferReceivedAt, dash)
+                  : formatProcurementDate(order.deliveryDeadline, dash);
                 // Open set, not 'placed' alone: a transfer cannot legitimately be
                 // 'partially_received', but if one ever is, keep the button so the RPC can
                 // reject it loudly rather than stranding the transfer with no affordance.
@@ -2288,7 +2271,7 @@ export default function ProjectProcurement() {
                       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t border-border/60 text-success">
                         <CheckCircle2 className="h-4 w-4" />
                         <span className="text-sm">{t("procurement.transfers.received")}</span>
-                        <span className="text-xs text-muted-foreground">{formatDate(transferReceivedAt, dash)}</span>
+                        <span className="text-xs text-muted-foreground">{formatProcurementDate(transferReceivedAt, dash)}</span>
                       </div>
                     )}
 
@@ -2436,7 +2419,7 @@ export default function ProjectProcurement() {
                         <CheckCircle2 className="h-4 w-4" />
                         <span className="text-sm">{t("procurement.order.fullyReceived")}</span>
                         {lastReceiveAt && (
-                          <span className="text-xs text-muted-foreground">{formatDate(lastReceiveAt, dash)}</span>
+                          <span className="text-xs text-muted-foreground">{formatProcurementDate(lastReceiveAt, dash)}</span>
                         )}
                       </div>
                       {receivedExpanded && (
@@ -2472,7 +2455,7 @@ export default function ProjectProcurement() {
                                     <td className="px-3 py-2 text-right tabular-nums text-foreground">{line.qty}</td>
                                     <td className="px-3 py-2 text-right tabular-nums text-foreground">{line.receivedQty}</td>
                                     <td className="px-3 py-2 text-foreground">{line.unit}</td>
-                                    <td className="px-3 py-2 text-xs text-muted-foreground">{formatDate(lineReceivedAt, dash)}</td>
+                                    <td className="px-3 py-2 text-xs text-muted-foreground">{formatProcurementDate(lineReceivedAt, dash)}</td>
                                   </tr>
                                 );
                               })}
@@ -2525,10 +2508,10 @@ export default function ProjectProcurement() {
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(null, dash)}</td>
+                                  <td className="px-2 py-2 text-xs text-muted-foreground">{formatProcurementDate(null, dash)}</td>
                                   <td className="px-2 py-2">
                                     <span className="text-xs text-muted-foreground">
-                                      {order.deliveryDeadline ? formatDate(order.deliveryDeadline, dash) : t("procurement.order.emptyDash")}
+                                      {order.deliveryDeadline ? formatProcurementDate(order.deliveryDeadline, dash) : t("procurement.order.emptyDash")}
                                     </span>
                                   </td>
                                   <td className="px-2 py-2 text-right">
@@ -2620,18 +2603,18 @@ export default function ProjectProcurement() {
                                   )}
                                 </td>
                                 <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>
-                                  {formatDate(item.requiredByDate, dash)}
+                                  {formatProcurementDate(item.requiredByDate, dash)}
                                 </td>
                                 <td className="px-2 py-2">
                                   {isSupabaseMode || !canManageProcurement ? (
                                     <span className="text-xs text-muted-foreground">
-                                      {order.deliveryDeadline ? formatDate(order.deliveryDeadline, dash) : t("procurement.order.emptyDash")}
+                                      {order.deliveryDeadline ? formatProcurementDate(order.deliveryDeadline, dash) : t("procurement.order.emptyDash")}
                                     </span>
                                   ) : (
                                     <Popover>
                                       <PopoverTrigger asChild>
                                         <button type="button" className="text-xs text-accent hover:underline">
-                                          {order.deliveryDeadline ? formatDate(order.deliveryDeadline, dash) : t("procurement.order.emptyDash")}
+                                          {order.deliveryDeadline ? formatProcurementDate(order.deliveryDeadline, dash) : t("procurement.order.emptyDash")}
                                         </button>
                                       </PopoverTrigger>
                                       <PopoverContent className="w-auto p-0" align="start">
@@ -2762,7 +2745,7 @@ export default function ProjectProcurement() {
                       {!canManageProcurement && (
                         <td className="px-2 py-2 text-xs text-muted-foreground">{row.receiverName ?? dash}</td>
                       )}
-                      <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(row.lastReceivedAt, dash)}</td>
+                      <td className="px-2 py-2 text-xs text-muted-foreground">{formatProcurementDate(row.lastReceivedAt, dash)}</td>
                       {showProcurementActions && (
                         <td className="px-2 py-2">
                           <div className="flex items-center justify-end gap-1">
@@ -3220,7 +3203,7 @@ export default function ProjectProcurement() {
                             className={cn("h-9 w-full justify-start text-left", isOverdue(editForm.requiredByDate) && "text-destructive")}
                           >
                             <CalendarIcon className="h-4 w-4 mr-2" />
-                            {formatDate(editForm.requiredByDate, dash)}
+                            {formatProcurementDate(editForm.requiredByDate, dash)}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">

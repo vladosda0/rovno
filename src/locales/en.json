@@ -1126,6 +1126,7 @@
   "preferences.automation.balancedDesc": "Shurik suggests changes, you confirm before apply.",
   "preferences.automation.high": "High",
   "preferences.automation.highDesc": "Shurik applies changes automatically when confident.",
+  "preferences.loadFailed": "Couldn't load your preferences.",
   "preferences.save": "Save preferences",
   "preferences.saving": "Saving...",
   "preferences.savedToast": "Preferences saved",

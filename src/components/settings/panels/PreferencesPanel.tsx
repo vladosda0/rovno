@@ -52,7 +52,12 @@ const AUTOMATION_LEVELS = [
 
 export function PreferencesPanel() {
   const { t } = useTranslation();
-  const { preferences } = useWorkspaceProfilePreferencesState();
+  const {
+    preferences,
+    isError: preferencesLoadFailed,
+    isRefetching: preferencesRefetching,
+    refetch: refetchPreferences,
+  } = useWorkspaceProfilePreferencesState();
   const updatePreferences = useUpdateWorkspaceProfilePreferences();
   const [interfaceLanguage, setInterfaceLanguage] = useState<AppLanguage>(() => getActiveLanguage());
   const [currency, setCurrency] = useState("RUB");
@@ -196,15 +201,31 @@ export function PreferencesPanel() {
         </div>
       </SettingsSection>
 
-      <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-        <Button
-          className="w-full sm:w-auto"
-          disabled={!preferences || updatePreferences.isPending}
-          onClick={() => void handleSave()}
-        >
-          {updatePreferences.isPending ? t("preferences.saving") : t("preferences.save")}
-        </Button>
-      </div>
+      {preferencesLoadFailed && !preferences ? (
+        <div className="flex flex-wrap items-center gap-sp-2 pt-sp-1">
+          <p role="alert" className="text-body-sm text-foreground">
+            {t("preferences.loadFailed")}
+          </p>
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto"
+            disabled={preferencesRefetching}
+            onClick={refetchPreferences}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-sp-2 pt-sp-1">
+          <Button
+            className="w-full sm:w-auto"
+            disabled={!preferences || updatePreferences.isPending}
+            onClick={() => void handleSave()}
+          >
+            {updatePreferences.isPending ? t("preferences.saving") : t("preferences.save")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

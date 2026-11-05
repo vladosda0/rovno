@@ -1142,6 +1142,7 @@
   "preferences.automation.balancedDesc": "Шурик предлагает изменения, ты подтверждаешь перед применением.",
   "preferences.automation.high": "Высокий",
   "preferences.automation.highDesc": "Шурик применяет изменения автоматически, если уверен.",
+  "preferences.loadFailed": "Не удалось загрузить настройки.",
   "preferences.save": "Сохранить настройки",
   "preferences.saving": "Сохраняем...",
   "preferences.savedToast": "Настройки сохранены",

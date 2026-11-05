@@ -120,6 +120,9 @@ export function useWorkspaceCurrentUser(): User {
 export function useWorkspaceProfilePreferencesState(): {
   preferences: ProfilePreferences | undefined;
   isLoading: boolean;
+  isError: boolean;
+  isRefetching: boolean;
+  refetch: () => void;
 } {
   const mode = useWorkspaceModeState();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
@@ -136,13 +139,20 @@ export function useWorkspaceProfilePreferencesState(): {
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
 
+  const refetch = () => {
+    void preferencesQuery.refetch();
+  };
+
   if (mode.kind === "pending-supabase") {
-    return { preferences: undefined, isLoading: true };
+    return { preferences: undefined, isLoading: true, isError: false, isRefetching: false, refetch };
   }
 
   return {
     preferences: preferencesQuery.data,
     isLoading: preferencesQuery.isPending,
+    isError: preferencesQuery.isError,
+    isRefetching: preferencesQuery.isFetching,
+    refetch,
   };
 }
 
