@@ -209,6 +209,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261104030000_knowledge_base_updates.sql`
 - `supabase/migrations/20261104030100_kb_solutions_recheck.sql`
 - `supabase/migrations/20261105030000_kb_solutions_recheck_each_document.sql`
+- `supabase/migrations/20261106030000_kb_watches_and_changes.sql`
 
 ## Exclusions
 

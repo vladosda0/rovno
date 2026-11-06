@@ -3303,6 +3303,27 @@ export type Database = {
           }
           Relationships: []
         }
+        "kb_watches": {
+          Row: {
+          "profile_id": string
+          "doc_id": string
+          "created_at": string
+          "primary": unknown | null
+          }
+          Insert: {
+          "profile_id": string
+          "doc_id": string
+          "created_at"?: string
+          "primary"?: unknown | null
+          }
+          Update: {
+          "profile_id"?: string
+          "doc_id"?: string
+          "created_at"?: string
+          "primary"?: unknown | null
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -3754,6 +3775,16 @@ export type Database = {
           }
           Returns: Json
         }
+        "kb_changes_feed": {
+          Args: {
+          "p_limit": unknown
+          }
+          Returns: unknown
+        }
+        "kb_changes_month_count": {
+          Args: Record<PropertyKey, never>
+          Returns: number
+        }
         "kb_document_history": {
           Args: {
           "p_slug": string
@@ -3772,6 +3803,19 @@ export type Database = {
         }
         "kb_sp_full_text_enabled": {
           Args: Record<PropertyKey, never>
+          Returns: boolean
+        }
+        "kb_watch_set": {
+          Args: {
+          "p_slug": string
+          "p_watch": boolean
+          }
+          Returns: boolean
+        }
+        "kb_watching": {
+          Args: {
+          "p_slug": string
+          }
           Returns: boolean
         }
         "list_canonical_stages_with_works": {
