@@ -27,7 +27,7 @@ const rawSupabase = supabase as unknown as SupabaseClient;
 // BILLING_ENABLED, so prod (flag off) behavior is unchanged.
 export function SubscriptionSection() {
   const { t, i18n } = useTranslation();
-  const { subscription, status, readOnly, isLoading, refetch } = useActiveSubscription();
+  const { subscription, status, readOnly, isLoading, isLoadingError, refetch } = useActiveSubscription();
   const { data: card, refetch: refetchCard } = useCardOnFile();
   // A bind finished on the bank's page while this screen was closed is picked up here.
   useCardBindingSync(refetchCard);
@@ -73,6 +73,19 @@ export function SubscriptionSection() {
   };
 
   if (isLoading) return null;
+
+  if (isLoadingError) {
+    return (
+      <SettingsSection title={t("settings.billing.subscriptionTitle")}>
+        <p role="alert" className="text-body-sm text-foreground">
+          {t("settings.billing.subscriptionLoadError")}
+        </p>
+        <Button variant="outline" onClick={() => { void refetch(); }}>
+          {t("common.retry")}
+        </Button>
+      </SettingsSection>
+    );
+  }
 
   if (!subscription || status === "none") {
     return (

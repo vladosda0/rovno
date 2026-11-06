@@ -1425,6 +1425,7 @@
   "settings.billing.cancelDone": "Auto-renewal turned off",
   "settings.billing.graceNote": "Expired on {{date}}. Renew to keep full access.",
   "settings.billing.readOnlyNote": "Subscription expired. Access is limited to read-only.",
+  "settings.billing.subscriptionLoadError": "Couldn't load your subscription.",
   "settings.billing.noSubscription": "You don't have an active subscription yet.",
   "settings.billing.choosePlan": "Choose a plan",
   "participants.header": "Participants",

@@ -79,7 +79,7 @@ function renderCheckout(plan = "master") {
 }
 
 function noSubscription(): ActiveSub {
-  return { status: "none", subscription: null, readOnly: false, isLoading: false, isError: false, refetch: vi.fn() };
+  return { status: "none", subscription: null, readOnly: false, isLoading: false, isError: false, isLoadingError: false, refetch: vi.fn() };
 }
 
 const PAYMENT_URL_RESPONSE = {
@@ -201,6 +201,7 @@ describe("Checkout", () => {
       readOnly: false,
       isLoading: false,
       isError: false,
+      isLoadingError: false,
       refetch: vi.fn(),
     };
 

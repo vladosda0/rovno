@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const { useActiveSubscriptionMock } = vi.hoisted(() => ({
@@ -24,14 +24,28 @@ function renderGate() {
 
 function subscription(
   planCode: string | null,
-  { isLoading = false, status = "active" }: { isLoading?: boolean; status?: string } = {},
+  {
+    isLoading = false,
+    status = "active",
+    isError = false,
+    isLoadingError = false,
+    refetch = () => {},
+  }: {
+    isLoading?: boolean;
+    status?: string;
+    isError?: boolean;
+    isLoadingError?: boolean;
+    refetch?: () => void;
+  } = {},
 ) {
   return {
     status,
     subscription: planCode ? { plan_code: planCode } : null,
     readOnly: status === "expired",
     isLoading,
-    refetch: () => {},
+    isError,
+    isLoadingError,
+    refetch,
   };
 }
 
@@ -88,5 +102,38 @@ describe("BrigadeAiFeature gate", () => {
     useActiveSubscriptionMock.mockReturnValue(subscription("brigade", { status: "grace" }));
     renderGate();
     expect(screen.getByText("SECRET CONTENT")).toBeInTheDocument();
+  });
+
+  it("shows a load error with retry, not the upsell, when the subscription could not be read", () => {
+    const refetch = vi.fn();
+    useActiveSubscriptionMock.mockReturnValue(
+      subscription(null, { status: "none", isError: true, isLoadingError: true, refetch }),
+    );
+    renderGate();
+    expect(screen.queryByText("SECRET CONTENT")).not.toBeInTheDocument();
+    expect(screen.queryByText("Available on the «Brigade» plan")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load your plan.");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the feature when a refetch fails but the Brigade subscription is still known", () => {
+    useActiveSubscriptionMock.mockReturnValue(subscription("brigade", { isError: true }));
+    renderGate();
+    expect(screen.getByText("SECRET CONTENT")).toBeInTheDocument();
+  });
+
+  it("keeps the upsell when a refetch fails but a lower plan is still known", () => {
+    useActiveSubscriptionMock.mockReturnValue(subscription("master", { isError: true }));
+    renderGate();
+    expect(screen.getByText("Available on the «Brigade» plan")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps the upsell when a refetch fails after a read that found no subscription", () => {
+    useActiveSubscriptionMock.mockReturnValue(subscription(null, { status: "none", isError: true }));
+    renderGate();
+    expect(screen.getByText("Available on the «Brigade» plan")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

@@ -1447,6 +1447,7 @@
   "settings.billing.cancelDone": "Автопродление отключено",
   "settings.billing.graceNote": "Срок действия истёк {{date}} Продлите подписку, чтобы сохранить полный доступ.",
   "settings.billing.readOnlyNote": "Подписка истекла. Доступ ограничен режимом только для чтения.",
+  "settings.billing.subscriptionLoadError": "Не удалось загрузить подписку.",
   "settings.billing.noSubscription": "У вас пока нет активной подписки.",
   "settings.billing.choosePlan": "Выбрать тариф",
   "participants.header": "Участники",
