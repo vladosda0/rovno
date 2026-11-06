@@ -10,7 +10,7 @@ import {
   DEFAULT_LEAF,
   type LeafSlug,
 } from "@/components/home/documents-hub/DocumentsLeftNav";
-import { KbNavContents } from "@/components/home/documents-hub/KbNavContents";
+import { KbNavChangesRow, KbNavContents } from "@/components/home/documents-hub/KbNavContents";
 import { MobileSectionNav } from "@/components/home/documents-hub/MobileSectionNav";
 import { MultiStepUploadModal } from "@/components/upload/MultiStepUploadModal";
 import { useActiveOrg } from "@/hooks/use-orgs";
@@ -131,6 +131,7 @@ export function DocumentsHubTab() {
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.delete("kbDoc");
+        next.delete("kbChanges");
         if (slug === DEFAULT_LEAF) next.delete(SUB_TAB_PARAM);
         else next.set(SUB_TAB_PARAM, slug);
         return next;
@@ -141,6 +142,8 @@ export function DocumentsHubTab() {
 
   const ActiveSection = LEAF_RENDERERS[activeLeaf] ?? MyAllDocsLeaf;
   const kbReading = activeLeaf === "knowledge-base" ? searchParams.get("kbDoc") : null;
+  const kbChanges =
+    activeLeaf === "knowledge-base" && !kbReading && !searchParams.has("kbSolution") && searchParams.has("kbChanges");
   const ctaLabel = t(ctaLabelForLeaf(activeLeaf));
   const presetType = presetForLeaf(activeLeaf);
 
@@ -185,6 +188,7 @@ export function DocumentsHubTab() {
           activeSlug={activeLeaf}
           onSelect={handleSelect}
           cta={hideCta ? null : ctaButtonDesktop}
+          knowledgeBaseExpanded={kbChanges}
           knowledgeBaseExtra={
             kbReading ? (
               <KbNavContents
@@ -193,10 +197,13 @@ export function DocumentsHubTab() {
                   setSearchParams((current) => {
                     const next = new URLSearchParams(current);
                     next.delete("kbDoc");
+                    next.delete("kbChanges");
                     return next;
                   })
                 }
               />
+            ) : kbChanges ? (
+              <KbNavChangesRow />
             ) : null
           }
         />

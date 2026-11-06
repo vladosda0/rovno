@@ -90,3 +90,8 @@ export declare function kbSolutionsJsonLd(t: KbTranslate, solutions: KbSolution[
 export declare function kbSolutionTitle(solution: KbSolution): string;
 export declare function kbSolutionDescription(solution: KbSolution): string;
 export declare function kbSolutionJsonLd(solution: KbSolution, t: KbTranslate): Json;
+
+export declare function kbChangesTrail(t: KbTranslate): KbCrumb[];
+export declare function kbChangesTitle(t: KbTranslate): string;
+export declare function kbChangesDescription(t: KbTranslate): string;
+export declare function kbChangesJsonLd(t: KbTranslate): Json;

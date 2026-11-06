@@ -18,9 +18,14 @@ import {
   sortKbSolutions,
 } from "./kbSolutions.mjs";
 import { kbEditionLine, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
+import { KB_CHANGES_PATH, kbChangeMonths } from "./kbChanges.mjs";
 import {
   KB_INDEX_PATH,
   kbBreadcrumbTrail,
+  kbChangesDescription,
+  kbChangesJsonLd,
+  kbChangesTitle,
+  kbChangesTrail,
   kbCollectionJsonLd,
   kbDocumentDescription,
   kbDocumentJsonLd,
@@ -337,7 +342,7 @@ export function kbHubSitemapUrls(paths, today) {
 }
 
 /** Slugs a document cannot take: they are the public folder pages' segment. */
-export const KB_RESERVED_SLUGS = new Set(["razdel", "resheniya"]);
+export const KB_RESERVED_SLUGS = new Set(["razdel", "resheniya", "izmeneniya"]);
 
 /** Sorted by designation, title, doc_id. */
 export function sortKbRows(rows) {
@@ -571,4 +576,60 @@ export function kbSolutionSitemapUrls(rows, today) {
       return `  <url><loc>${escapeHtml(`${SITE_ORIGIN}${kbSolutionPath(row.slug)}`)}</loc><lastmod>${lastmod}</lastmod></url>`;
     }),
   ];
+}
+
+// ── «Что изменилось» (slice 8, step 8.4, frame 5) ───────────────────────────
+
+const MONTH = 'style="font-family:var(--font-body);font-size:16px;font-weight:600;color:var(--rv-blue);opacity:.64;margin:32px 0 8px"';
+const MUTED = 'style="font-family:var(--font-body);font-size:16px;color:var(--rv-blue);opacity:.64"';
+
+function changePartHtml(part) {
+  const text = escapeHtml(part.text);
+  if (part.doc) return `<a href="${escapeHtml(kbDocPath(part.doc))}">${text}</a>`;
+  if (part.solution) return `<a href="${escapeHtml(kbSolutionPath(part.solution))}">${text}</a>`;
+  return text;
+}
+
+/** /baza/izmeneniya/: the same months and lines as the in-app page, links to the public pages. */
+export function kbChangesRootHtml(rows, t) {
+  const months = kbChangeMonths(rows, t, "ru");
+  const body = months.length
+    ? months
+        .map(
+          (m) =>
+            `<h2 ${MONTH}>${escapeHtml(m.label)}</h2><ul class="rv-kb-doc-list">${m.entries
+              .map(
+                (e) =>
+                  `<li class="rv-kb-doc-item"><span>${escapeHtml(e.date)}</span><p class="rv-kb-change-line">${e.parts.map(changePartHtml).join("")}</p>${
+                    e.note ? `<span>${escapeHtml(e.note)}</span>` : ""
+                  }</li>`,
+              )
+              .join("")}</ul>`,
+        )
+        .join("")
+    : `<p ${MUTED}>${escapeHtml(t("home.knowledgeBase.changes.empty"))}</p>`;
+  return `${chromeStart()}
+  <main><section class="rv-section rv-kb-hub" style="padding:64px 48px 96px">
+    ${kbBreadcrumbsHtml(kbChangesTrail(t))}
+    <h1 ${H1}>${escapeHtml(t("home.knowledgeBase.changes.guestTitle"))}</h1>
+    <p ${LEAD}>${escapeHtml(t("home.knowledgeBase.changes.subtitle"))}</p>
+    ${body}
+  </section></main>
+  ${chromeEnd()}`;
+}
+
+export function kbChangesPageHtml(template, rows, t, cssAssets = []) {
+  const html = withKbHead(template, {
+    title: kbChangesTitle(t),
+    description: kbChangesDescription(t),
+    canonicalPath: KB_CHANGES_PATH,
+    ogType: "website",
+    jsonLd: kbChangesJsonLd(t),
+    cssAssets,
+  });
+  return html.replace(/<div id="root"><\/div>/, () => `<div id="root">${kbChangesRootHtml(rows, t)}</div>`);
+}
+
+export function kbChangesSitemapUrls(today) {
+  return [`  <url><loc>${escapeHtml(`${SITE_ORIGIN}${KB_CHANGES_PATH}`)}</loc><lastmod>${today}</lastmod></url>`];
 }

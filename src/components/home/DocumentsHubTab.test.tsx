@@ -44,6 +44,14 @@ vi.mock("@/components/home/KnowledgeBaseTab", () => ({
 vi.mock("@/components/home/DocumentTemplatesTab", () => ({
   DocumentTemplatesTab: () => <div data-testid="stub-document-templates">doc templates</div>,
 }));
+vi.mock("@/components/home/documents-hub/KbNavContents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/home/documents-hub/KbNavContents")>()),
+  KbNavContents: ({ onFolder }: { onFolder: () => void }) => (
+    <button type="button" onClick={onFolder}>
+      stub folder row
+    </button>
+  ),
+}));
 const activeOrgRole = vi.hoisted(() => ({ value: null as string | null }));
 vi.mock("@/hooks/use-orgs", () => ({
   useActiveOrg: () => (activeOrgRole.value ? { id: "o1", role: activeOrgRole.value } : null),
@@ -140,26 +148,48 @@ describe("DocumentsHubTab", () => {
       expect(screen.getByTestId("location-search").textContent).toBe("?docTab=document-templates");
     });
   });
-  it("marks the knowledge base as New until it is opened, and the mark stays gone after a remount", async () => {
+  it("marks the knowledge base with a dot while «What changed» is unopened, entering the base keeps it", async () => {
     markFeatureOpened("contractor-card");
-    const first = renderHub("/home");
+    renderHub("/home");
     const kbButton = await screen.findByRole("button", { name: /Knowledge base/i });
-    expect(within(kbButton).getByText("New")).toBeInTheDocument();
-    // Closed mobile section list carries the dot while the knowledge base is unopened.
-    expect(screen.getByText("has something new")).toBeInTheDocument();
+    expect(within(kbButton).queryByText("New")).not.toBeInTheDocument();
+    expect(within(kbButton).getByText("has something new")).toBeInTheDocument();
+    fireEvent.click(kbButton);
+    await waitFor(() => expect(screen.getByTestId("stub-knowledge-base")).toBeInTheDocument());
+    // The mark goes once the page itself is opened (KnowledgeBaseTab), not with the section.
+    expect(within(kbButton).getByText("has something new")).toBeInTheDocument();
+    markFeatureOpened("kb-changes");
+    await waitFor(() => expect(screen.queryByText("has something new")).not.toBeInTheDocument());
+  });
+
+  it("the folder row under a document opened from «What changed» leaves the page too", async () => {
+    renderHub("/home?docTab=knowledge-base&kbChanges=1&kbDoc=sp-29-13330");
+    fireEvent.click(await screen.findByRole("button", { name: "stub folder row" }));
+    await waitFor(() => expect(screen.getByTestId("location-search").textContent).toBe("?docTab=knowledge-base"));
+  });
+
+  it("does not treat «What changed» as current while a card opened from it is on screen", async () => {
+    renderHub("/home?docTab=knowledge-base&kbChanges=1&kbSolution=poly");
+    await screen.findByTestId("stub-knowledge-base");
+    const kbButton = screen.getAllByRole("button", { name: /Knowledge base/i }).find((b) => b.closest("aside"))!;
+    expect(kbButton).not.toHaveAttribute("aria-expanded");
+    expect(screen.queryByText("What changed")).not.toBeInTheDocument();
+  });
+
+  it("on «What changed» opens «Knowledge base» with a chevron and the page as a row under it (slice 8)", async () => {
+    renderHub("/home?docTab=knowledge-base&kbChanges=1");
+    await screen.findByTestId("stub-knowledge-base");
+    const kbButton = screen.getAllByRole("button", { name: /Knowledge base/i }).find((b) => b.closest("aside"))!;
+    expect(kbButton).toHaveAttribute("aria-expanded", "true");
+    expect(kbButton).not.toHaveAttribute("aria-current");
+    const row = screen.getByText("What changed").closest("[aria-current]") as HTMLElement;
+    expect(row).toHaveAttribute("aria-current", "page");
+    expect(row.querySelector("svg")).toBeNull();
 
     fireEvent.click(kbButton);
-    await waitFor(() => {
-      expect(screen.getByTestId("stub-knowledge-base")).toBeInTheDocument();
-    });
-    expect(screen.queryByText("New")).not.toBeInTheDocument();
-    expect(screen.queryByText("has something new")).not.toBeInTheDocument();
-
-    first.unmount();
-    renderHub("/home");
-    await screen.findByRole("button", { name: /Knowledge base/i });
-    expect(screen.queryByText("New")).not.toBeInTheDocument();
-    expect(screen.queryByText("has something new")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("location-search").textContent).toBe("?docTab=knowledge-base"));
+    expect(screen.queryByText("What changed")).not.toBeInTheDocument();
+    expect(kbButton).not.toHaveAttribute("aria-expanded");
   });
 
   it("gives a member no create button on the card leaf", async () => {
@@ -178,13 +208,4 @@ describe("DocumentsHubTab", () => {
     activeOrgRole.value = null;
   });
 
-  it("clears the New mark when the knowledge base is reached by a link", async () => {
-    renderHub("/home?docTab=knowledge-base");
-    await waitFor(() => {
-      expect(screen.getByTestId("stub-knowledge-base")).toBeInTheDocument();
-    });
-    await waitFor(() => {
-      expect(screen.queryByText("New")).not.toBeInTheDocument();
-    });
-  });
 });

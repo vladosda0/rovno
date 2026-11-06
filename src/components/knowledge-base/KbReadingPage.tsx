@@ -11,6 +11,7 @@ import { kbFullTextReadable } from "@/lib/knowledge-base/kbFullText.mjs";
 import { kbSourceButtons } from "./kb-view";
 import { KbAskShurikButton, KbSelectionAsk } from "./KbAskShurik";
 import { KbReader } from "./KbReader";
+import { KbWatchButton } from "./KbWatchButton";
 
 interface KbReadingPageProps {
   slug: string;
@@ -68,7 +69,12 @@ export function KbReadingPage({ slug, onBack }: KbReadingPageProps) {
           clauses={clauseList}
           source={kbSourceButtons(doc, t)[0] ?? null}
           variant="app"
-          headerExtra={<KbAskShurikButton label={docLabel} />}
+          headerExtra={
+            <>
+              <KbAskShurikButton label={docLabel} />
+              <KbWatchButton slug={doc.slug} />
+            </>
+          }
         />
       </KbSelectionAsk>
     </div>

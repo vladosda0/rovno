@@ -40,6 +40,8 @@ interface FolderTileProps {
     deleteLabel: string;
   } | null;
   filesLabel: string;
+  /** Next to the title: the «Новое» pill. */
+  badge?: ReactNode;
 }
 
 export function FolderTile({
@@ -57,6 +59,7 @@ export function FolderTile({
   onDrop,
   menu,
   filesLabel,
+  badge,
 }: FolderTileProps) {
   return (
     <Card
@@ -94,7 +97,14 @@ export function FolderTile({
       <CardContent className="flex flex-1 flex-col gap-1 p-4">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="line-clamp-2 text-body font-semibold text-foreground">{title}</h3>
+            {badge ? (
+              <div className="flex items-start gap-2">
+                <h3 className="line-clamp-2 text-body font-semibold text-foreground">{title}</h3>
+                {badge}
+              </div>
+            ) : (
+              <h3 className="line-clamp-2 text-body font-semibold text-foreground">{title}</h3>
+            )}
             <p className="mt-0.5 text-caption text-muted-foreground">
               {filesLabel.replace("{{count}}", String(count))}
             </p>

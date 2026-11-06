@@ -14,7 +14,7 @@ import {
   FileType2,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { NewFeatureBadge } from "@/components/ui/new-feature-badge";
+import { NewFeatureBadge, NewFeatureDot } from "@/components/ui/new-feature-badge";
 import { cn } from "@/lib/utils";
 
 export interface LeafItem {
@@ -23,6 +23,8 @@ export interface LeafItem {
   icon: typeof FileText;
   /** Registry id in `@/lib/new-features` when this leaf carries a «Новое» mark. */
   newFeatureId?: string;
+  /** A feature inside this leaf: a dot only, cleared where the feature opens, not by the leaf. */
+  newFeatureDotId?: string;
 }
 
 export const LEAVES = {
@@ -46,7 +48,7 @@ export const LEAVES = {
     slug: "knowledge-base",
     labelKey: "home.documentsHub.nav.knowledgeBase",
     icon: BookOpen,
-    newFeatureId: "knowledge-base",
+    newFeatureDotId: "kb-changes",
   },
   documentTemplates: { slug: "document-templates", labelKey: "home.documentsHub.nav.documentTemplates", icon: FileType2 },
 } as const;
@@ -104,6 +106,8 @@ interface DocumentsLeftNavProps {
   cta: ReactNode;
   /** Rendered under «База знаний»: the open document and its contents (knowledge base, slice 7). */
   knowledgeBaseExtra?: ReactNode;
+  /** «База знаний» opened with a chevron: a page inside it is the current one (slice 8, frame 2). */
+  knowledgeBaseExpanded?: boolean;
 }
 
 interface NavRowProps {
@@ -114,16 +118,31 @@ interface NavRowProps {
   onSelect: (slug: LeafSlug) => void;
   indent?: boolean;
   newFeatureId?: string;
+  newFeatureDotId?: string;
+  /** The row's page is open below it: a chevron instead of the icon, the child row is current. */
+  expanded?: boolean;
 }
 
-function NavRow({ slug, labelKey, icon: Icon, activeSlug, onSelect, indent = false, newFeatureId }: NavRowProps) {
+function NavRow({
+  slug,
+  labelKey,
+  icon: Icon,
+  activeSlug,
+  onSelect,
+  indent = false,
+  newFeatureId,
+  newFeatureDotId,
+  expanded = false,
+}: NavRowProps) {
   const { t } = useTranslation();
-  const isActive = activeSlug === slug;
+  const isActive = activeSlug === slug && !expanded;
+  const RowIcon = expanded ? ChevronDown : Icon;
   return (
     <button
       type="button"
       onClick={() => onSelect(slug as LeafSlug)}
       aria-current={isActive ? "page" : undefined}
+      aria-expanded={expanded ? true : undefined}
       className={cn(
         "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-body-sm transition-colors",
         indent && "pl-7",
@@ -132,9 +151,10 @@ function NavRow({ slug, labelKey, icon: Icon, activeSlug, onSelect, indent = fal
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0" />
+      <RowIcon className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{t(labelKey)}</span>
       {newFeatureId && <NewFeatureBadge featureId={newFeatureId} />}
+      {newFeatureDotId && <NewFeatureDot featureIds={[newFeatureDotId]} />}
     </button>
   );
 }
@@ -177,7 +197,13 @@ function Group({ headingKey, items, activeSlug, onSelect, defaultOpen = true }: 
   );
 }
 
-export function DocumentsLeftNav({ activeSlug, onSelect, cta, knowledgeBaseExtra }: DocumentsLeftNavProps) {
+export function DocumentsLeftNav({
+  activeSlug,
+  onSelect,
+  cta,
+  knowledgeBaseExtra,
+  knowledgeBaseExpanded = false,
+}: DocumentsLeftNavProps) {
   return (
     <aside className="w-full space-y-3">
       {cta}
@@ -205,6 +231,8 @@ export function DocumentsLeftNav({ activeSlug, onSelect, cta, knowledgeBaseExtra
                 activeSlug={activeSlug}
                 onSelect={onSelect}
                 newFeatureId={leaf.newFeatureId}
+                newFeatureDotId={leaf.newFeatureDotId}
+                expanded={leaf.slug === LEAVES.knowledgeBase.slug && activeSlug === leaf.slug && knowledgeBaseExpanded}
               />
               {leaf.slug === LEAVES.knowledgeBase.slug && activeSlug === leaf.slug && knowledgeBaseExtra}
             </div>

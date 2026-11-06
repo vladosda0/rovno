@@ -5,6 +5,7 @@
 //   dist/baza/<slug>/index.html   — one static page per published kb_documents row
 //   dist/baza/resheniya/[<slug>/]  — «Решения» (slice 4): the folder and one page per
 //                                    published card, none while no card is published
+//   dist/baza/izmeneniya/         — «Что изменилось» (slice 8), when kb_changes_feed answers
 //   dist/sitemap.xml              — the blog's sitemap, extended with those pages
 //
 // Same mechanics and env as the blog prerenderer: the app shell is dist/index.html,
@@ -33,6 +34,8 @@ import {
   createTranslator,
   fallbackShellWithoutKbPages,
   isSafeSlug,
+  kbChangesPageHtml,
+  kbChangesSitemapUrls,
   kbFolderPageHtml,
   kbHubSitemapUrls,
   kbIndexPageHtml,
@@ -193,6 +196,33 @@ async function fetchSolutionsOrNone(env) {
   }
 }
 
+/**
+ * «Что изменилось» rows from kb_changes_feed (slice 8), read as anon. Null when
+ * the backend has no such function yet or the read failed: then no page is
+ * written, rather than an empty one claiming nothing has changed.
+ */
+async function fetchChangesOrNone(env) {
+  try {
+    const base = env.VITE_SUPABASE_URL.replace(/\/$/, "");
+    const key = env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const response = await fetch(`${base}/rest/v1/rpc/kb_changes_feed`, {
+      method: "POST",
+      headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify({ p_limit: 300 }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      log(`WARN: kb_changes_feed answered ${response.status}, no /baza/izmeneniya/ page`);
+      return null;
+    }
+    const rows = await response.json();
+    return Array.isArray(rows) ? rows : null;
+  } catch (error) {
+    log(`WARN: changes fetch failed, no /baza/izmeneniya/ page (${error?.message ?? error})`);
+    return null;
+  }
+}
+
 /** CSS chunks carrying the landing/blog styles (code-split out of the entry CSS). */
 async function findLandingCssAssets() {
   const assetsDir = path.join(DIST, "assets");
@@ -281,6 +311,13 @@ async function writePages(outcome) {
     await writeFile(path.join(dir, "index.html"), page.html, "utf8");
   }
   log(`wrote ${solutionPages.length} «Решения» page(s) under baza/resheniya/`);
+  const changeRows = await fetchChangesOrNone(env);
+  if (changeRows) {
+    const dir = path.join(DIST, "baza", "izmeneniya");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "index.html"), kbChangesPageHtml(template, changeRows, t, cssAssets), "utf8");
+    log(`wrote baza/izmeneniya/ with ${changeRows.length} change(s)`);
+  }
   const hubPaths = [KB_INDEX_PATH];
   for (const [folder, list] of byFolder) {
     if (!list.length) continue;
@@ -321,11 +358,12 @@ async function writePages(outcome) {
     mergeIntoSitemap(existing, [
       ...kbHubSitemapUrls(hubPaths, today),
       ...kbSolutionSitemapUrls(solutionRows, today),
+      ...(changeRows ? kbChangesSitemapUrls(today) : []),
       ...kbSitemapUrls(rows_, today),
     ]),
     "utf8",
   );
-  log(`added ${hubPaths.length + solutionPages.length + rows_.length} url(s) to sitemap.xml`);
+  log(`added ${hubPaths.length + solutionPages.length + (changeRows ? 1 : 0) + rows_.length} url(s) to sitemap.xml`);
   outcome.fetchFailed = false;
   return rows_.length;
 }

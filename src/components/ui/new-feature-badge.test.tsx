@@ -10,11 +10,11 @@ describe("NewFeatureBadge", () => {
   });
 
   it("shows the «New» pill for an unopened feature and starts the person's clock", () => {
-    render(<NewFeatureBadge featureId="knowledge-base" />);
+    render(<NewFeatureBadge featureId="kb-changes" />);
     // A span, so it stays valid inside the nav-row <button>.
     expect(screen.getByText("New").tagName).toBe("SPAN");
     const stored = JSON.parse(localStorage.getItem(NEW_FEATURES_STORAGE_KEY)!);
-    expect(stored["knowledge-base"].firstSeenAt).toBeTruthy();
+    expect(stored["kb-changes"].firstSeenAt).toBeTruthy();
   });
 
   it("renders nothing for an id outside the registry", () => {
@@ -23,8 +23,8 @@ describe("NewFeatureBadge", () => {
   });
 
   it("disappears in the same frame the feature is opened", () => {
-    render(<NewFeatureBadge featureId="knowledge-base" />);
-    act(() => markFeatureOpened("knowledge-base"));
+    render(<NewFeatureBadge featureId="kb-changes" />);
+    act(() => markFeatureOpened("kb-changes"));
     expect(screen.queryByText("New")).not.toBeInTheDocument();
   });
 });
@@ -52,24 +52,24 @@ describe("NewFeatureDot", () => {
         disconnect = disconnect;
       },
     );
-    render(<NewFeatureDot featureIds={["knowledge-base"]} />);
+    render(<NewFeatureDot featureIds={["kb-changes"]} />);
     act(() => report(false));
     expect(localStorage.getItem(NEW_FEATURES_STORAGE_KEY)).toBeNull();
     act(() => report(true));
     const stored = JSON.parse(localStorage.getItem(NEW_FEATURES_STORAGE_KEY)!);
-    expect(stored["knowledge-base"].firstSeenAt).toBeTruthy();
+    expect(stored["kb-changes"].firstSeenAt).toBeTruthy();
     expect(disconnect).toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 
   it("shows a dot with a screen-reader label while any listed feature is unopened", () => {
-    render(<NewFeatureDot featureIds={["knowledge-base"]} />);
+    render(<NewFeatureDot featureIds={["kb-changes"]} />);
     expect(screen.getByText("has something new")).toHaveClass("sr-only");
   });
 
   it("renders nothing when every listed feature is opened, or none is listed", () => {
-    markFeatureOpened("knowledge-base");
-    const { container } = render(<NewFeatureDot featureIds={["knowledge-base"]} />);
+    markFeatureOpened("kb-changes");
+    const { container } = render(<NewFeatureDot featureIds={["kb-changes"]} />);
     expect(container).toBeEmptyDOMElement();
     const empty = render(<NewFeatureDot featureIds={[]} />);
     expect(empty.container).toBeEmptyDOMElement();

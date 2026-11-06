@@ -17,10 +17,11 @@ export interface NewFeature {
   homeTab?: string;
 }
 
+// At most MAX_ACTIVE_FEATURES: a new entry retires the oldest («knowledge-base», 26.10).
 export const NEW_FEATURES: readonly NewFeature[] = [
-  { id: "knowledge-base", addedAt: "2026-10-26", homeTab: "documents" },
   { id: "contractor-card", addedAt: "2026-11-01", homeTab: "documents" },
   { id: "shurik-outside-chat", addedAt: "2026-11-02" },
+  { id: "kb-changes", addedAt: "2026-11-06", homeTab: "documents" },
 ];
 
 export const MAX_ACTIVE_FEATURES = 3;

@@ -6,6 +6,8 @@ import {
   escapeHtml,
   KB_RESERVED_SLUGS,
   kbDocumentRootHtml,
+  kbChangesPageHtml,
+  kbChangesSitemapUrls,
   kbIndexPageHtml,
   kbPageHtml,
   kbSolutionPages,
@@ -356,5 +358,41 @@ describe("«Решения» guest pages (docs-library slice 4, step 4.7)", () =
     expect(card.querySelector(".rv-kb-cite blockquote")?.textContent).toBe(`«…${evil}…»`);
     const data = JSON.parse(card.getElementById("__KB_SOLUTION_DATA__")?.textContent ?? "null");
     expect(data.title).toBe(evil);
+  });
+});
+
+describe("«Что изменилось» for guests (slice 8, step 8.4, frame 5)", () => {
+  const FEED = [
+    { listed_on: "2026-11-10", event: "amendment_approved", doc_slug: "sp-29-13330", doc_heading: "СП 29.13330 · Полы", amendment_no: 5, effective_from: "2027-06-01" },
+    { listed_on: "2026-10-22", event: "solution_rechecked", solution_slug: "poly", solution_title: "Полы <в> санузле", after_doc_slug: "sp-29-13330", after_doc_heading: "СП 29.13330", after_amendment_no: 4, after_event: "amendment_effective" },
+  ];
+
+  it("writes /baza/izmeneniya/ with its head, crumbs, months and links to the public pages", () => {
+    const html = kbChangesPageHtml(TEMPLATE, FEED, t, ["/assets/blog.css"]);
+    expect(html).toContain('<link rel="canonical" href="https://rovno.ai/baza/izmeneniya/" />');
+    expect(html).toContain("<title>Что изменилось в базе знаний — База знаний Ровно</title>");
+    expect(html).toContain(">Что изменилось в базе знаний</h1>");
+    expect(html).toContain('<li><a href="/baza/">База знаний</a></li><li><span aria-current="page">Что изменилось</span></li>');
+    expect(html).toContain("Раз в неделю база сверяется с официальными источниками.");
+    expect(html).toContain(">Ноябрь 2026</h2>");
+    expect(html).toContain(">Октябрь 2026</h2>");
+    expect(html).toContain('<a href="/baza/sp-29-13330/">СП 29.13330 · Полы</a>: утверждено Изменение № 5, вступит 01.06.2027');
+    expect(html).toContain("Текст пока прежний, у метки значок часов");
+    // Only the date and the note take the grey small `.rv-kb-doc-item span` style; the line is main text.
+    const item = /<li class="rv-kb-doc-item">(.*?)<\/li>/.exec(html)![1];
+    expect(item).toMatch(/^<span>10\.11\.2026<\/span><p class="rv-kb-change-line">.*: утверждено Изменение № 5, вступит 01\.06\.2027<\/p><span>Текст пока прежний/);
+    expect(html).toContain('<a href="/baza/resheniya/poly/">Решение «Полы &lt;в&gt; санузле»</a>');
+    expect(html.indexOf("Ноябрь 2026")).toBeLessThan(html.indexOf("Октябрь 2026"));
+  });
+
+  it("says nothing has changed yet on an empty feed", () => {
+    expect(kbChangesPageHtml(TEMPLATE, [], t)).toContain("Пока ничего не поменялось. Следующая сверка в понедельник.");
+  });
+
+  it("keeps the slug for itself and goes into the sitemap", () => {
+    expect(KB_RESERVED_SLUGS.has("izmeneniya")).toBe(true);
+    expect(kbChangesSitemapUrls("2026-11-06")).toEqual([
+      "  <url><loc>https://rovno.ai/baza/izmeneniya/</loc><lastmod>2026-11-06</lastmod></url>",
+    ]);
   });
 });

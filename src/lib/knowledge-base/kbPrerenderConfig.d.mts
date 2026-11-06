@@ -85,3 +85,6 @@ export declare function kbSolutionPages(
 ): Array<{ path: string; html: string }>;
 export declare function kbUsableSolutionRows<T extends Record<string, unknown>>(rows: T[]): T[];
 export declare function kbSolutionSitemapUrls(rows: Array<Record<string, unknown>>, today: string): string[];
+export declare function kbChangesRootHtml(rows: unknown[], t: KbTranslate): string;
+export declare function kbChangesPageHtml(template: string, rows: unknown[], t: KbTranslate, cssAssets?: string[]): string;
+export declare function kbChangesSitemapUrls(today: string): string[];

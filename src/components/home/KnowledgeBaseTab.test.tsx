@@ -13,6 +13,8 @@ const fetchKbDocumentBySlug = vi.fn();
 
 const fetchKbSolutions = vi.fn().mockResolvedValue([]);
 const fetchKbSolutionBySlug = vi.fn().mockResolvedValue(null);
+const fetchKbChangesFeed = vi.fn().mockResolvedValue([]);
+const fetchKbChangesMonthCount = vi.fn().mockResolvedValue(0);
 
 vi.mock("@/lib/knowledge-base/api", () => ({
   fetchKbSolutions: () => fetchKbSolutions(),
@@ -23,9 +25,18 @@ vi.mock("@/lib/knowledge-base/api", () => ({
   fetchKbSpFullTextEnabled: () => Promise.resolve(true),
   fetchKbClauses: () => Promise.resolve([]),
   fetchKbDocumentById: vi.fn(),
+  fetchKbChangesFeed: () => fetchKbChangesFeed(),
+  fetchKbChangesMonthCount: () => fetchKbChangesMonthCount(),
+  fetchKbWatching: () => Promise.resolve(false),
+  setKbWatch: () => Promise.resolve(true),
 }));
 
 import { KnowledgeBaseTab } from "@/components/home/KnowledgeBaseTab";
+import { kbMonthName } from "@/lib/knowledge-base/kbChanges.mjs";
+import { kbMoscowToday } from "@/lib/knowledge-base/kbHistory.mjs";
+import { NEW_FEATURES_STORAGE_KEY, resetNewFeaturesForTests } from "@/lib/new-features";
+import type { RuntimeAuthState } from "@/hooks/use-runtime-auth";
+import { __unsafeResetRuntimeAuthForTests, __unsafeSetRuntimeAuthStateForTests } from "@/hooks/use-runtime-auth";
 
 function doc(overrides: Partial<KbDocument> = {}): KbDocument {
   return {
@@ -59,11 +70,11 @@ const COUNTS = {
   manufacturers: 4065, international: 575, cis: 0, other: 849,
 };
 
-function renderKB() {
+function renderKB(initialEntry = "/home?tab=documents&docTab=knowledge-base") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <KnowledgeBaseTab />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -76,6 +87,10 @@ beforeEach(() => {
   fetchKbSolutions.mockReset().mockResolvedValue([]);
   fetchKbSolutionBySlug.mockReset().mockResolvedValue(null);
   fetchKbDocumentBySlug.mockReset().mockResolvedValue(null);
+  fetchKbChangesFeed.mockReset().mockResolvedValue([]);
+  fetchKbChangesMonthCount.mockReset().mockResolvedValue(0);
+  localStorage.clear();
+  resetNewFeaturesForTests();
 });
 
 describe("KnowledgeBaseTab", () => {
@@ -86,7 +101,7 @@ describe("KnowledgeBaseTab", () => {
     expect(await screen.findByText("237 documents")).toBeInTheDocument();
     const titles = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
     expect(titles).toEqual([
-      "Codes of practice (SP)", "GOST", "Laws and acts", "SNiP and departmental", "SanPiN",
+      "What changed", "Codes of practice (SP)", "GOST", "Laws and acts", "SNiP and departmental", "SanPiN",
       "Handbooks and manuals", "Manufacturers", "International standards", "Other",
     ]);
     expect(screen.getByText("SP of the Russian Ministry of Construction")).toBeInTheDocument();
@@ -165,6 +180,26 @@ describe("KnowledgeBaseTab", () => {
     expect(links[0]).toHaveAttribute("rel", "noopener noreferrer");
     expect(within(dialog).getAllByRole("button", { name: "Close" }).length).toBeGreaterThan(0);
     expect(within(dialog).queryByText("Ask Shurik")).not.toBeInTheDocument();
+  });
+
+  it("puts «Следить за изменениями» in the window's footer: source, follow, close (slice 8, frame 4a)", async () => {
+    __unsafeSetRuntimeAuthStateForTests({ status: "authenticated", session: null, user: null, profileId: "p1" } as unknown as RuntimeAuthState);
+    try {
+      renderKB();
+      fireEvent.click(await screen.findByText("Codes of practice (SP)"));
+      fireEvent.click(await screen.findByText("СП 71.13330 Изоляционные и отделочные покрытия"));
+      const dialog = await screen.findByRole("dialog");
+      const follow = await within(dialog).findByRole("button", { name: "Follow changes" });
+      const footer = follow.parentElement as HTMLElement;
+      const order = Array.from(footer.children).map((el) => el.textContent);
+      expect(order).toEqual(["Open on the Ministry of Construction site", "Open in ConsultantPlus", "Follow changes", "Close"]);
+      await waitFor(() => expect(follow).toBeEnabled());
+      fireEvent.click(follow);
+      expect(await within(dialog).findByRole("button", { name: "Following" })).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    } finally {
+      __unsafeResetRuntimeAuthForTests();
+    }
   });
 
   it("shows a document without a link with its facts and only Close", async () => {
@@ -252,8 +287,9 @@ describe("KnowledgeBaseTab: «Решения» (slice 4)", () => {
     renderKB();
     expect(await screen.findByText("1 solution")).toBeInTheDocument();
     const titles = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
-    expect(titles[0]).toBe("Solutions");
-    expect(titles[1]).toBe("Codes of practice (SP)");
+    expect(titles[0]).toBe("What changed");
+    expect(titles[1]).toBe("Solutions");
+    expect(titles[2]).toBe("Codes of practice (SP)");
     const tile = screen.getByText("Solutions").closest(".group") as HTMLElement;
     expect(tile.querySelector("[data-tone]")).toHaveAttribute("data-tone", "success");
     expect(screen.getByText("How to do it to code: steps, numbers, acceptance")).toBeInTheDocument();
@@ -294,6 +330,23 @@ describe("KnowledgeBaseTab: «Решения» (slice 4)", () => {
     await screen.findByText("Codes of practice (SP) · 2017 с изменениями 1-4");
     const titles = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
     expect(titles).toEqual(["Пол в санузле под плитку", "Стены в санузле под плитку", "СП 71.13330 Изоляционные и отделочные покрытия"]);
+  });
+
+  it("from «What changed» a card goes back to the page, and back again to the root, not to «Solutions»", async () => {
+    fetchKbSolutions.mockResolvedValue([walls]);
+    fetchKbSolutionBySlug.mockResolvedValue(walls);
+    fetchKbChangesFeed.mockResolvedValue([
+      { listed_on: "2026-11-10", event: "solution_rechecked", solution_slug: walls.slug, solution_title: walls.title },
+    ]);
+    renderKB("/home?tab=documents&docTab=knowledge-base&kbChanges=1");
+    fireEvent.click(await screen.findByRole("link", { name: `Solution «${walls.title}»` }));
+    expect(await screen.findByRole("heading", { level: 1, name: walls.title })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
+    expect(await screen.findByText("November 2026")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
+    expect(await screen.findByText("237 documents")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Knowledge base" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "Solutions" })).not.toBeInTheDocument();
   });
 
   it("opens a card page with crumbs and comes back to the folder", async () => {
@@ -372,5 +425,75 @@ describe("KnowledgeBaseTab: «Решения» (slice 4)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Back/ }));
     expect(await screen.findByRole("heading", { level: 1, name: "Стены в санузле под плитку" })).toBeInTheDocument();
+  });
+});
+
+describe("KnowledgeBaseTab: «Что изменилось» (slice 8, step 8.4)", () => {
+  const FEED = [
+    { listed_on: "2026-11-10", event: "amendment_approved", doc_slug: "sp-29-13330", doc_heading: "СП 29.13330 · Полы", amendment_no: 5, effective_from: "2027-06-01" },
+    { listed_on: "2026-11-10", event: "replaced", doc_slug: "sp-71-13330", doc_heading: "СП 71.13330 · Покрытия", replaced_by_slug: "sp-71-2026", replaced_by_heading: "СП 71.13330.2026", solutions_rechecked: 2 },
+    { listed_on: "2026-10-22", event: "solution_rechecked", solution_slug: "poly", solution_title: "Полы в санузле под плитку", after_doc_slug: "sp-29-13330", after_doc_heading: "СП 29.13330", after_amendment_no: 4, after_event: "amendment_effective" },
+  ];
+
+  it("puts the tile first with the «New» mark and this month's number", async () => {
+    fetchKbChangesMonthCount.mockResolvedValue(3);
+    renderKB();
+    await screen.findByText("237 documents");
+    const titles = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(titles[0]).toBe("What changed");
+    const tile = screen.getByText("What changed").closest(".group") as HTMLElement;
+    expect(within(tile).getByText("New")).toBeInTheDocument();
+    expect(within(tile).getByText("New editions, cancellations and revised solutions")).toBeInTheDocument();
+    expect(await within(tile).findByText(`In ${kbMonthName(kbMoscowToday(), "en")}: 3`)).toBeInTheDocument();
+  });
+
+  it("has no number line while the month had no changes", async () => {
+    renderKB();
+    await screen.findByText("237 documents");
+    await waitFor(() => expect(fetchKbChangesMonthCount).toHaveBeenCalled());
+    const tile = screen.getByText("What changed").closest(".group") as HTMLElement;
+    expect(within(tile).queryByText(/^In /)).not.toBeInTheDocument();
+  });
+
+  it("opens the page: months, newest first, documents as links, the grey line, and clears the mark", async () => {
+    fetchKbChangesFeed.mockResolvedValue(FEED);
+    renderKB();
+    fireEvent.click(await screen.findByText("What changed"));
+    expect(await screen.findByRole("heading", { level: 2, name: "What changed" })).toBeInTheDocument();
+    expect(screen.getByText("Once a week the base is checked against the official sources. Everything that changed after that is here.")).toBeInTheDocument();
+    expect(await screen.findByText("November 2026")).toBeInTheDocument();
+    expect(screen.getByText("October 2026")).toBeInTheDocument();
+    const rows = screen.getAllByTestId("kb-change");
+    expect(rows.map((r) => r.querySelector("[data-kb-change-date]")?.textContent)).toEqual(["10.11.2026", "10.11.2026", "22.10.2026"]);
+    expect(rows[0]).toHaveTextContent("СП 29.13330 · Полы: Amendment No. 5 approved, in force from 01.06.2027");
+    expect(rows[0]).toHaveTextContent("The text stays as it is for now, the label shows a clock");
+    expect(within(rows[1]).getByRole("link", { name: "СП 71.13330.2026" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("kbDoc=sp-71-2026"),
+    );
+    expect(rows[1]).toHaveTextContent("Solutions rechecked against it: 2");
+    expect(within(rows[2]).getByRole("link", { name: "Solution «Полы в санузле под плитку»" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("kbSolution=poly"),
+    );
+    // No search on this page: a few lines a week.
+    expect(screen.queryByRole("textbox", { name: "Search..." })).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(NEW_FEATURES_STORAGE_KEY) ?? "{}")["kb-changes"]?.openedAt).toBeTruthy();
+  });
+
+  it("opens a document from a line and comes back to the page", async () => {
+    fetchKbChangesFeed.mockResolvedValue(FEED);
+    fetchKbDocumentBySlug.mockResolvedValue(doc({ slug: "sp-29-13330" }));
+    renderKB("/home?tab=documents&docTab=knowledge-base&kbChanges=1");
+    fireEvent.click(await screen.findByRole("link", { name: "СП 29.13330 · Полы" }));
+    expect(await screen.findByText("The full text will appear in the base later.")).toBeInTheDocument();
+    expect(fetchKbDocumentBySlug).toHaveBeenCalledWith("sp-29-13330");
+    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
+    expect(await screen.findByText("November 2026")).toBeInTheDocument();
+  });
+
+  it("says so while nothing has changed", async () => {
+    renderKB("/home?tab=documents&docTab=knowledge-base&kbChanges=1");
+    expect(await screen.findByText("Nothing has changed yet. The next check is on Monday.")).toBeInTheDocument();
   });
 });

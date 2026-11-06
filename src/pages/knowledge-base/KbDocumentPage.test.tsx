@@ -21,11 +21,13 @@ vi.mock("@/lib/knowledge-base/api", () => ({
   fetchKbSpFullTextEnabled: () => Promise.resolve(true),
   fetchKbClauses: (docId: string) => fetchKbClauses(docId),
   fetchKbDocumentById: vi.fn(),
+  fetchKbWatching: () => Promise.resolve(false),
+  setKbWatch: () => Promise.resolve(true),
 }));
 
 let authStatus: "loading" | "authenticated" | "guest" = "guest";
 vi.mock("@/hooks/use-runtime-auth", () => ({
-  useRuntimeAuth: () => ({ status: authStatus }),
+  useRuntimeAuth: () => ({ status: authStatus, profileId: authStatus === "authenticated" ? "profile-1" : null }),
 }));
 
 // The landing chrome is not under test here; keep the page shell inert.
@@ -152,5 +154,38 @@ describe("KbDocumentPage (/baza/:slug)", () => {
     await screen.findByRole("heading", { level: 1 });
     expect(fetchKbClauses).not.toHaveBeenCalled();
   });
-});
 
+  it("puts «Следить за изменениями» in the row of buttons, leading a guest to sign-up (slice 8, step 8.5)", async () => {
+    renderAt("/baza/sp-71-13330/");
+    const follow = await screen.findByRole("link", { name: "Follow changes" });
+    expect(follow).toHaveAttribute("href", "/auth/signup?next=%2Fbaza%2Fsp-71-13330%2F");
+    const row = follow.parentElement as HTMLElement;
+    expect(row).toContainElement(screen.getByRole("link", { name: "Ask Shurik" }));
+    expect(row).toContainElement(screen.getByRole("link", { name: "Open on the Ministry of Construction site" }));
+    fireEvent.click(follow);
+    expect(JSON.parse(localStorage.getItem("rovno.kbPendingWatch.v1")!).slug).toBe("sp-71-13330");
+  });
+
+  it("on a readable document stands next to «Спросить Шурика» and brings back no «Open on the site» button (frame 5a)", async () => {
+    fetchKbDocumentBySlug.mockResolvedValue({ ...SP71, fullTextAvailable: true, textLabel: "verified", textCheckedAt: "2026-10-22" });
+    fetchKbClauses.mockResolvedValue([
+      { anchor: "p-4-7", number: "4.7", level: 2, heading: null, body: "Учет работ ведут в журнале.", position: 1, amendments: [] },
+    ]);
+    renderAt("/baza/sp-71-13330/");
+    await screen.findByText("Учет работ ведут в журнале.");
+    const follow = screen.getByRole("link", { name: "Follow changes" });
+    expect(follow.parentElement).toContainElement(screen.getByRole("link", { name: "Ask Shurik" }));
+    // The source is the icon at the title (slice 7), not a button in this row.
+    const sources = screen.getAllByRole("link", { name: "Open on the Ministry of Construction site" });
+    expect(sources).toHaveLength(1);
+    expect(follow.parentElement).not.toContainElement(sources[0]);
+    expect(sources[0].closest("h1, header")).not.toBeNull();
+  });
+
+  it("lets a signed-in reader follow the document right on the page", async () => {
+    authStatus = "authenticated";
+    renderAt("/baza/sp-71-13330/");
+    expect(await screen.findByRole("button", { name: "Follow changes" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Follow changes" })).not.toBeInTheDocument();
+  });
+});

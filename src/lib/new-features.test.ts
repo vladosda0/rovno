@@ -14,7 +14,7 @@ import {
 } from "@/lib/new-features";
 
 const DAY = 24 * 60 * 60 * 1000;
-const ID = "knowledge-base";
+const ID = "kb-changes";
 const addedAt = Date.parse(NEW_FEATURES.find((f) => f.id === ID)!.addedAt);
 
 describe("new-features", () => {

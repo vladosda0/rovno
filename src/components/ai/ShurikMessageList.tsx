@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   isBriefingShurikMessage,
   isClientReportReminderShurikMessage,
+  isKbDocumentChangedShurikMessage,
   isMoneyShurikMessage,
   isPeopleShurikMessage,
   readShurikBriefingLead,
@@ -149,7 +150,10 @@ export function ShurikMessageList({
         const reportHref = clientReportAvailable && isBriefingShurikMessage(message) && message.project_id
           ? clientReportHref(message.project_id)
           : null;
-        const titled = isPeopleShurikMessage(message) || isClientReportReminderShurikMessage(message);
+        const titled =
+          isPeopleShurikMessage(message) ||
+          isClientReportReminderShurikMessage(message) ||
+          isKbDocumentChangedShurikMessage(message);
         return (
           <div key={message.id} data-testid={`shurik-message-${message.id}`} data-unread={unread}>
             <ShurikBubble pose={messagePose(message)} unread={unread}>

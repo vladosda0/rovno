@@ -1,7 +1,8 @@
 // Document window for the knowledge base. Same shell as FilePreviewDialog
 // (header, scrollable body, footer with buttons): there is no file to preview,
 // so the body is the registry facts, and the footer carries one button per
-// source link (official first) before «Закрыть».
+// source link (official first), then «Следить за изменениями» (slice 8, frame
+// 4a), then «Закрыть».
 
 import { useTranslation } from "react-i18next";
 import { BookOpen, ExternalLink } from "lucide-react";
@@ -18,6 +19,7 @@ import type { KbDocument } from "@/lib/knowledge-base/api";
 import { useKbSpFullText } from "@/hooks/use-knowledge-base";
 import { useKbDocumentView } from "./kb-view";
 import { KbTextLabel } from "./KbTextLabel";
+import { KbWatchButton } from "./KbWatchButton";
 
 interface KbDocumentDialogProps {
   doc: KbDocument | null;
@@ -74,6 +76,7 @@ export function KbDocumentDialog({ doc, open, onOpenChange, onRead }: KbDocument
               </a>
             </Button>
           ))}
+          {doc && <KbWatchButton slug={doc.slug} size="default" />}
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common.close")}
           </Button>

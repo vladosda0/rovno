@@ -576,3 +576,37 @@ describe("ShurikUnreadBadge", () => {
     expect(screen.getByTestId("shurik-unread-badge")).toHaveTextContent("99+");
   });
 });
+
+function kbDocumentChanged(partial: Partial<ShurikMessage> = {}): ShurikMessage {
+  return message({
+    id: "kb-1",
+    project_id: null,
+    type: "kb_document_changed",
+    title: "СП 29.13330 · Полы",
+    body: "Утверждено Изменение № 5, вступит 01.06.2027. До этой даты действует нынешний текст.",
+    payload: {
+      action_label: "Открыть документ",
+      action_href: "/home?tab=documents&docTab=knowledge-base&kbDoc=sp-29-13330",
+      doc_slug: "sp-29-13330",
+    },
+    ...partial,
+  });
+}
+
+describe("ShurikMessageList, a document someone follows has changed (docs-library 8.6)", () => {
+  it("shows the document as the title, the change as the text, and opens the document in Documents", () => {
+    const { onAction } = renderList([kbDocumentChanged()]);
+
+    expect(screen.getByTestId("shurik-message-title")).toHaveTextContent("СП 29.13330 · Полы");
+    expect(screen.getByTestId("shurik-bubble")).toHaveTextContent(
+      "Утверждено Изменение № 5, вступит 01.06.2027. До этой даты действует нынешний текст.",
+    );
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть документ" }));
+    expect(screen.getByTestId("where")).toHaveTextContent(
+      "/home?tab=documents&docTab=knowledge-base&kbDoc=sp-29-13330",
+    );
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+});

@@ -11,36 +11,52 @@
 // with a green cover, and only while at least one card is published. Inside, the
 // same folder view; the cards are few, so search and paging run in the browser.
 // The header search at the root finds cards too and shows them first.
+//
+// Slice 8 (mockup v3 approved 05.11, frames 1-3): «Что изменилось» is the very
+// first tile, with the «Новое» mark and this month's number, and opens its own
+// page (?kbChanges=1); a document or a card opened from there comes back to it.
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookOpen, ChevronLeft, FileText, Lightbulb, SearchX } from "lucide-react";
+import { BookOpen, ChevronLeft, FileText, History, Lightbulb, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SectionChrome } from "@/components/home/documents-hub/SectionChrome";
 import { FileTile, FolderTile, TileGrid } from "@/components/home/documents-hub/tiles";
 import { EmptyState } from "@/components/home/documents-hub/EmptyState";
+import { NewFeatureBadge } from "@/components/ui/new-feature-badge";
+import { KB_CHANGES_FEATURE, KbChangesView } from "@/components/knowledge-base/KbChangesView";
 import { KbDocumentDialog } from "@/components/knowledge-base/KbDocumentDialog";
 import { KbReadingPage } from "@/components/knowledge-base/KbReadingPage";
 import { KbSolutionPage } from "@/components/knowledge-base/KbSolutionPage";
 import { KbLabelBadge } from "@/components/knowledge-base/KbTextLabel";
 import { kbSourceButtons, openKbSource } from "@/components/knowledge-base/kb-view";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useKbDocumentPage, useKbFolderCounts, useKbSolutions, useKbSpFullText } from "@/hooks/use-knowledge-base";
+import {
+  useKbChangesMonthCount,
+  useKbDocumentPage,
+  useKbFolderCounts,
+  useKbSolutions,
+  useKbSpFullText,
+} from "@/hooks/use-knowledge-base";
 import type { KbDocument } from "@/lib/knowledge-base/api";
 import { KB_FOLDERS, KB_PAGE_SIZE, displayTitle, formatKbDate, type KbFolder } from "@/lib/knowledge-base/kbConfig.mjs";
 import { kbFullTextReadable, kbTextLabel } from "@/lib/knowledge-base/kbFullText.mjs";
+import { kbChangesMonthLine } from "@/lib/knowledge-base/kbChanges.mjs";
+import { kbMoscowToday } from "@/lib/knowledge-base/kbHistory.mjs";
 import { kbSolutionCheckedDate, kbSolutionMatches, type KbSolution } from "@/lib/knowledge-base/kbSolutions.mjs";
 
 /** The reading page's address inside «Документы» (slice 2). */
 export const KB_READ_PARAM = "kbDoc";
 /** A «Решения» card's address inside «Документы» (slice 4). */
 export const KB_SOLUTION_PARAM = "kbSolution";
+/** «Что изменилось» inside «Документы» (slice 8). */
+export const KB_CHANGES_PARAM = "kbChanges";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 export function KnowledgeBaseTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [folder, setFolderState] = useState<KbFolder | null>(null);
   const [solutionsOpen, setSolutionsOpenState] = useState(false);
   const [search, setSearchState] = useState("");
@@ -49,7 +65,9 @@ export function KnowledgeBaseTab() {
   const [searchParams, setSearchParams] = useSearchParams();
   const readingSlug = searchParams.get(KB_READ_PARAM);
   const solutionSlug = searchParams.get(KB_SOLUTION_PARAM);
+  const changesOpen = searchParams.has(KB_CHANGES_PARAM);
   const sp = useKbSpFullText();
+  const changesCount = useKbChangesMonthCount();
 
   function setParam(param: string, slug: string | null) {
     setSearchParams((current) => {
@@ -61,6 +79,12 @@ export function KnowledgeBaseTab() {
   }
   const setReading = (slug: string | null) => setParam(KB_READ_PARAM, slug);
   const setSolution = (slug: string | null) => setParam(KB_SOLUTION_PARAM, slug);
+  // A line of «Что изменилось» keeps the page in the address, so «Назад» returns to it.
+  const withParam = (param: string, slug: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set(param, slug);
+    return { search: `?${next.toString()}` };
+  };
 
   const debouncedSearch = useDebounce(search.trim(), SEARCH_DEBOUNCE_MS);
   const searching = debouncedSearch !== "";
@@ -172,12 +196,29 @@ export function KnowledgeBaseTab() {
       <KbSolutionPage
         slug={solutionSlug}
         onBack={() => {
-          setSolutionsOpen(true);
+          if (!changesOpen) setSolutionsOpen(true);
           setSolution(null);
         }}
       />
     );
   }
+
+  if (changesOpen) {
+    return (
+      <KbChangesView
+        onBack={() => setParam(KB_CHANGES_PARAM, null)}
+        docTo={(slug) => withParam(KB_READ_PARAM, slug)}
+        solutionTo={(slug) => withParam(KB_SOLUTION_PARAM, slug)}
+      />
+    );
+  }
+
+  const changesLine = kbChangesMonthLine(
+    changesCount.data ?? 0,
+    (key, vars) => t(key, vars) as string,
+    i18n.language,
+    kbMoscowToday(),
+  );
 
   const title = solutionsOpen
     ? t("home.knowledgeBase.solutions.title")
@@ -234,6 +275,16 @@ export function KnowledgeBaseTab() {
           <EmptyState icon={BookOpen} title={t("home.knowledgeBase.emptyBase")} />
         ) : !listing ? (
           <TileGrid>
+            {/* The subtitle sits in the count slot and the month line below it, as in frame 1. */}
+            <FolderTile
+              title={t("home.knowledgeBase.changes.title")}
+              icon={History}
+              count={changesCount.data ?? 0}
+              filesLabel={t("home.knowledgeBase.changes.tileDescription")}
+              description={changesLine}
+              badge={<NewFeatureBadge featureId={KB_CHANGES_FEATURE} />}
+              onClick={() => setParam(KB_CHANGES_PARAM, "1")}
+            />
             {hasSolutions && (
               <FolderTile
                 title={t("home.knowledgeBase.solutions.title")}

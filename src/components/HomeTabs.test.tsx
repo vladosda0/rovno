@@ -45,7 +45,7 @@ describe("HomeTabs", () => {
     renderTabs("/home?tab=bogus");
     expect(screen.getByRole("link", { name: /Overview/i })).toHaveAttribute("aria-current", "page");
   });
-  it("puts a new-feature dot on Documents until the knowledge base is opened", () => {
+  it("puts a new-feature dot on Documents until «What changed» and the card are opened", () => {
     localStorage.clear();
     const { unmount } = renderTabs("/home");
     const documents = screen.getByRole("link", { name: /Documents/i });
@@ -53,7 +53,7 @@ describe("HomeTabs", () => {
     expect(within(screen.getByRole("link", { name: /Tasks/i })).queryByText("has something new")).toBeNull();
     unmount();
 
-    markFeatureOpened("knowledge-base");
+    markFeatureOpened("kb-changes");
     markFeatureOpened("contractor-card");
     renderTabs("/home");
     expect(screen.queryByText("has something new")).not.toBeInTheDocument();

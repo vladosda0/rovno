@@ -8,6 +8,7 @@ import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { MetrikaPageviewTracker } from "@/components/system/MetrikaPageviewTracker";
 import { ScrollToHash } from "@/components/system/ScrollToHash";
 import { DocumentLanguage } from "@/components/system/DocumentLanguage";
+import { KbPendingWatch } from "@/components/knowledge-base/KbPendingWatch";
 import { queryClient } from "@/lib/query-client";
 
 const AppLayout = lazy(() => import("@/layouts/AppLayout"));
@@ -58,6 +59,9 @@ const KbFolderPage = lazy(() => import("@/pages/knowledge-base/KbHubPages").then
 const KbSolutionsPage = lazy(() =>
   import("@/pages/knowledge-base/KbSolutionPages").then((m) => ({ default: m.KbSolutionsPage })),
 );
+const KbChangesPublicPage = lazy(() =>
+  import("@/pages/knowledge-base/KbChangesPage").then((m) => ({ default: m.KbChangesPublicPage })),
+);
 const KbSolutionPublicPage = lazy(() =>
   import("@/pages/knowledge-base/KbSolutionPages").then((m) => ({ default: m.KbSolutionPublicPage })),
 );
@@ -91,6 +95,7 @@ const App = () => (
         <MetrikaPageviewTracker />
         <ScrollToHash />
         <DocumentLanguage />
+        <KbPendingWatch />
         <Routes>
           {/* Standalone pages */}
           <Route path="/" element={routeElement(<Landing />)} />
@@ -116,6 +121,7 @@ const App = () => (
           <Route path="/baza/razdel/:folder/:page" element={routeElement(<KbFolderPage />)} />
           <Route path="/baza/resheniya" element={routeElement(<KbSolutionsPage />)} />
           <Route path="/baza/resheniya/:slug" element={routeElement(<KbSolutionPublicPage />)} />
+          <Route path="/baza/izmeneniya" element={routeElement(<KbChangesPublicPage />)} />
           <Route path="/baza/:slug" element={routeElement(<KbDocumentPage />)} />
 
           {/* Legal / compliance pages (required by T-Bank acquirer) */}

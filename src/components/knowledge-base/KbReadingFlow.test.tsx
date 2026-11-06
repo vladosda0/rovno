@@ -28,9 +28,15 @@ vi.mock("@/lib/knowledge-base/api", () => ({
   fetchKbSpFullTextEnabled: () => fetchKbSpFullTextEnabled(),
   fetchKbDocumentById: vi.fn().mockResolvedValue(null),
   fetchKbDocumentHistory: (slug: string) => fetchKbDocumentHistory(slug),
+  fetchKbChangesMonthCount: () => Promise.resolve(0),
+  fetchKbChangesFeed: () => Promise.resolve([]),
+  fetchKbWatching: () => Promise.resolve(false),
+  setKbWatch: () => Promise.resolve(true),
 }));
 
 import { KnowledgeBaseTab } from "@/components/home/KnowledgeBaseTab";
+import type { RuntimeAuthState } from "@/hooks/use-runtime-auth";
+import { __unsafeResetRuntimeAuthForTests, __unsafeSetRuntimeAuthStateForTests } from "@/hooks/use-runtime-auth";
 
 const SP71: KbDocument = normalizeKbRow({
   doc_id: "SP-012",
@@ -113,6 +119,17 @@ describe("knowledge base full text (slice 2)", () => {
     fireEvent.click(await screen.findByText("СП 71.13330 Изоляционные и отделочные покрытия"));
     expect(await screen.findByRole("heading", { level: 1, name: "СП 71.13330 · Изоляционные и отделочные покрытия" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("puts «Следить за изменениями» in the reading page header for a signed-in reader (slice 8, frame 4)", async () => {
+    __unsafeSetRuntimeAuthStateForTests({ status: "authenticated", session: null, user: null, profileId: "p1" } as unknown as RuntimeAuthState);
+    try {
+      renderKB("/home?docTab=knowledge-base&kbDoc=sp-71-13330");
+      const follow = await screen.findByRole("button", { name: "Follow changes" });
+      expect(follow.closest("header")).toContainElement(screen.getByRole("heading", { level: 1 }));
+    } finally {
+      __unsafeResetRuntimeAuthForTests();
+    }
   });
 
   it("reading page: title with the site icon, one label, the clauses; the label opens Details and History; Back", async () => {

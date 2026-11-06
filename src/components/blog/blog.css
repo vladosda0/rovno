@@ -754,6 +754,7 @@
 .rv-kb-folder span, .rv-kb-doc-item span { font-size: 14px; opacity: .72; }
 .rv-kb-doc-item { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--line-blue-soft); }
 .rv-kb-doc-item a { font-size: 16px; }
+.rv-kb-change-line { margin: 0; font-size: 16px; }
 .rv-kb-pager { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px; font-family: var(--font-body); color: var(--rv-blue); }
 .rv-kb-pager [aria-current] { font-weight: 700; }
 @media (max-width: 640px) { .rv-kb-folders { grid-template-columns: 1fr; } }

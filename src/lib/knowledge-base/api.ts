@@ -181,3 +181,31 @@ export async function fetchKbSolutionHistory(slug: string): Promise<Record<strin
   if (error) throw error;
   return (data ?? []) as Record<string, unknown>[];
 }
+
+/** «Что изменилось» (slice 8, `kb_changes_feed`): newest first, readable by guests. */
+export async function fetchKbChangesFeed(limit = 300): Promise<Record<string, unknown>[]> {
+  const { data, error } = await rawSupabase.rpc("kb_changes_feed", { p_limit: limit });
+  if (error) throw error;
+  return (data ?? []) as Record<string, unknown>[];
+}
+
+/** Lines of the current month, for «За ноябрь: 3» under the tile (`kb_changes_month_count`). */
+export async function fetchKbChangesMonthCount(): Promise<number> {
+  const { data, error } = await rawSupabase.rpc("kb_changes_month_count");
+  if (error) throw error;
+  return Number(data) || 0;
+}
+
+/** Whether the signed-in person follows the document (`kb_watching`; false for a guest). */
+export async function fetchKbWatching(slug: string): Promise<boolean> {
+  const { data, error } = await rawSupabase.rpc("kb_watching", { p_slug: slug });
+  if (error) throw error;
+  return data === true;
+}
+
+/** Follows or stops following; the server answers with the state after (`kb_watch_set`). */
+export async function setKbWatch(slug: string, watch: boolean): Promise<boolean> {
+  const { data, error } = await rawSupabase.rpc("kb_watch_set", { p_slug: slug, p_watch: watch });
+  if (error) throw error;
+  return data === true;
+}

@@ -14,6 +14,7 @@ const MONEY_TYPE_PREFIX = "billing_";
 const BRIEFING_TYPE = "briefing";
 const PEOPLE_TYPE_PREFIX = "people_";
 const CLIENT_REPORT_REMINDER_TYPE = "client_report_reminder";
+const KB_DOCUMENT_CHANGED_TYPE = "kb_document_changed";
 /** Shurik's most important hint of the day, written only to be sent to Telegram. */
 export const SHURIK_HINT_TYPE = "shurik_hint";
 
@@ -83,6 +84,11 @@ export function isPeopleShurikMessage(message: Pick<ShurikMessage, "type">): boo
 /** Shurik's reminder that a report for the client is ready to be looked at. */
 export function isClientReportReminderShurikMessage(message: Pick<ShurikMessage, "type">): boolean {
   return message.type === CLIENT_REPORT_REMINDER_TYPE;
+}
+
+/** A knowledge-base document the person follows has changed (docs-library 8.3, 8.6). */
+export function isKbDocumentChangedShurikMessage(message: Pick<ShurikMessage, "type">): boolean {
+  return message.type === KB_DOCUMENT_CHANGED_TYPE;
 }
 
 /**

@@ -95,3 +95,13 @@ export function KbNavContents({ slug, onFolder }: KbNavContentsProps) {
     </div>
   );
 }
+
+/** «Что изменилось» under the opened «База знаний» (slice 8, frame 2): a page, so no chevron and no icon. */
+export function KbNavChangesRow() {
+  const { t } = useTranslation();
+  return (
+    <div className={cn(row, "pl-7 font-medium text-accent bg-accent/10")} aria-current="page" data-kb-nav-changes>
+      <span className="truncate">{t("home.knowledgeBase.changes.title")}</span>
+    </div>
+  );
+}

@@ -3,6 +3,8 @@
 
 import { useQuery, type QueryKey } from "@tanstack/react-query";
 import {
+  fetchKbChangesFeed,
+  fetchKbChangesMonthCount,
   fetchKbClauses,
   fetchKbDocumentById,
   fetchKbDocumentBySlug,
@@ -13,10 +15,12 @@ import {
   fetchKbSolutionBySlug,
   fetchKbSolutions,
   fetchKbSolutionHistory,
+  fetchKbWatching,
   type KbDocument,
   type KbDocumentPageParams,
   type KbSolution,
 } from "@/lib/knowledge-base/api";
+import { kbWatchingKey } from "@/lib/knowledge-base/kbPendingWatch";
 
 const STALE = 10 * 60 * 1000;
 
@@ -32,6 +36,9 @@ export const kbKeys = {
   solutions: () => [...kbKeys.all, "solutions"] as const,
   solution: (slug: string) => [...kbKeys.all, "solution", slug] as const,
   history: (kind: "doc" | "solution", slug: string) => [...kbKeys.all, "history", kind, slug] as const,
+  changes: () => [...kbKeys.all, "changes"] as const,
+  changesMonthCount: () => [...kbKeys.all, "changes-month-count"] as const,
+  watching: kbWatchingKey,
 };
 
 export function useKbFolderCounts() {
@@ -133,6 +140,36 @@ export function useKbHistory(kind: "doc" | "solution", slug: string | undefined,
     queryKey: kbKeys.history(kind, slug ?? ""),
     queryFn: () => (kind === "doc" ? fetchKbDocumentHistory(slug!) : fetchKbSolutionHistory(slug!)),
     enabled: enabled && !!slug,
+    staleTime: STALE,
+  });
+}
+
+/** «Что изменилось» (slice 8): the whole feed, a few hundred short rows at most. */
+export function useKbChanges(enabled = true) {
+  return useQuery({
+    queryKey: kbKeys.changes(),
+    queryFn: () => fetchKbChangesFeed(),
+    enabled,
+    staleTime: STALE,
+  });
+}
+
+/** The number under the «Что изменилось» tile; a failed read only drops the line. */
+export function useKbChangesMonthCount() {
+  return useQuery({
+    queryKey: kbKeys.changesMonthCount(),
+    queryFn: fetchKbChangesMonthCount,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+/** Whether the signed-in person follows the document; off for a guest. */
+export function useKbWatching(slug: string, profileId: string | null) {
+  return useQuery({
+    queryKey: kbKeys.watching(slug, profileId),
+    queryFn: () => fetchKbWatching(slug),
+    enabled: !!slug && !!profileId,
     staleTime: STALE,
   });
 }

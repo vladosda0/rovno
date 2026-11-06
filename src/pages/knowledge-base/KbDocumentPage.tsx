@@ -15,6 +15,7 @@ import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useKbDocumentView } from "@/components/knowledge-base/kb-view";
 import { readPrerenderedKbDocument } from "@/lib/knowledge-base/prerendered-data";
 import { KbReader } from "@/components/knowledge-base/KbReader";
+import { KbWatchButton } from "@/components/knowledge-base/KbWatchButton";
 import { kbDocPath } from "@/lib/knowledge-base/kbConfig.mjs";
 import {
   kbBreadcrumbTrail,
@@ -124,11 +125,14 @@ export default function KbDocumentPage() {
                 source={view.buttons[0] ?? null}
                 variant="guest"
                 headerExtra={
-                  showAskShurik ? (
-                    <Link className="rv-btn rv-btn--primary rv-kb-ask" to={SIGN_UP_PATH}>
-                      {t("home.knowledgeBase.askShurik")}
-                    </Link>
-                  ) : undefined
+                  <>
+                    {showAskShurik && (
+                      <Link className="rv-btn rv-btn--primary rv-kb-ask" to={SIGN_UP_PATH}>
+                        {t("home.knowledgeBase.askShurik")}
+                      </Link>
+                    )}
+                    <KbWatchButton slug={doc.slug} appearance="site" />
+                  </>
                 }
               />
             </div>
@@ -170,6 +174,7 @@ export default function KbDocumentPage() {
                 {t("home.knowledgeBase.askShurik")}
               </Link>
             )}
+            <KbWatchButton slug={doc.slug} appearance="site" />
           </div>
 
             </>

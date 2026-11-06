@@ -16,6 +16,7 @@
 import { KB_FOLDERS, displayTitle, kbDocPath, kbHeading, sourceHost } from "./kbConfig.mjs";
 import { kbEditionLine, kbFullTextReadable, kbTextLabel } from "./kbFullText.mjs";
 import { KB_SOLUTIONS_PATH, kbSolutionDocuments, kbSolutionPath } from "./kbSolutions.mjs";
+import { KB_CHANGES_PATH } from "./kbChanges.mjs";
 
 export const SITE_ORIGIN = "https://rovno.ai";
 export const KB_SITE_SECTION = "База знаний Ровно";
@@ -432,4 +433,35 @@ export function kbLlmsSection(counts, t, fullTextDocs = [], solutions = []) {
     for (const s of solutions) lines.push(`- [${mdLinkText(s.title)}](${abs(kbSolutionPath(s.slug))})`);
   }
   return lines.join("\n") + "\n";
+}
+
+// ── «Что изменилось» (slice 8, frame 5) ─────────────────────────────────────
+
+/** Главная › База знаний › Что изменилось. */
+export function kbChangesTrail(t) {
+  return [
+    { name: "Главная", path: "/" },
+    { name: t("home.knowledgeBase.title"), path: KB_INDEX_PATH },
+    { name: t("home.knowledgeBase.changes.title"), path: KB_CHANGES_PATH },
+  ];
+}
+
+export function kbChangesTitle(t) {
+  return `${t("home.knowledgeBase.changes.guestTitle")} — ${KB_SITE_SECTION}`;
+}
+
+export function kbChangesDescription(t) {
+  return clip(
+    `Новые редакции и изменения строительных норм, отменённые и заменённые документы, пересмотренные решения. ${t("home.knowledgeBase.changes.subtitle")}`,
+  );
+}
+
+export function kbChangesJsonLd(t) {
+  return kbCollectionJsonLd(t, {
+    items: [],
+    name: kbChangesTitle(t),
+    description: kbChangesDescription(t),
+    path: KB_CHANGES_PATH,
+    trail: kbChangesTrail(t),
+  });
 }

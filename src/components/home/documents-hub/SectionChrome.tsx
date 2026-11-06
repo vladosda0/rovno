@@ -43,6 +43,8 @@ interface SectionChromeProps {
   isFilterActive: boolean;
   onReset: () => void;
   systemHidden?: boolean;
+  /** No search and reset row: a page with nothing to filter («Что изменилось»). */
+  toolbarHidden?: boolean;
   headerExtra?: ReactNode;
   children: ReactNode;
 }
@@ -68,6 +70,7 @@ export function SectionChrome({
   isFilterActive,
   onReset,
   systemHidden = false,
+  toolbarHidden = false,
   headerExtra,
   children,
 }: SectionChromeProps) {
@@ -101,6 +104,7 @@ export function SectionChrome({
         {headerExtra}
       </header>
 
+      {!toolbarHidden && (
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1 max-w-md">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -189,6 +193,7 @@ export function SectionChrome({
           {t("home.documentsHub.chrome.reset")}
         </Button>
       </div>
+      )}
 
       {systemHidden && (
         <p className="text-caption text-muted-foreground italic">
