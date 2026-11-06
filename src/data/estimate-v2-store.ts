@@ -319,6 +319,9 @@ const retainedSupabaseAccessContextByProjectId = new Map<string, EstimateV2Proje
 // a debounce firing before hydration would persist a default/empty snapshot over
 // the real remote draft. Cleared on hydrate install and on any real mutation.
 const defaultSeededStateProjectIds = new Set<string>();
+const executionStatusWriteFailedProjectIds = new Set<string>();
+const latestExecutionStatusWriteByProjectId = new Map<string, number>();
+let executionStatusWriteSeq = 0;
 
 function notify() {
   listeners.forEach((listener) => listener());
@@ -846,6 +849,8 @@ function clearEstimateV2ProjectRuntimeState(projectId: string) {
   retainedSupabaseSyncProfileIdByProjectId.delete(projectId);
   retainedSupabaseAccessContextByProjectId.delete(projectId);
   defaultSeededStateProjectIds.delete(projectId);
+  executionStatusWriteFailedProjectIds.delete(projectId);
+  latestExecutionStatusWriteByProjectId.delete(projectId);
 }
 
 /**
@@ -946,9 +951,10 @@ export function getEstimateV2ProjectionCapability(projectId: string): EstimateV2
 }
 
 /**
- * Best-effort mirror of the execution status onto the estimate root for the portfolio
- * rollup. Fire-and-forget: only in managed supabase sync, errors swallowed; a no-row
- * update (root not yet synced) is a harmless no-op.
+ * Mirror of the execution status onto the estimate root for the portfolio rollup.
+ * Fire-and-forget, only in managed supabase sync. A failed write surfaces as a draft
+ * sync error and is retried after the next successful draft save; a no-row update
+ * (root not yet synced) is a harmless no-op.
  *
  * Self-healing is asymmetric: a lost in_work write is recovered by the RPC reader fallback
  * (root status='approved' → in_work), but paused/finished have NO server-side fallback, so
@@ -957,9 +963,28 @@ export function getEstimateV2ProjectionCapability(projectId: string): EstimateV2
  */
 function persistExecutionStatusIfManaged(projectId: string, status: EstimateExecutionStatus): void {
   if (!getManagedEstimateRemoteSyncContext(projectId)) return;
-  const estimateId = statesByProjectId.get(projectId)?.project.id;
-  if (!estimateId) return;
-  void updateProjectEstimateExecutionStatus(estimateId, status).catch((error) => {
+  const localEstimateId = statesByProjectId.get(projectId)?.project.id;
+  if (!localEstimateId) return;
+  // The root a draft save creates gets this id (resolveEstimateDraftRemoteIds).
+  const estimateId = ensureWorkspaceUuid(projectId, "estimate", localEstimateId);
+  // Only the outcome of the latest write counts: an older write settling later,
+  // or one from before an account switch, must neither clear nor raise the retry.
+  executionStatusWriteSeq += 1;
+  const seq = executionStatusWriteSeq;
+  latestExecutionStatusWriteByProjectId.set(projectId, seq);
+  const isLatestWrite = () => latestExecutionStatusWriteByProjectId.get(projectId) === seq;
+  void updateProjectEstimateExecutionStatus(estimateId, status).then(() => {
+    if (isLatestWrite()) executionStatusWriteFailedProjectIds.delete(projectId);
+  }, (error) => {
+    if (!isLatestWrite()) return;
+    executionStatusWriteFailedProjectIds.add(projectId);
+    const failedState = statesByProjectId.get(projectId);
+    const failedSync = failedState ? ensureProjectSyncState(failedState) : null;
+    if (failedSync && failedSync.draftSaveStatus !== "blocked_permission") {
+      failedSync.draftSaveStatus = "error";
+      failedSync.draftSaveLastError = error instanceof Error ? error.message : "Estimate status save failed";
+      notify();
+    }
     if (import.meta.env.DEV) {
       console.warn(`execution_status sync failed for ${projectId}`, error);
     }
@@ -1416,6 +1441,9 @@ async function runProjectDraftSync(projectId: string) {
           postSync.draftSaveStatus = "saved";
           postSync.draftSaveLastSucceededAt = nowIso();
           postSync.draftSaveLastError = null;
+          if (executionStatusWriteFailedProjectIds.has(projectId)) {
+            persistExecutionStatusIfManaged(projectId, postSaveState.project.estimateStatus);
+          }
         }
         // Cross-session signal for P2 realtime consumers; best-effort.
         void emitEstimateDraftSyncEvent(projectId, projectionRevision);
@@ -4361,6 +4389,8 @@ export function computeVersionDiff(
 
 export function __unsafeResetEstimateV2ForTests() {
   statesByProjectId.clear();
+  executionStatusWriteFailedProjectIds.clear();
+  latestExecutionStatusWriteByProjectId.clear();
   accessContextByProjectId.clear();
   retainedSupabaseSyncProfileIdByProjectId.clear();
   retainedSupabaseAccessContextByProjectId.clear();

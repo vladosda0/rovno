@@ -12,6 +12,7 @@ const {
   syncProjectTasksFromEstimateMock,
   syncProjectProcurementFromEstimateMock,
   syncProjectHRFromEstimateMock,
+  updateProjectEstimateExecutionStatusMock,
 } = vi.hoisted(() => ({
   loadCurrentEstimateDraftMock: vi.fn(),
   loadEstimateDraftSeqMock: vi.fn(),
@@ -24,6 +25,7 @@ const {
   syncProjectTasksFromEstimateMock: vi.fn(),
   syncProjectProcurementFromEstimateMock: vi.fn(),
   syncProjectHRFromEstimateMock: vi.fn(),
+  updateProjectEstimateExecutionStatusMock: vi.fn(),
 }));
 
 vi.mock("@/data/estimate-source", async () => {
@@ -35,6 +37,7 @@ vi.mock("@/data/estimate-source", async () => {
     saveCurrentEstimateDraft: saveCurrentEstimateDraftMock,
     syncEstimateProjectionRemote: syncEstimateProjectionRemoteMock,
     emitEstimateDraftSyncEvent: emitEstimateDraftSyncEventMock,
+    updateProjectEstimateExecutionStatus: updateProjectEstimateExecutionStatusMock,
   };
 });
 
@@ -87,6 +90,7 @@ import {
   getEstimateV2ProjectState,
   hydrateEstimateV2ProjectFromWorkspace,
   registerEstimateV2ProjectAccessContext,
+  setProjectEstimateStatus,
   updateLine,
 } from "@/data/estimate-v2-store";
 import { EstimateDraftConflictError, SyncEstimateProjectionUnavailableError } from "@/data/estimate-source";
@@ -207,6 +211,7 @@ describe("estimate-v2 sync-state honesty", () => {
     saveCurrentEstimateDraftMock.mockResolvedValue(undefined);
     emitEstimateDraftSyncEventMock.mockResolvedValue(undefined);
     loadEstimateDraftSeqMock.mockResolvedValue(0);
+    updateProjectEstimateExecutionStatusMock.mockResolvedValue(undefined);
     // Default to a pre-P1 database so the pinned suites keep exercising the
     // legacy client pipeline (still shipped as the fallback); RPC-path tests
     // override this per test.
@@ -513,6 +518,199 @@ describe("estimate-v2 sync-state honesty", () => {
 
     await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1", forceFresh: true });
     expect(getEstimateV2ProjectState(PROJECT_ID).project.estimateStatus).toBe("paused");
+  });
+
+  it("retries a failed execution_status write after the next successful draft save", async () => {
+    vi.useFakeTimers();
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      expect(getEstimateV2ProjectState(PROJECT_ID).project.estimateStatus).toBe("in_work");
+      await vi.advanceTimersByTimeAsync(350);
+      updateProjectEstimateExecutionStatusMock.mockClear();
+
+      updateProjectEstimateExecutionStatusMock.mockRejectedValueOnce(new Error("network down"));
+      expect(setProjectEstimateStatus(PROJECT_ID, "paused").ok).toBe(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(getEstimateV2ProjectState(PROJECT_ID).sync.draftSaveStatus).toBe("error");
+      expect(updateProjectEstimateExecutionStatusMock).toHaveBeenCalledTimes(1);
+
+      updateLine(PROJECT_ID, "33333333-3333-4333-8333-333333333333", { qtyMilli: 3000 });
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(saveCurrentEstimateDraftMock).toHaveBeenCalled();
+      expect(updateProjectEstimateExecutionStatusMock).toHaveBeenCalledTimes(2);
+      expect(updateProjectEstimateExecutionStatusMock).toHaveBeenLastCalledWith(expect.any(String), "paused");
+
+      const savesBefore = saveCurrentEstimateDraftMock.mock.calls.length;
+      updateLine(PROJECT_ID, "33333333-3333-4333-8333-333333333333", { qtyMilli: 4000 });
+      await vi.advanceTimersByTimeAsync(350);
+      expect(saveCurrentEstimateDraftMock.mock.calls.length).toBe(savesBefore + 1);
+      expect(updateProjectEstimateExecutionStatusMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not rewrite execution_status on a draft save when the last write succeeded", async () => {
+    vi.useFakeTimers();
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      await vi.advanceTimersByTimeAsync(350);
+      expect(setProjectEstimateStatus(PROJECT_ID, "paused").ok).toBe(true);
+      await vi.advanceTimersByTimeAsync(350);
+      updateProjectEstimateExecutionStatusMock.mockClear();
+
+      updateLine(PROJECT_ID, "33333333-3333-4333-8333-333333333333", { qtyMilli: 3000 });
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(saveCurrentEstimateDraftMock).toHaveBeenCalled();
+      expect(updateProjectEstimateExecutionStatusMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the retry when an older status write succeeds after the newer one failed", async () => {
+    vi.useFakeTimers();
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      await vi.advanceTimersByTimeAsync(350);
+      updateProjectEstimateExecutionStatusMock.mockClear();
+
+      let resolvePaused!: () => void;
+      updateProjectEstimateExecutionStatusMock
+        .mockImplementationOnce(() => new Promise<void>((resolve) => { resolvePaused = resolve; }))
+        .mockRejectedValueOnce(new Error("network down"));
+      expect(setProjectEstimateStatus(PROJECT_ID, "paused").ok).toBe(true);
+      expect(setProjectEstimateStatus(PROJECT_ID, "finished").ok).toBe(true);
+      await vi.advanceTimersByTimeAsync(0);
+      resolvePaused();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(getEstimateV2ProjectState(PROJECT_ID).project.estimateStatus).toBe("finished");
+
+      updateLine(PROJECT_ID, "33333333-3333-4333-8333-333333333333", { qtyMilli: 3000 });
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(updateProjectEstimateExecutionStatusMock).toHaveBeenLastCalledWith(expect.any(String), "finished");
+      expect(updateProjectEstimateExecutionStatusMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the retry when the first of two equal status writes succeeds after the second failed", async () => {
+    vi.useFakeTimers();
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      await vi.advanceTimersByTimeAsync(350);
+      updateProjectEstimateExecutionStatusMock.mockClear();
+
+      let resolveFirstPaused!: () => void;
+      updateProjectEstimateExecutionStatusMock
+        .mockImplementationOnce(() => new Promise<void>((resolve) => { resolveFirstPaused = resolve; }))
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("network down"));
+      setProjectEstimateStatus(PROJECT_ID, "paused");
+      setProjectEstimateStatus(PROJECT_ID, "finished");
+      setProjectEstimateStatus(PROJECT_ID, "paused");
+      await vi.advanceTimersByTimeAsync(0);
+      resolveFirstPaused();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(getEstimateV2ProjectState(PROJECT_ID).project.estimateStatus).toBe("paused");
+
+      updateLine(PROJECT_ID, "33333333-3333-4333-8333-333333333333", { qtyMilli: 3000 });
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(updateProjectEstimateExecutionStatusMock).toHaveBeenCalledTimes(4);
+      expect(updateProjectEstimateExecutionStatusMock).toHaveBeenLastCalledWith(expect.any(String), "paused");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops a failed status write that settles after the account changed", async () => {
+    vi.useFakeTimers();
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      await vi.advanceTimersByTimeAsync(350);
+      let rejectPaused!: (error: Error) => void;
+      updateProjectEstimateExecutionStatusMock
+        .mockImplementationOnce(() => new Promise<void>((_, reject) => { rejectPaused = reject; }));
+      expect(setProjectEstimateStatus(PROJECT_ID, "paused").ok).toBe(true);
+
+      clearEstimateV2ProjectAccessContext(PROJECT_ID);
+      const pausedDraft = serverDraft({ withStructure: true });
+      (pausedDraft.estimate as { execution_status?: string }).execution_status = "paused";
+      loadCurrentEstimateDraftMock.mockResolvedValue(pausedDraft);
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-2" });
+      registerEstimateV2ProjectAccessContext(PROJECT_ID, {
+        mode: "supabase",
+        profileId: "profile-2",
+        projectOwnerProfileId: "profile-2",
+        membershipRole: "owner",
+      });
+      expect(getEstimateV2ProjectState(PROJECT_ID).project.estimateStatus).toBe("paused");
+      const before = getEstimateV2ProjectState(PROJECT_ID).sync.draftSaveStatus;
+      rejectPaused(new Error("previous account"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(getEstimateV2ProjectState(PROJECT_ID).sync.draftSaveStatus).toBe(before);
+      expect(getEstimateV2ProjectState(PROJECT_ID).sync.draftSaveLastError).not.toBe("previous account");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("forgets a failed status write when another account takes over the project", async () => {
+    vi.useFakeTimers();
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      await vi.advanceTimersByTimeAsync(350);
+      updateProjectEstimateExecutionStatusMock.mockRejectedValueOnce(new Error("network down"));
+      expect(setProjectEstimateStatus(PROJECT_ID, "paused").ok).toBe(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(getEstimateV2ProjectState(PROJECT_ID).sync.draftSaveStatus).toBe("error");
+
+      clearEstimateV2ProjectAccessContext(PROJECT_ID);
+      const planningDraft = serverDraft({ withStructure: true });
+      planningDraft.estimate.status = "draft";
+      loadCurrentEstimateDraftMock.mockResolvedValue(planningDraft);
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-2" });
+      registerEstimateV2ProjectAccessContext(PROJECT_ID, {
+        mode: "supabase",
+        profileId: "profile-2",
+        projectOwnerProfileId: "profile-2",
+        membershipRole: "owner",
+      });
+      updateProjectEstimateExecutionStatusMock.mockClear();
+      updateLine(PROJECT_ID, "33333333-3333-4333-8333-333333333333", { qtyMilli: 3000 });
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(saveCurrentEstimateDraftMock).toHaveBeenCalled();
+      expect(updateProjectEstimateExecutionStatusMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not paint a blocked_permission session as a save error", async () => {
+    vi.useFakeTimers();
+    try {
+      registerSummaryCoOwnerContext();
+      updateProjectEstimateExecutionStatusMock.mockRejectedValueOnce(new Error("rls"));
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-2" });
+      await vi.advanceTimersByTimeAsync(350);
+      expect(updateProjectEstimateExecutionStatusMock).toHaveBeenCalledTimes(1);
+      expect(getEstimateV2ProjectState(PROJECT_ID).sync.draftSaveStatus).toBe("blocked_permission");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("never caches or autosaves a default-seeded state before hydration installs remote truth", async () => {
