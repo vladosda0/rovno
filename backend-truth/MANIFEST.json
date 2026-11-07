@@ -719,6 +719,10 @@
     {
       "path": "supabase/migrations/20261106030000_kb_watches_and_changes.sql",
       "sha256": "506db46b7705b3bd32ac31baf2d3d8958024beaf91f5c42a214576d3e7d14a35"
+    },
+    {
+      "path": "supabase/migrations/20261107030000_kb_solution_sources_fingerprint.sql",
+      "sha256": "0e65b151f6eb9d2830caa69fbdef827a156539c36e94b8e54b3301997e58cd86"
     }
   ],
   "generated_artifacts": [
