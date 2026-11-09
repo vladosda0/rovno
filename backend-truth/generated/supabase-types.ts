@@ -2639,19 +2639,16 @@ export type Database = {
           "profile_id": string
           "project_id": string
           "created_at": string
-          "primary": unknown | null
           }
           Insert: {
           "profile_id": string
           "project_id": string
           "created_at"?: string
-          "primary"?: unknown | null
           }
           Update: {
           "profile_id"?: string
           "project_id"?: string
           "created_at"?: string
-          "primary"?: unknown | null
           }
           Relationships: []
         }
@@ -3163,7 +3160,6 @@ export type Database = {
           "answer": string
           "created_at": string
           "updated_at": string
-          "primary": unknown | null
           }
           Insert: {
           "profile_id": string
@@ -3174,7 +3170,6 @@ export type Database = {
           "answer"?: string
           "created_at"?: string
           "updated_at"?: string
-          "primary"?: unknown | null
           }
           Update: {
           "profile_id"?: string
@@ -3185,7 +3180,6 @@ export type Database = {
           "answer"?: string
           "created_at"?: string
           "updated_at"?: string
-          "primary"?: unknown | null
           }
           Relationships: []
         }
@@ -3234,7 +3228,6 @@ export type Database = {
           "position": number
           "amendments": unknown
           "created_at": string
-          "primary": unknown | null
           }
           Insert: {
           "doc_id": string
@@ -3247,7 +3240,6 @@ export type Database = {
           "position": number
           "amendments"?: unknown
           "created_at"?: string
-          "primary"?: unknown | null
           }
           Update: {
           "doc_id"?: string
@@ -3260,7 +3252,6 @@ export type Database = {
           "position"?: number
           "amendments"?: unknown
           "created_at"?: string
-          "primary"?: unknown | null
           }
           Relationships: []
         }
@@ -3308,19 +3299,16 @@ export type Database = {
           "profile_id": string
           "doc_id": string
           "created_at": string
-          "primary": unknown | null
           }
           Insert: {
           "profile_id": string
           "doc_id": string
           "created_at"?: string
-          "primary"?: unknown | null
           }
           Update: {
           "profile_id"?: string
           "doc_id"?: string
           "created_at"?: string
-          "primary"?: unknown | null
           }
           Relationships: []
         }
