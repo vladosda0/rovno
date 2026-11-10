@@ -540,7 +540,7 @@ describe("ShurikOutsidePanel", () => {
 
     it("replaces the field with the card and stands Shurik above it in an empty conversation", async () => {
       renderPanel();
-      expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+      expect(await screen.findByRole("alert")).toHaveAccessibleName("AI chat limit reached");
       expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
       const figure = await screen.findByTestId("shurik-quota-figure");
       expect(within(figure).getByRole("presentation", { hidden: true }).getAttribute("src")).toBe("/shurik/working.png");
@@ -550,7 +550,7 @@ describe("ShurikOutsidePanel", () => {
       historyOf([{ role: "user", text: "Q" }, { role: "assistant", text: "A" }]);
       renderPanel();
       expect(await screen.findByText("A")).toBeInTheDocument();
-      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
       expect(screen.queryByTestId("shurik-quota-figure")).not.toBeInTheDocument();
     });
   });
