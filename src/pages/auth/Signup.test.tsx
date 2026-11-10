@@ -78,8 +78,9 @@ describe("Signup", () => {
     expect(screen.queryByLabelText("Password")).toBeNull();
     expect(screen.queryByLabelText("Confirm password")).toBeNull();
     expect(screen.getByRole("button", { name: "Get code" })).toBeInTheDocument();
-    expect(screen.getByText(/By clicking “Get code” or “Sign in with Yandex ID”/)).toBeInTheDocument();
+    expect(screen.getByText(/By clicking “Get code”, “Yandex\sID” or “VK\sID”/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in with Yandex ID" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in with VK ID" })).toBeInTheDocument();
   });
 
   it("asks for a sign-up code that creates a passwordless account", async () => {

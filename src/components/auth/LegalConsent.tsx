@@ -2,7 +2,7 @@ import { Trans } from "react-i18next";
 
 const linkClass = "underline hover:text-foreground";
 
-/** The offer and privacy consent line under the sign-up and Yandex buttons. */
+/** The offer and privacy consent line under the sign-up and external sign-in buttons. */
 export function LegalConsent({ i18nKey }: { i18nKey: string }) {
   return (
     <p className="text-center text-caption text-muted-foreground">

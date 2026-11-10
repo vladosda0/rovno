@@ -299,12 +299,39 @@ describe("Login", () => {
       );
     }
 
-    it("shows the button and the consent in both the password and the code view", () => {
+    it("shows Yandex ID and VK ID in one row and the consent in both the password and the code view", () => {
       renderAt("/auth/login");
-      expect(screen.getByRole("button", { name: "Sign in with Yandex ID" })).toBeInTheDocument();
-      expect(screen.getByText(/By signing in with Yandex for the first time/)).toBeInTheDocument();
+      const yandex = screen.getByRole("button", { name: "Sign in with Yandex ID" });
+      const vk = screen.getByRole("button", { name: "Sign in with VK ID" });
+      expect(yandex).toHaveTextContent(/^Yandex ID$/);
+      expect(vk).toHaveTextContent(/^VK ID$/);
+      expect(yandex.parentElement).toBe(vk.parentElement);
+      expect(screen.queryByText(/Sign in with$/)).toBeNull();
+      expect(screen.getByText(/By signing in with Yandex\sID or VK\sID for the first time/)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Sign in with a code from email" }));
       expect(screen.getByRole("button", { name: "Sign in with Yandex ID" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Sign in with VK ID" })).toBeInTheDocument();
+      expect(screen.getByText(/By signing in with Yandex\sID or VK\sID for the first time/)).toBeInTheDocument();
+    });
+
+    it("VK ID starts its own attempt with next and turns busy", async () => {
+      invokeMock.mockReturnValue(new Promise(() => undefined));
+      renderAt("/auth/login?next=%2Finvite%2Faccept%2Fabc");
+      fireEvent.click(screen.getByRole("button", { name: "Sign in with VK ID" }));
+      await waitFor(() =>
+        expect(invokeMock).toHaveBeenCalledWith("vk-auth", {
+          body: { action: "start", mode: "login", next: "/invite/accept/abc" },
+        }),
+      );
+      expect(screen.getByRole("button", { name: "Sign in with VK ID" })).toBeDisabled();
+      // One attempt at a time: the other provider waits too.
+      expect(screen.getByRole("button", { name: "Sign in with Yandex ID" })).toBeDisabled();
+    });
+
+    it("shows the VK plaque once", async () => {
+      renderAt("/auth/login?vk=failed&next=%2Fhome");
+      expect(screen.getByRole("alert")).toHaveTextContent("VK ID sign-in wasn't completed. Try again or sign in with a code from email.");
+      await waitFor(() => expect(screen.getByTestId("location-marker").textContent).toBe("/auth/login?next=%2Fhome"));
     });
 
     it("carries next into the attempt", async () => {

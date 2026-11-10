@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { EmailCodeStep } from "@/components/auth/EmailCodeStep";
 import { LegalConsent } from "@/components/auth/LegalConsent";
-import { YandexButton } from "@/components/auth/YandexButton";
+import { ExternalLoginButtons } from "@/components/auth/ExternalLoginButtons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,13 +30,16 @@ export default function Login() {
   const [mode, setMode] = useState<LoginMode>("password");
   const safeNext = safeNextPath(searchParams.get("next"));
   const confirmed = searchParams.get("confirmed") === "1";
-  const [yandexFailed, setYandexFailed] = useState(() => searchParams.get("yandex") === "failed");
+  const [providerFailed, setProviderFailed] = useState<"yandex" | "vk" | null>(() =>
+    searchParams.get("vk") === "failed" ? "vk" : searchParams.get("yandex") === "failed" ? "yandex" : null,
+  );
 
   // Read once: a refresh of the page forgets the failed attempt.
   useEffect(() => {
-    if (!searchParams.has("yandex")) return;
+    if (!searchParams.has("yandex") && !searchParams.has("vk")) return;
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("yandex");
+    nextParams.delete("vk");
     setSearchParams(nextParams, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -77,13 +80,13 @@ export default function Login() {
   };
 
   const changeMode = (next: LoginMode) => {
-    setYandexFailed(false);
+    setProviderFailed(null);
     setMode(next);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setYandexFailed(false);
+    setProviderFailed(null);
     if (!email || !password) {
       toast({ title: t("auth.login.validationTitle"), description: t("auth.login.validationDescription"), variant: "destructive" });
       return;
@@ -127,7 +130,7 @@ export default function Login() {
 
   const handleCodeRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    setYandexFailed(false);
+    setProviderFailed(null);
     if (!email.trim()) return;
     setLoading(true);
     try {
@@ -178,9 +181,9 @@ export default function Login() {
         </div>
       }
     >
-      {yandexFailed && (
+      {providerFailed && (
         <Alert variant="destructive" className="px-sp-2 py-1.5">
-          <AlertDescription className="text-caption">{t("auth.yandex.failed")}</AlertDescription>
+          <AlertDescription className="text-caption">{t(providerFailed === "vk" ? "auth.vk.failed" : "auth.yandex.failed")}</AlertDescription>
         </Alert>
       )}
       {mode === "password" ? (
@@ -228,8 +231,8 @@ export default function Login() {
           </div>
         </form>
       )}
-      <YandexButton next={safeNext} onStart={() => setYandexFailed(false)} />
-      <LegalConsent i18nKey="auth.yandex.loginConsent" />
+      <ExternalLoginButtons next={safeNext} onStart={() => setProviderFailed(null)} />
+      <LegalConsent i18nKey="auth.external.loginConsent" />
     </AuthCard>
   );
 }

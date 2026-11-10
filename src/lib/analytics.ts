@@ -362,6 +362,7 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/auth/email-sent" },
   { pattern: "/auth/callback" },
   { pattern: "/auth/yandex/callback" },
+  { pattern: "/auth/vk/callback" },
   { pattern: "/home" },
   { pattern: "/home/catalogs/upload-review/:uploadId" },
   { pattern: "/home/catalogs/:catalogId" },
@@ -494,7 +495,7 @@ export function analyticsReferrer(): string {
  *
  * `code` is deliberately absent: Supabase PKCE is not in use, and `code` is also
  * the promo-redeem parameter, which must not stall analytics forever. The Yandex
- * callback carries its `code` on its own path, held back in urlCarriesAuthCredential.
+ * and VK callbacks carry their `code` on their own paths, held back in urlCarriesAuthCredential.
  */
 const AUTH_CREDENTIAL_KEYS = [
   "access_token",
@@ -553,7 +554,8 @@ function carriesSecretRouteValue(params: URLSearchParams): boolean {
   return false;
 }
 
-const YANDEX_CALLBACK_PATH = "/auth/yandex/callback";
+// The provider callbacks carry their `code` (VK also its device id) on their own path.
+const PROVIDER_CALLBACK_PATHS: ReadonlySet<string> = new Set(["/auth/yandex/callback", "/auth/vk/callback"]);
 
 function urlCarriesAuthCredential(): boolean {
   const { hash, search, pathname } = window.location;
@@ -561,7 +563,7 @@ function urlCarriesAuthCredential(): boolean {
   const searchParams = new URLSearchParams(search);
   return (
     matchAnalyticsRoute(pathname)?.secret === true ||
-    pathname === YANDEX_CALLBACK_PATH ||
+    PROVIDER_CALLBACK_PATHS.has(pathname) ||
     carriesCredential(hashParams) ||
     carriesCredential(searchParams) ||
     carriesSecretRouteValue(searchParams) ||

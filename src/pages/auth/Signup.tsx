@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { EmailCodeStep } from "@/components/auth/EmailCodeStep";
 import { LegalConsent } from "@/components/auth/LegalConsent";
-import { YandexButton } from "@/components/auth/YandexButton";
+import { ExternalLoginButtons } from "@/components/auth/ExternalLoginButtons";
 import { isJustConfirmed } from "@/lib/email-code";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -144,7 +144,7 @@ export default function Signup() {
         {t("auth.login.or")}
         <span className="h-px flex-1 bg-border" />
       </div>
-      <YandexButton next={safeNext} />
+      <ExternalLoginButtons next={safeNext} />
       <LegalConsent i18nKey="auth.signup.consent" />
     </AuthCard>
   );
