@@ -42,7 +42,13 @@ export default function Checkout() {
   // again (double charge). An upgrade (higher tier) is the exception — it is
   // allowed through, and tbank-init-payment charges only the catalogue
   // difference. Downgrades are scheduled from PlansDialog, never paid here.
-  const { status: subStatus, subscription, isLoading: subLoading } = useActiveSubscription();
+  const {
+    status: subStatus,
+    subscription,
+    isLoading: subLoading,
+    isLoadingError: subLoadError,
+    refetch: refetchSubscription,
+  } = useActiveSubscription();
   const currentPlanCode = subscription?.plan_code ?? null;
   const isUpgrade =
     subStatus === "active" && isValidPlan && planRank(planCode) > planRank(currentPlanCode);
@@ -151,16 +157,16 @@ export default function Checkout() {
   // analytics workstream, which owns the AnalyticsEventName registry.)
   const startedRef = useRef(false);
   useEffect(() => {
-    if (startedRef.current || !allowed || subLoading || blocked) return;
+    if (startedRef.current || !allowed || authStatus !== "authenticated" || subLoading || subLoadError || blocked) return;
     startedRef.current = true;
     trackEvent("billing_checkout_started", { plan: planCode });
-  }, [allowed, subLoading, blocked, planCode]);
+  }, [allowed, authStatus, subLoading, subLoadError, blocked, planCode]);
 
   // Initialise the payment once subscription state is known, the user is not
   // already subscribed, and consent is given. Re-runs on plan/auth change,
   // explicit retry, and the consent toggle (the payment gate).
   useEffect(() => {
-    if (!allowed || authStatus === "loading" || subLoading || blocked || !consentGiven) return;
+    if (!allowed || authStatus !== "authenticated" || subLoading || subLoadError || blocked || !consentGiven) return;
     let cancelled = false;
     setIntentId(null);
     setPaymentUrl(null);
@@ -207,7 +213,7 @@ export default function Checkout() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, authStatus, subLoading, blocked, consentGiven, autoRenew, planCode, retryNonce]);
+  }, [allowed, authStatus, subLoading, subLoadError, blocked, consentGiven, autoRenew, planCode, retryNonce]);
 
   // C1: reveal the hosted-page fallback if the widget never reports ready.
   useEffect(() => {
@@ -241,6 +247,22 @@ export default function Checkout() {
     return (
       <div className="mx-auto w-full max-w-xl px-sp-3 py-sp-4">
         <p className="text-body-sm text-muted-foreground">{t("common.loading")}</p>
+      </div>
+    );
+  }
+  if (subLoadError) {
+    return (
+      <div className="mx-auto w-full max-w-xl px-sp-3 py-sp-4">
+        <Button variant="ghost" size="sm" asChild className="mb-sp-3 -ml-2">
+          <Link to={backHref}>
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            {t("billing.checkout.back")}
+          </Link>
+        </Button>
+        <p role="alert" className="text-body-sm text-foreground">{t("settings.billing.subscriptionLoadError")}</p>
+        <Button className="mt-sp-2" variant="outline" onClick={() => refetchSubscription()}>
+          {t("common.retry")}
+        </Button>
       </div>
     );
   }

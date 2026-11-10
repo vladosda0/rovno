@@ -25,6 +25,17 @@ vi.mock("@/hooks/use-toast", async (importOriginal) => {
 
 type ActiveSub = ReturnType<typeof import("@/hooks/useActiveSubscription").useActiveSubscription>;
 let activeSubReturn: ActiveSub;
+const trackEventSpy = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/analytics", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/analytics")>();
+  return {
+    ...actual,
+    trackEvent: (...args: Parameters<typeof actual.trackEvent>) => {
+      trackEventSpy(...args);
+      return actual.trackEvent(...args);
+    },
+  };
+});
 vi.mock("@/hooks/useActiveSubscription", () => ({
   useActiveSubscription: () => activeSubReturn,
 }));
@@ -209,6 +220,121 @@ describe("Checkout", () => {
 
     expect(screen.getByText("You already have a subscription")).toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("a failed subscription read shows the load error with retry and never inits", async () => {
+    const refetch = vi.fn();
+    activeSubReturn = { ...noSubscription(), isError: true, isLoadingError: true, refetch };
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+
+    renderCheckout();
+    const consent = screen.queryByRole("checkbox");
+    if (consent) {
+      await act(async () => {
+        fireEvent.click(consent);
+      });
+    }
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByText("Couldn't load your subscription.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("a read that fails after consent was ticked does not init a payment", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+
+    const view = renderCheckout();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox"));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+    // The query key changes (e.g. account switch) and the new read fails:
+    // pending -> isLoadingError without unmount, consent state survives.
+    activeSubReturn = { ...noSubscription(), isLoading: true };
+    view.rerender(
+      <MemoryRouter initialEntries={["/billing/checkout?plan=master"]}>
+        <Checkout />
+      </MemoryRouter>,
+    );
+    activeSubReturn = { ...noSubscription(), isError: true, isLoadingError: true };
+    view.rerender(
+      <MemoryRouter initialEntries={["/billing/checkout?plan=master"]}>
+        <Checkout />
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("Couldn't load your subscription.")).toBeInTheDocument();
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("the load-error screen does not count as a started checkout", () => {
+    trackEventSpy.mockClear();
+    activeSubReturn = { ...noSubscription(), isError: true, isLoadingError: true };
+
+    renderCheckout();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load your subscription.");
+    expect(screen.getByRole("link", { name: /back/i })).toBeInTheDocument();
+    expect(trackEventSpy).not.toHaveBeenCalledWith("billing_checkout_started", expect.anything());
+  });
+
+  it("signing out in another tab after consent does not init a payment without a session", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+
+    const view = renderCheckout();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox"));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      __unsafeSetRuntimeAuthStateForTests({ status: "guest", session: null, user: null, profileId: null });
+    });
+    view.rerender(
+      <MemoryRouter initialEntries={["/billing/checkout?plan=master"]}>
+        <Checkout />
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not count a started checkout while sign-in is still loading", () => {
+    trackEventSpy.mockClear();
+    __unsafeSetRuntimeAuthStateForTests({ status: "loading", session: null, user: null, profileId: null });
+
+    const { rerender } = renderCheckout();
+    expect(trackEventSpy).not.toHaveBeenCalledWith("billing_checkout_started", expect.anything());
+
+    act(() => {
+      __unsafeSetRuntimeAuthStateForTests({
+        status: "authenticated",
+        session: {} as Session,
+        user: { email: "user@example.ru" } as User,
+        profileId: "pid-1",
+      });
+    });
+    rerender(
+      <MemoryRouter initialEntries={["/billing/checkout?plan=master"]}>
+        <Checkout />
+      </MemoryRouter>,
+    );
+    const started = trackEventSpy.mock.calls.filter(([name]) => name === "billing_checkout_started");
+    expect(started).toHaveLength(1);
   });
 
   it("upgrade: charges the catalogue difference today and names the full price for later", async () => {
