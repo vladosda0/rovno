@@ -185,6 +185,46 @@ describe("knowledge base full text (slice 2)", () => {
     expect(document.getElementById("p-4-7")?.className).not.toMatch(/border-l-2/);
   });
 
+  it("a building code's contents button names the section, not the headed subsection (slice 9 keeps SP as it was)", async () => {
+    window.location.hash = "#p-7-1-1";
+    renderKB("/home?docTab=knowledge-base&kbDoc=sp-71-13330");
+    await screen.findByText("Записи в журнале и в общем журнале.");
+    expect(screen.getAllByText("Contents: 7 Отделочные работы").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Contents: 7.1 Общие требования")).not.toBeInTheDocument();
+  });
+
+  it("a law: chapter caption, article heading, part number, the edition note in grey and searchable (slice 9)", async () => {
+    const law = normalizeKbRow({
+      doc_id: "LAW-001", slug: "grk-rf", designation: "ГрК РФ", title: "Градостроительный кодекс РФ", category: "Закон",
+      folder: "laws", display_mode: "full_text", full_text_available: true, text_label: "verified",
+      edition_date: "2026-08-04", text_checked_at: "2026-11-10", text_source_url: "http://pravo.gov.ru/proxy/ips/?doc_itself=&nd=102090643&fulltext=1",
+    });
+    fetchKbDocumentBySlug.mockResolvedValue(law);
+    fetchKbClauses.mockResolvedValue([
+      { anchor: "gl-6", number: null, level: 1, heading: "Глава 6. Проектирование", body: "", position: 1 },
+      { anchor: "st-51", number: null, level: 2, heading: "Статья 51. Разрешение на строительство", body: "", position: 2 },
+      { anchor: "st-51-ch-1", number: "1", level: 3, heading: null, body: "Разрешение есть документ.\n(В редакции Федерального закона от 03.08.2018 № 342-ФЗ)", position: 3 },
+      { anchor: "st-51-ch-17", number: "17", level: 3, heading: null, body: "Выдача разрешения не требуется в случае:\n1) строительства гаража;\n2) строительства киоска.", position: 4 },
+    ].map(normalizeKbClause));
+    window.location.hash = "#st-51-ch-1";
+    renderKB("/home?docTab=knowledge-base&kbDoc=grk-rf");
+    expect(await screen.findByText("Статья 51. Разрешение на строительство")).toBeInTheDocument();
+    expect(screen.getByText("Разрешение есть документ.")).toBeInTheDocument();
+    expect(screen.getByText("В редакции Федерального закона от 03.08.2018 № 342-ФЗ")).toHaveAttribute("data-kb-edition-note");
+    expect(document.getElementById("st-51-ch-1")?.className).toMatch(/border-l-2/);
+    // Пункты части с новой строки, как в официальном тексте (живая проверка 11.11).
+    const items = screen.getByText(/Выдача разрешения не требуется в случае:/);
+    expect(items.textContent).toContain("Выдача разрешения не требуется в случае:\n1) строительства гаража;\n2) строительства киоска.");
+    expect(items.className).toMatch(/whitespace-pre-line/);
+    expect(screen.getAllByText("Contents: Статья 51. Разрешение на строительство").length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search this document" }), { target: { value: "342-ФЗ" } });
+    expect(screen.getByText("1 of 1")).toBeInTheDocument();
+    expect(document.querySelector("[data-kb-edition-note] mark")).toHaveTextContent("342-ФЗ");
+    fireEvent.change(screen.getByRole("textbox", { name: "Search this document" }), { target: { value: "ФЗ)" } });
+    expect(screen.getByText("1 of 1")).toBeInTheDocument();
+    expect(document.querySelector("[data-kb-edition-note] mark")).toHaveTextContent("ФЗ");
+  });
+
   it("copies the clause link to the public page", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });

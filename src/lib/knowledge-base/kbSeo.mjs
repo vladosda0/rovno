@@ -14,7 +14,7 @@
 // Types live in kbSeo.d.mts.
 
 import { KB_FOLDERS, displayTitle, kbDocPath, kbHeading, sourceHost } from "./kbConfig.mjs";
-import { kbEditionLine, kbFullTextReadable, kbTextLabel } from "./kbFullText.mjs";
+import { kbEditionLine, kbEditionNote, kbFullTextReadable, kbTextLabel } from "./kbFullText.mjs";
 import { KB_SOLUTIONS_PATH, kbSolutionDocuments, kbSolutionPath } from "./kbSolutions.mjs";
 import { KB_CHANGES_PATH } from "./kbChanges.mjs";
 
@@ -113,8 +113,10 @@ export function kbDocumentDescription(doc, t, { spFullText = true, firstText = n
 
 /** The first body text of a document, for the description. */
 export function kbFirstText(clauses) {
-  const c = (clauses ?? []).find((x) => x.body && x.body.length > 40);
-  return c ? clip(c.body, 90) : null;
+  // A law clause's edition note is not its text (slice 9).
+  const texts = (clauses ?? []).map((x) => kbEditionNote(x).text);
+  const text = texts.find((x) => x && x.length > 40);
+  return text ? clip(text, 90) : null;
 }
 
 const LEGAL_FORCE = { active: "https://schema.org/InForce", replaced: "https://schema.org/NotInForce", cancelled: "https://schema.org/NotInForce" };

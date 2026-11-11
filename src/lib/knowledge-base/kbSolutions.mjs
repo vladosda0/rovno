@@ -7,6 +7,8 @@
 // The texts inside a card's body are content (Russian), not locale strings.
 // Types live in kbSolutions.d.mts.
 
+import { kbLawClauseLabel } from "./kbFullText.mjs";
+
 export const KB_SOLUTIONS_PATH = "/baza/resheniya/";
 
 /**
@@ -164,10 +166,12 @@ const APPENDIX_LETTERS = {
 
 /**
  * The clause part of a chip from its anchor: `p-6-4-2-8` → «п. 6.4.2.8»,
- * `p-pril-b` → «прил. Б», `p-pril-b-1` → «п. Б.1».
+ * `p-pril-b` → «прил. Б», `p-pril-b-1` → «п. Б.1», a law's `st-51-ch-17` → «ст. 51 ч. 17».
  */
 export function kbClauseLabel(anchor) {
   if (!anchor) return null;
+  const law = kbLawClauseLabel(anchor);
+  if (law) return law;
   const appendix = /^p-pril-([a-z0-9]+)(?:-(.+))?$/.exec(anchor);
   if (appendix) {
     const letter = APPENDIX_LETTERS[appendix[1]] ?? appendix[1].toUpperCase();

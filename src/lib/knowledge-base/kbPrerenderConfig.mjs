@@ -17,7 +17,7 @@ import {
   normalizeKbSolution,
   sortKbSolutions,
 } from "./kbSolutions.mjs";
-import { kbEditionLine, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
+import { kbEditionLine, kbEditionNote, kbIsLawAnchor, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
 import { KB_CHANGES_PATH, kbChangeMonths } from "./kbChanges.mjs";
 import {
   KB_INDEX_PATH,
@@ -108,9 +108,21 @@ export function kbFullTextHtml(doc, clauses, t) {
     edition ? `<span class="rv-kb-edition">${escapeHtml(edition)}</span>` : "",
   ].join(" ");
   const number = (c) => (c.number && /^\d/.test(c.number) ? `${escapeHtml(c.number)} ` : "");
+  // A law keeps the official text's line per item «1)», «1¹)», as the reader does.
+  const lawLines = (text) => escapeHtml(text).replaceAll("\n", "<br>");
   const body = clauses
     .map((c) => {
       const id = escapeHtml(c.anchor);
+      // A law (slice 9): chapter h2, article h3, the edition note in its own muted line.
+      if (kbIsLawAnchor(c.anchor)) {
+        const { text, note } = kbEditionNote(c);
+        const noteHtml = note ? `<p class="rv-kb-edition">${escapeHtml(note)}</p>` : "";
+        if (c.level <= 2 && c.heading) {
+          const tag = c.level === 1 ? "h2" : "h3";
+          return `<${tag} id="${id}">${escapeHtml(c.heading)}</${tag}>${text ? `<p>${lawLines(text)}</p>` : ""}${noteHtml}`;
+        }
+        return `<p id="${id}"><strong>${number(c)}</strong>${lawLines(text)}</p>${noteHtml}`;
+      }
       if (c.heading && !c.body) {
         const tag = c.level === 1 || !/^\d/.test(c.number ?? "") ? "h2" : "h3";
         return `<${tag} id="${id}">${number(c)}${escapeHtml(c.heading)}</${tag}>`;

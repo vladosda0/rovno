@@ -73,6 +73,15 @@ describe("KbSourceLine", () => {
     expect(onAsk).toHaveBeenCalledWith("«должны быть покрыты гидроизолирующим составом» · СП 163.1325800, cl. 6.4.2.8\n");
   });
 
+  it("a law article without a clause number: the button and the window heading both name the article (slice 9)", () => {
+    const article: KbAnswerSource = { docId: "LAW-022", docSlug: "tk-rf-197-fz", docLabel: "ТК РФ", anchor: "st-81", checking: false, pendingAmendments: [], quote: "Трудовой договор может быть расторгнут" };
+    expect(kbClauseLabel(article)).toBe("ТК РФ, ст. 81");
+    render(<KbSourceLine knowledgeBase={{ sources: [article], missing: false }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Based on:/ }));
+    fireEvent.click(screen.getByRole("button", { name: "ТК РФ, ст. 81" }));
+    expect(screen.getByText("ТК РФ · ст. 81")).toBeInTheDocument();
+  });
+
   it("a quote clipped by the server keeps one closing ellipsis; a repeated amendment number counts once", () => {
     const clipped = { ...CARD_FACT, quote: "должны быть покрыты…", checking: true, pendingAmendments: [3, 3] };
     render(<KbSourceLine knowledgeBase={{ sources: [clipped], missing: false }} />);

@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { KbAnswerSource, LiveTextKnowledgeBase } from "@/lib/ai-assistant-contract";
 import { kbMoscowToday } from "@/lib/knowledge-base/kbHistory.mjs";
+import { kbLawClauseLabel } from "@/lib/knowledge-base/kbFullText.mjs";
 
 const KB_TAB = "/home?tab=documents&docTab=knowledge-base";
 
@@ -46,6 +47,9 @@ export function compactAmendmentNumbers(numbers: ReadonlyArray<number>): string 
 }
 
 export function kbClauseLabel(source: KbAnswerSource, clausePrefix = "п."): string {
+  // A law part reads «ст. 51 ч. 17» (docs-library slice 9, frame 4).
+  const law = kbLawClauseLabel(source.anchor);
+  if (law) return `${source.docLabel}, ${law}`;
   if (!source.clause) return source.docLabel;
   // «Приложение Ж» names itself, the prefix goes only before a clause number.
   return /^\d/.test(source.clause)
@@ -91,7 +95,8 @@ function ClauseButton({ source, onAsk }: ClauseButtonProps) {
   const href = kbClauseHref(source);
   const prefix = t("ai.kb.sources.clausePrefix");
   const label = kbClauseLabel(source, prefix);
-  const heading = source.clause ? `${source.docLabel} · ${label.slice(source.docLabel.length + 2)}` : source.docLabel;
+  // The window heading names what the button names: «ТК РФ · ст. 81» for a law article that has no clause number.
+  const heading = label !== source.docLabel ? `${source.docLabel} · ${label.slice(source.docLabel.length + 2)}` : source.docLabel;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

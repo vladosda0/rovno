@@ -8,7 +8,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, FileText, Folder } from "lucide-react";
 import { useKbClauses, useKbDocument, useKbSpFullText } from "@/hooks/use-knowledge-base";
-import { kbAnchorFromHash, kbFullTextReadable, kbSectionAnchor, kbToc, type KbTocEntry } from "@/lib/knowledge-base/kbFullText.mjs";
+import {
+  kbAnchorFromHash,
+  kbArticleAnchor,
+  kbFullTextReadable,
+  kbIsLawAnchor,
+  kbSectionAnchor,
+  kbToc,
+  type KbTocEntry,
+} from "@/lib/knowledge-base/kbFullText.mjs";
 import { kbHeading } from "@/lib/knowledge-base/kbConfig.mjs";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +49,14 @@ export function KbNavContents({ slug, onFolder }: KbNavContentsProps) {
 
   if (!doc) return null;
   const section = anchor && clauses.length ? kbSectionAnchor(clauses, anchor) : null;
+  const article = anchor && clauses.length ? kbArticleAnchor(clauses, anchor) : null;
+  // A law (slice 9, frame 1 A): chapters, and the open chapter shows its articles.
+  const articlesOf = (chapter: string) => {
+    const at = toc.main.findIndex((e) => e.anchor === chapter);
+    const out: KbTocEntry[] = [];
+    for (let i = at + 1; i < toc.main.length && toc.main[i].level > 1; i++) out.push(toc.main[i]);
+    return out;
+  };
 
   const entry = (e: KbTocEntry) => (
     <button
@@ -54,12 +70,14 @@ export function KbNavContents({ slug, onFolder }: KbNavContentsProps) {
           window.location.hash = e.anchor;
         }
       }}
-      aria-current={e.anchor === section ? "location" : undefined}
+      aria-current={e.anchor === (e.level > 1 && kbIsLawAnchor(e.anchor) ? article : section) ? "location" : undefined}
       className={cn(
         row,
         "py-1 pl-[3.25rem] text-caption",
         e.level > 1 && "pl-[4.25rem]",
-        e.anchor === section ? "bg-accent/10 font-medium text-accent" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        e.anchor === (e.level > 1 && kbIsLawAnchor(e.anchor) ? article : section)
+          ? "bg-accent/10 font-medium text-accent"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
       data-kb-nav-section
     >
@@ -77,7 +95,12 @@ export function KbNavContents({ slug, onFolder }: KbNavContentsProps) {
         <FileText className="h-3.5 w-3.5 shrink-0" />
         <span className="line-clamp-2">{kbHeading(doc)}</span>
       </div>
-      {toc.main.filter((e) => e.level === 1).map(entry)}
+      {toc.main.some((e) => e.level === 1)
+        ? toc.main
+          .filter((e) => e.level === 1)
+          .flatMap((e) => (kbIsLawAnchor(e.anchor) && e.anchor === section ? [entry(e), ...articlesOf(e.anchor).map(entry)] : [entry(e)]))
+        : // A short law without chapters: its articles are the contents.
+          toc.main.filter((e) => kbIsLawAnchor(e.anchor)).map(entry)}
       {toc.back.length > 0 && (
         <>
           <button

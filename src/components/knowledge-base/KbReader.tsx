@@ -21,8 +21,11 @@ import { useKbDocumentById } from "@/hooks/use-knowledge-base";
 import { kbDocPath, kbHeading } from "@/lib/knowledge-base/kbConfig.mjs";
 import {
   kbAnchorFromHash,
+  kbArticleAnchor,
   kbClauseUrl,
+  kbEditionNote,
   kbHighlight,
+  kbIsLawAnchor,
   kbSearchMatches,
   kbSectionAnchor,
   kbTextLabel,
@@ -65,9 +68,12 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
   const activeMatch = matches.length ? matches[Math.min(current, matches.length - 1)] : null;
   const highlighted = activeMatch?.anchor ?? target;
   const section = highlighted ? kbSectionAnchor(clauses, highlighted) : null;
-  const sectionEntry = toc.main.find((e) => e.anchor === section) ?? null;
+  // A law names the article it is on (slice 9, frame 6), other documents their section.
+  const article = highlighted && kbIsLawAnchor(highlighted) ? kbArticleAnchor(clauses, highlighted) : null;
+  const sectionEntry =
+    (article ? toc.main.find((e) => e.anchor === article) : undefined) ?? toc.main.find((e) => e.anchor === section) ?? null;
 
-  // A link with #p-… opens the page on that clause (frame 3). The hash can change
+  // A link with #p-… (a law's #st-…) opens the page on that clause (frame 3). The hash can change
   // without a reload (a link inside the app), so listen as well.
   const scrolledFor = useRef<string | null>(null);
   useEffect(() => {
@@ -112,8 +118,13 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
   });
   const currentIndex = activeMatch ? matches.indexOf(activeMatch) : -1;
 
-  function renderText(text: string, anchor: string, field: "heading" | "body") {
-    const own = matchIndex.get(`${anchor}:${field}`) ?? [];
+  function renderText(text: string, anchor: string, field: "heading" | "body", offset = 0) {
+    // A law clause's body is drawn in two pieces, its text and its edition note
+    // (`offset` is where the piece starts in the body); a match is drawn in the piece that holds it.
+    // A match crossing a piece's edge (a note's bracket) is drawn clamped to the piece.
+    const own = (matchIndex.get(`${anchor}:${field}`) ?? [])
+      .filter((m) => m.end > offset && m.start < offset + text.length)
+      .map((m) => ({ ...m, start: Math.max(m.start, offset) - offset, end: Math.min(m.end, offset + text.length) - offset }));
     if (!own.length) return text;
     return kbHighlight(text, own, currentIndex).map((piece, i) =>
       piece.hit ? (
@@ -138,7 +149,8 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
         className={cn(
           "block w-full rounded-md px-2 py-1.5 text-left text-body-sm transition hover:bg-muted",
           entry.level > 1 && "pl-5 text-muted-foreground",
-          entry.anchor === section && "bg-accent/10 font-medium text-foreground",
+          entry.anchor === (entry.level > 1 && kbIsLawAnchor(entry.anchor) ? article : section) &&
+            "bg-accent/10 font-medium text-foreground",
         )}
       >
         {entry.label}
@@ -296,6 +308,32 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
             {clauses.map((c) => {
               const isTarget = c.anchor === highlighted;
               const isSection = c.level === 1 || !c.number || !/^\d/.test(c.number);
+              const law = kbIsLawAnchor(c.anchor);
+              const { text, note, noteStart } = kbEditionNote(c);
+
+              const noteLine = note && (
+                <p className="mt-1 text-caption text-muted-foreground" data-kb-edition-note>
+                  {renderText(note, c.anchor, "body", noteStart)}
+                </p>
+              );
+              // A law (slice 9, frame 1): the chapter is a quiet caption, the article the heading.
+              if (law && c.level <= 2 && c.heading) {
+                const Tag = c.level === 1 ? "h2" : "h3";
+                return (
+                  <div key={c.anchor} id={c.anchor} className={cn("scroll-mt-20", isTarget && "border-l-2 border-accent pl-2")}>
+                    <Tag
+                      className={cn(
+                        "font-semibold",
+                        c.level === 1 ? "pt-6 text-body-sm text-muted-foreground" : "pt-4 text-h3 text-foreground",
+                      )}
+                    >
+                      {renderText(c.heading, c.anchor, "heading")}
+                    </Tag>
+                    {text && <p className="mt-2 whitespace-pre-line text-body-sm leading-relaxed text-foreground">{renderText(text, c.anchor, "body")}</p>}
+                    {noteLine}
+                  </div>
+                );
+              }
               if (c.heading && !c.body) {
                 const Tag = isSection ? "h2" : "h3";
                 return (
@@ -328,7 +366,8 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
                       {renderText(c.heading, c.anchor, "heading")}
                     </p>
                   )}
-                  <p className="overflow-x-auto text-body-sm leading-relaxed text-foreground">
+                  {/* A law keeps the official text's line per item «1)», «1¹)», «а)» (slice 9, live check 11.11). */}
+                  <p className={cn("overflow-x-auto text-body-sm leading-relaxed text-foreground", law && "whitespace-pre-line")}>
                     {!c.heading && c.number && (
                       <button
                         type="button"
@@ -341,8 +380,9 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
                         <Link2 className="h-3 w-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
                       </button>
                     )}
-                    {renderText(c.body, c.anchor, "body")}
+                    {renderText(text, c.anchor, "body")}
                   </p>
+                  {noteLine}
                   {c.amendments.length > 0 && (
                     <p className="mt-1 text-caption text-muted-foreground">
                       {t("home.knowledgeBase.reader.amended", { no: c.amendments[c.amendments.length - 1] })}

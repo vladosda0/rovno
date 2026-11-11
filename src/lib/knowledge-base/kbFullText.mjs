@@ -141,11 +141,23 @@ export function kbPendingAmendmentsView(doc) {
   return { linked, missing, missingList: amendmentList(missing) };
 }
 
-/** Table of contents: sections, their headed subsections, appendices last. */
+/** A law's chapter (`gl-6`, `rz-ii`, code part `cz-2`) or article (`st-51`) and its parts (slice 9). */
+export function kbIsLawAnchor(anchor) {
+  return /^(?:gl|rz|cz|st)-/.test(String(anchor ?? ""));
+}
+
+/**
+ * Table of contents: sections, their headed subsections, appendices last. A
+ * law (slice 9, frame 1 A): chapters at level 1, their articles at level 2.
+ */
 export function kbToc(clauses) {
   const main = [];
   const back = [];
   for (const c of clauses) {
+    if (kbIsLawAnchor(c.anchor)) {
+      if (c.heading && c.level <= 2) main.push({ anchor: c.anchor, label: c.heading, level: c.level });
+      continue;
+    }
     const isBack = !c.number || !/^\d/.test(c.number);
     if (isBack) {
       back.push({ anchor: c.anchor, label: c.heading ?? c.number ?? "", level: 1 });
@@ -166,6 +178,52 @@ export function kbSectionAnchor(clauses, anchor) {
     if (c.anchor === anchor) return section ?? c.anchor;
   }
   return null;
+}
+
+const SUPERSCRIPT = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
+const sup = (digits) => [...digits].map((d) => SUPERSCRIPT[Number(d)]).join("");
+
+/**
+ * «ст. 51 ч. 17» from a law anchor (slice 9, frame 4), the same rule as the
+ * server's source line: `st-51s1` is article 51¹, `st-55s5s1` article 55⁵⁻¹, `st-51-1` article 51.1,
+ * `-ch-1-1` part 1¹, `-ch-7-1-1` part 7¹⁻¹. Null for any other anchor.
+ */
+export function kbLawClauseLabel(anchor) {
+  const m = anchor ? /^st-(\d+(?:-\d+)*)((?:s\d+)*)(?:-ch-(\d+)((?:-\d+)*))?$/.exec(anchor) : null;
+  if (!m) return null;
+  const index = (groups, sep) => groups.split(sep).filter(Boolean).map(sup).join("⁻");
+  const article = `${m[1].replace(/-/g, ".")}${index(m[2], "s")}`;
+  return m[3] ? `ст. ${article} ч. ${m[3]}${index(m[4], "-")}` : `ст. ${article}`;
+}
+
+/** The article a law clause belongs to (its level-2 ancestor), for the TOC highlight. */
+export function kbArticleAnchor(clauses, anchor) {
+  let article = null;
+  for (const c of clauses) {
+    if (c.level === 1) article = null;
+    if (c.level === 2) article = c.anchor;
+    if (c.anchor === anchor) return article;
+  }
+  return null;
+}
+
+// «(В редакции Федерального закона от 31.07.2025 № 295-ФЗ)»: a whole-line note
+// that names an act by its date (slice 9, frame 3 A).
+const EDITION_NOTE =
+  /^\((?:[^()]*\s)?(?:в\s+редакции|в\s+ред\.|дополнен\S*|утратил\S*\s+силу|признан\S*\s+утративш\S*|исключен\S*|изменен\S*)[^()]*\sот\s+\d{2}\.\d{2}\.\d{4}[^()]*\)$/iu;
+
+/**
+ * Splits the edition note off the last line of a law clause: `{ text, note, noteStart }`,
+ * the note without its brackets, noteStart its offset in the body (-1 without a note). Other clauses come back unchanged with a null note.
+ */
+export function kbEditionNote(clause) {
+  const body = clause?.body ?? "";
+  if (!kbIsLawAnchor(clause?.anchor)) return { text: body, note: null, noteStart: -1 };
+  const at = body.lastIndexOf("\n");
+  const last = (at >= 0 ? body.slice(at + 1) : body).replace(/\r$/, "");
+  if (!EDITION_NOTE.test(last)) return { text: body, note: null, noteStart: -1 };
+  // noteStart: where the note's text (after «(») begins in the body, for search highlights.
+  return { text: at >= 0 ? body.slice(0, at).replace(/\r$/, "") : "", note: last.slice(1, -1), noteStart: at + 2 };
 }
 
 const fold = (s) => s.toLocaleLowerCase("ru").replace(/ё/g, "е");
@@ -216,7 +274,7 @@ export function kbClauseUrl(origin, slug, anchor) {
   return `${origin.replace(/\/$/, "")}/baza/${slug}/#${anchor}`;
 }
 
-/** Anchors are `p-<digits/letters/dashes>`; anything else in a hash is ignored. */
+/** Anchors are `p-…`, or a law's `st-…`, `gl-…`, `rz-…`, `cz-…` (slice 9); anything else in a hash is ignored. */
 export function kbAnchorFromHash(hash) {
   let value;
   try {
@@ -224,5 +282,5 @@ export function kbAnchorFromHash(hash) {
   } catch {
     return null;
   }
-  return /^p-[a-z0-9а-яё-]+$/.test(value) ? value : null;
+  return /^(?:p|st|gl|rz|cz)-[a-z0-9а-яё-]+$/.test(value) ? value : null;
 }

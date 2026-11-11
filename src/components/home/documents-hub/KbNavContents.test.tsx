@@ -11,6 +11,7 @@ const DOC = normalizeKbRow({
   folder: "sp", display_mode: "full_text", full_text_available: true, text_label: "verified",
   edition_date: "2018-07-18", text_checked_at: "2026-10-22", text_source_url: "https://minstroyrf.gov.ru/docs/1/",
 });
+let clausesNow: ReturnType<typeof normalizeKbClause>[] = [];
 const CLAUSES = [
   { anchor: "p-4", number: "4", level: 1, heading: "Общие положения", body: "", position: 1 },
   { anchor: "p-5", number: "5", level: 1, heading: "Полы в помещениях с мокрым режимом", body: "", position: 2 },
@@ -20,7 +21,7 @@ const CLAUSES = [
 
 vi.mock("@/lib/knowledge-base/api", () => ({
   fetchKbDocumentBySlug: () => Promise.resolve(DOC),
-  fetchKbClauses: () => Promise.resolve(CLAUSES),
+  fetchKbClauses: () => Promise.resolve(clausesNow.length ? clausesNow : CLAUSES),
   fetchKbSpFullTextEnabled: () => Promise.resolve(true),
 }));
 
@@ -38,6 +39,7 @@ function renderNav(onFolder = vi.fn()) {
 
 afterEach(() => {
   window.location.hash = "";
+  clausesNow = [];
 });
 
 describe("KbNavContents", () => {
@@ -66,6 +68,40 @@ describe("KbNavContents", () => {
     fireEvent.click(screen.getByText("5 Полы в помещениях с мокрым режимом"));
     expect(scroll).toHaveBeenCalled();
     target.remove();
+  });
+
+  it("a law: chapters, the open chapter shows its articles, the current article is marked (slice 9, frame 1 A)", async () => {
+    clausesNow = [
+      { anchor: "gl-5", number: null, level: 1, heading: "Глава 5. Планирование", body: "", position: 1 },
+      { anchor: "st-42", number: null, level: 2, heading: "Статья 42. Проект планировки", body: "Текст.", position: 2 },
+      { anchor: "gl-6", number: null, level: 1, heading: "Глава 6. Проектирование", body: "", position: 3 },
+      { anchor: "st-51", number: null, level: 2, heading: "Статья 51. Разрешение на строительство", body: "", position: 4 },
+      { anchor: "st-51-ch-7", number: "7", level: 3, heading: null, body: "Заявление.", position: 5 },
+    ].map(normalizeKbClause);
+    window.location.hash = "#st-51-ch-7";
+    renderNav();
+    expect(await screen.findByText("Глава 6. Проектирование")).toBeInTheDocument();
+    expect(screen.getByText("Глава 5. Планирование")).toBeInTheDocument();
+    expect(screen.getByText("Статья 51. Разрешение на строительство").closest("button")).toHaveAttribute("aria-current", "location");
+    expect(screen.queryByText("Статья 42. Проект планировки")).not.toBeInTheDocument();
+  });
+
+  it("a short law without chapters lists its articles", async () => {
+    clausesNow = [
+      { anchor: "st-1", number: null, level: 2, heading: "Статья 1. Предмет", body: "Текст.", position: 1 },
+      { anchor: "st-2", number: null, level: 2, heading: "Статья 2. Понятия", body: "Текст.", position: 2 },
+    ].map(normalizeKbClause);
+    window.location.hash = "#st-2";
+    renderNav();
+    expect(await screen.findByText("Статья 1. Предмет")).toBeInTheDocument();
+    expect(screen.getByText("Статья 2. Понятия").closest("button")).toHaveAttribute("aria-current", "location");
+  });
+
+  it("an open appendix stays marked in a building code (slice 9 keeps SP as it was)", async () => {
+    window.location.hash = "#p-pril-a";
+    renderNav();
+    fireEvent.click(await screen.findByRole("button", { name: "Appendices" }));
+    expect(screen.getByText("Приложение А").closest("button")).toHaveAttribute("aria-current", "location");
   });
 
   it("the folder row goes back to the folder", async () => {
