@@ -731,6 +731,10 @@
     {
       "path": "supabase/migrations/20261112030000_kb_search_amending_articles.sql",
       "sha256": "6f6531b9066f063326d01db23f7881da970a78371d097ca826495ea39a465d19"
+    },
+    {
+      "path": "supabase/migrations/20261112040000_get_card_on_file_partial_refund.sql",
+      "sha256": "bd7c51f475979f5a0693d21d29dd8a29ac89906af970131913941d9decbbb505"
     }
   ],
   "generated_artifacts": [
