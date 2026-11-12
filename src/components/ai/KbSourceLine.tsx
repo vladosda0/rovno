@@ -47,7 +47,7 @@ export function compactAmendmentNumbers(numbers: ReadonlyArray<number>): string 
 }
 
 export function kbClauseLabel(source: KbAnswerSource, clausePrefix = "п."): string {
-  // A law part reads «ст. 51 ч. 17» (docs-library slice 9, frame 4).
+  // A law part reads «ст. 51 ч. 17», or «ст. 39.1 п. 1» in a law split into points (docs-library 9.2в).
   const law = kbLawClauseLabel(source.anchor);
   if (law) return `${source.docLabel}, ${law}`;
   if (!source.clause) return source.docLabel;

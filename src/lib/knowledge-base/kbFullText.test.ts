@@ -238,6 +238,9 @@ describe("a law (docs-library slice 9)", () => {
     expect(kbLawClauseLabel("st-51-1")).toBe("ст. 51.1");
     expect(kbLawClauseLabel("st-55s5s1-ch-1")).toBe("ст. 55⁵⁻¹ ч. 1");
     expect(kbLawClauseLabel("st-51-ch-7-1-1")).toBe("ст. 51 ч. 7¹⁻¹");
+    // A law whose article is split into points (ЗК РФ, step 9.2в): «п.», not «ч.».
+    expect(kbLawClauseLabel("st-39-1-p-1")).toBe("ст. 39.1 п. 1");
+    expect(kbLawClauseLabel("st-39-1-p-3-1")).toBe("ст. 39.1 п. 3¹");
     expect(kbLawClauseLabel("p-7-4-17")).toBeNull();
     expect(kbLawClauseLabel(null)).toBeNull();
   });

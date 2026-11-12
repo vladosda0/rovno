@@ -39,6 +39,7 @@ describe("«Решения» helpers", () => {
     expect(kbClauseLabel("p-pril-b")).toBe("прил. Б");
     expect(kbClauseLabel("p-pril-zh-2")).toBe("п. Ж.2");
     expect(kbClauseLabel("st-51-ch-17")).toBe("ст. 51 ч. 17");
+    expect(kbClauseLabel("st-39-1-p-1")).toBe("ст. 39.1 п. 1");
     const [chip] = kbItemChips(solution, solution.steps[0]);
     expect(chip).toMatchObject({
       label: "СП 163, п. 6.4.2.8",

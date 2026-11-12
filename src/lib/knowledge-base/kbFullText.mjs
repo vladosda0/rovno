@@ -186,14 +186,15 @@ const sup = (digits) => [...digits].map((d) => SUPERSCRIPT[Number(d)]).join("");
 /**
  * «ст. 51 ч. 17» from a law anchor (slice 9, frame 4), the same rule as the
  * server's source line: `st-51s1` is article 51¹, `st-55s5s1` article 55⁵⁻¹, `st-51-1` article 51.1,
- * `-ch-1-1` part 1¹, `-ch-7-1-1` part 7¹⁻¹. Null for any other anchor.
+ * `-ch-1-1` part 1¹, `-ch-7-1-1` part 7¹⁻¹; `-p-1` is point 1 of a law whose article is
+ * split into points, not parts (ЗК РФ: «ст. 39.1 п. 1», step 9.2в). Null for any other anchor.
  */
 export function kbLawClauseLabel(anchor) {
-  const m = anchor ? /^st-(\d+(?:-\d+)*)((?:s\d+)*)(?:-ch-(\d+)((?:-\d+)*))?$/.exec(anchor) : null;
+  const m = anchor ? /^st-(\d+(?:-\d+)*)((?:s\d+)*)(?:-(ch|p)-(\d+)((?:-\d+)*))?$/.exec(anchor) : null;
   if (!m) return null;
   const index = (groups, sep) => groups.split(sep).filter(Boolean).map(sup).join("⁻");
   const article = `${m[1].replace(/-/g, ".")}${index(m[2], "s")}`;
-  return m[3] ? `ст. ${article} ч. ${m[3]}${index(m[4], "-")}` : `ст. ${article}`;
+  return m[3] ? `ст. ${article} ${m[3] === "p" ? "п." : "ч."} ${m[4]}${index(m[5], "-")}` : `ст. ${article}`;
 }
 
 /** The article a law clause belongs to (its level-2 ancestor), for the TOC highlight. */

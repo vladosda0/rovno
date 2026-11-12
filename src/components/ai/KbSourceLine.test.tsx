@@ -76,6 +76,8 @@ describe("KbSourceLine", () => {
   it("a law article without a clause number: the button and the window heading both name the article (slice 9)", () => {
     const article: KbAnswerSource = { docId: "LAW-022", docSlug: "tk-rf-197-fz", docLabel: "ТК РФ", anchor: "st-81", checking: false, pendingAmendments: [], quote: "Трудовой договор может быть расторгнут" };
     expect(kbClauseLabel(article)).toBe("ТК РФ, ст. 81");
+    // A law split into points (ЗК РФ, docs-library 9.2в): «п.», not «ч.».
+    expect(kbClauseLabel({ ...article, docLabel: "ЗК РФ", anchor: "st-39-1-p-1" })).toBe("ЗК РФ, ст. 39.1 п. 1");
     render(<KbSourceLine knowledgeBase={{ sources: [article], missing: false }} />);
     fireEvent.click(screen.getByRole("button", { name: /Based on:/ }));
     fireEvent.click(screen.getByRole("button", { name: "ТК РФ, ст. 81" }));

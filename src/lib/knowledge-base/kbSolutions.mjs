@@ -166,7 +166,7 @@ const APPENDIX_LETTERS = {
 
 /**
  * The clause part of a chip from its anchor: `p-6-4-2-8` → «п. 6.4.2.8»,
- * `p-pril-b` → «прил. Б», `p-pril-b-1` → «п. Б.1», a law's `st-51-ch-17` → «ст. 51 ч. 17».
+ * `p-pril-b` → «прил. Б», `p-pril-b-1` → «п. Б.1», a law's `st-51-ch-17` → «ст. 51 ч. 17» (`st-39-1-p-1` → «ст. 39.1 п. 1»).
  */
 export function kbClauseLabel(anchor) {
   if (!anchor) return null;
