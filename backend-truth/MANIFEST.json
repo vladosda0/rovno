@@ -739,6 +739,10 @@
     {
       "path": "supabase/migrations/20261113030000_kb_text_copy_and_unavailable_reason.sql",
       "sha256": "6bb0ef3d1c5a3c0f09be42dd4f160c17e9f7559cf96e5d9c0314e328b37207db"
+    },
+    {
+      "path": "supabase/migrations/20261114020000_kb_country_and_text_rights.sql",
+      "sha256": "fa513b3d8e3f99670d93390c09c45207705f8690d7c85e93e6a2f5162e9c80d4"
     }
   ],
   "generated_artifacts": [

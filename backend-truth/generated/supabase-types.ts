@@ -83,6 +83,8 @@ export type Database = {
           "created_at": string
           "updated_at": string
           "active_org_id": string | null
+          "kb_country": "RU" | "AZ" | "AM" | "BY" | "KZ" | "KG" | "MD" | "TJ" | "TM" | "UZ"
+          "kb_region": string | null
           }
           Insert: {
           "profile_id"?: string
@@ -100,6 +102,8 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "active_org_id"?: string | null
+          "kb_country"?: "RU" | "AZ" | "AM" | "BY" | "KZ" | "KG" | "MD" | "TJ" | "TM" | "UZ"
+          "kb_region"?: string | null
           }
           Update: {
           "profile_id"?: string
@@ -117,6 +121,8 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "active_org_id"?: string | null
+          "kb_country"?: "RU" | "AZ" | "AM" | "BY" | "KZ" | "KG" | "MD" | "TJ" | "TM" | "UZ"
+          "kb_region"?: string | null
           }
           Relationships: []
         }
@@ -2857,6 +2863,7 @@ export type Database = {
           "recognized_from_scan": boolean
           "upcoming_amendments": Json
           "text_unavailable_reason": string | null
+          "text_rights": "free" | "needs_permission" | "unknown"
           }
           Insert: {
           "doc_id"?: string
@@ -2894,6 +2901,7 @@ export type Database = {
           "recognized_from_scan"?: boolean
           "upcoming_amendments"?: Json
           "text_unavailable_reason"?: string | null
+          "text_rights"?: "free" | "needs_permission" | "unknown"
           }
           Update: {
           "doc_id"?: string
@@ -2931,6 +2939,7 @@ export type Database = {
           "recognized_from_scan"?: boolean
           "upcoming_amendments"?: Json
           "text_unavailable_reason"?: string | null
+          "text_rights"?: "free" | "needs_permission" | "unknown"
           }
           Relationships: []
         }
@@ -3763,6 +3772,7 @@ export type Database = {
           "p_question": string
           "p_solution_limit": unknown
           "p_clause_limit": unknown
+          "p_country": unknown
           }
           Returns: Json
         }
