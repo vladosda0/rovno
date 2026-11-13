@@ -172,8 +172,16 @@ export function KbSourceLine({ knowledgeBase, onAskAboutClause }: KbSourceLinePr
   const total = cards.length + sources.length;
   const first = sources[0];
 
+  const fallback = knowledgeBase.fallbackCountry ? (
+    <p className="mt-2 text-caption text-muted-foreground break-words" data-testid="kb-country-fallback">
+      {t("ai.kb.sources.countryFallback", { country: t(`preferences.kbCountry.genitive.${knowledgeBase.fallbackCountry}`) })}
+    </p>
+  ) : null;
+
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="mt-2 min-w-0 max-w-full text-caption" data-testid="kb-sources">
+    <>
+    {fallback}
+    <Collapsible open={open} onOpenChange={setOpen} className={`${fallback ? "mt-1" : "mt-2"} min-w-0 max-w-full text-caption`} data-testid="kb-sources">
       <CollapsibleTrigger asChild>
         <button
           type="button"
@@ -218,5 +226,6 @@ export function KbSourceLine({ knowledgeBase, onAskAboutClause }: KbSourceLinePr
         </ul>
       </CollapsibleContent>
     </Collapsible>
+    </>
   );
 }

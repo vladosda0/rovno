@@ -14,6 +14,7 @@ export interface HomeAiChatTurn {
   text: string;
   knowledgeBaseSources?: unknown;
   knowledgeBaseMissing?: boolean;
+  knowledgeBaseFallbackCountry?: string;
   /** An answer that asked which project: the buttons must survive a reload too. */
   needsProject?: boolean;
 }
@@ -49,7 +50,7 @@ export function homeTurnsToMessages(turns: readonly HomeAiChatTurn[]): AIMessage
     }
     const id = homeAnswerId(turn.text);
     const question = turns[index - 1]?.role === "user" ? turns[index - 1].text : "";
-    const knowledgeBase = mapKnowledgeBase(turn.knowledgeBaseSources, turn.knowledgeBaseMissing);
+    const knowledgeBase = mapKnowledgeBase(turn.knowledgeBaseSources, turn.knowledgeBaseMissing, turn.knowledgeBaseFallbackCountry);
     return {
       id,
       role: "assistant",

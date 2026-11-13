@@ -53,6 +53,8 @@ export interface KbAnswerSource {
 export interface LiveTextKnowledgeBase {
   sources: KbAnswerSource[];
   missing: boolean;
+  /** The person's country when the answer stands on Russian norms because the base has none of theirs (rovno-db#230). */
+  fallbackCountry?: string;
 }
 
 /** Result returned by `invokeLiveTextAssistant` (mock or hosted edge). */

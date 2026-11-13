@@ -138,3 +138,28 @@ describe("kbClauseLabel", () => {
     expect(kbClauseLabel({ ...CARD_FACT, clause: undefined })).toBe("СП 163.1325800");
   });
 });
+
+describe("KbSourceLine country fallback (rovno-db#230)", () => {
+  it("names the fallback to Russian norms above the line for a person from another country (rovno-db#230)", () => {
+    const kb = mapKnowledgeBase(
+      [{ kind: "knowledge_base", docId: "SP-017", docLabel: "СП 17.13330 (Россия)", clause: "4.3", checking: false, pendingAmendments: [] }],
+      false,
+      "KZ",
+    );
+    expect(kb?.fallbackCountry).toBe("KZ");
+    render(<KbSourceLine knowledgeBase={kb!} />);
+    expect(screen.getByTestId("kb-country-fallback")).toHaveTextContent(
+      "Kazakhstan norms in the base do not cover this yet, answering by Russian norms.",
+    );
+    expect(screen.getByRole("button", { name: /Based on: СП 17\.13330 \(Россия\), cl\. 4\.3/ })).toBeInTheDocument();
+  });
+
+  it("drops an unknown or Russian fallback country and shows no phrase without sources", () => {
+    expect(mapKnowledgeBase([], false, "KZ")?.fallbackCountry).toBe("KZ");
+    expect(mapKnowledgeBase([], false, "RU")?.fallbackCountry).toBeUndefined();
+    expect(mapKnowledgeBase([], false, "XX")?.fallbackCountry).toBeUndefined();
+    expect(mapKnowledgeBase([], false, "constructor")?.fallbackCountry).toBeUndefined();
+    render(<KbSourceLine knowledgeBase={{ sources: [], missing: true, fallbackCountry: "KZ" }} />);
+    expect(screen.queryByTestId("kb-country-fallback")).toBeNull();
+  });
+});

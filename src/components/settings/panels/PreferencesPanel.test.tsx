@@ -49,4 +49,37 @@ describe("PreferencesPanel", () => {
       expect(saved.automationLevel).toBe("manual");
     });
   });
+
+  it("shows Russia by default and keeps the country and region the person saved (rovno-db#230)", async () => {
+    localStorage.setItem("profile-preferences", JSON.stringify({
+      currency: "RUB",
+      units: "metric",
+      dateFormat: "dd.MM.yyyy",
+      weekStart: "monday",
+      aiOutputLanguage: "ru",
+      automationLevel: "manual",
+      kbCountry: "KZ",
+      kbRegion: "Алматинская область",
+    }));
+
+    renderPanel();
+
+    expect(await screen.findByText("Kazakhstan")).toBeInTheDocument();
+    expect(screen.getByText("Алматинская область")).toBeInTheDocument();
+    expect(screen.getByText("Shurik answers by the norms of this country. The region tells him the climate and local requirements.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /save preferences/i }));
+
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem("profile-preferences") ?? "{}") as Record<string, unknown>;
+      expect(saved.kbCountry).toBe("KZ");
+      expect(saved.kbRegion).toBe("Алматинская область");
+    });
+  });
+
+  it("starts from Russia with no region for a person who never chose", async () => {
+    renderPanel();
+    expect(await screen.findByText("Russia")).toBeInTheDocument();
+    expect(screen.getByText("Not selected")).toBeInTheDocument();
+  });
 });

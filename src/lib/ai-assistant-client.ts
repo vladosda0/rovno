@@ -12,6 +12,7 @@ import type {
   PresentationalWorkProposal,
 } from "@/lib/ai-assistant-contract";
 import type { AIAccess } from "@/types/entities";
+import { KB_COUNTRIES } from "@/data/kb-regions";
 
 // ---------------------------------------------------------------------------
 // Input
@@ -187,6 +188,7 @@ interface AIInferenceResponseBody {
   workProposal?: BackendWorkProposal | null;
   knowledgeBaseSources?: unknown;
   knowledgeBaseMissing?: unknown;
+  knowledgeBaseFallbackCountry?: unknown;
   /** Outside a project: the question was about a project (docs-library 6.2). */
   needsProject?: boolean;
 }
@@ -282,6 +284,7 @@ function kbString(value: unknown): string | undefined {
 export function mapKnowledgeBase(
   rawSources: unknown,
   rawMissing: unknown,
+  rawFallbackCountry?: unknown,
 ): LiveTextKnowledgeBase | undefined {
   if (!Array.isArray(rawSources) && typeof rawMissing !== "boolean") return undefined;
   const sources: KbAnswerSource[] = [];
@@ -312,7 +315,16 @@ export function mapKnowledgeBase(
       quote: kbString(s.quote),
     });
   }
-  return { sources, missing: rawMissing === true && sources.length === 0 };
+  const fallbackCountry =
+    typeof rawFallbackCountry === "string" && rawFallbackCountry !== "RU" &&
+      (KB_COUNTRIES as readonly string[]).includes(rawFallbackCountry)
+      ? rawFallbackCountry
+      : undefined;
+  return {
+    sources,
+    missing: rawMissing === true && sources.length === 0,
+    ...(fallbackCountry ? { fallbackCountry } : {}),
+  };
 }
 
 export function mapGroundingSources(
@@ -443,7 +455,7 @@ export function mapInferenceResponse(
       ? softenProgrammaticCopy(body.groundingNote, assistantUiLanguage)
       : undefined,
     sources: mapGroundingSources(body.groundingSources, assistantUiLanguage),
-    knowledgeBase: mapKnowledgeBase(body.knowledgeBaseSources, body.knowledgeBaseMissing),
+    knowledgeBase: mapKnowledgeBase(body.knowledgeBaseSources, body.knowledgeBaseMissing, body.knowledgeBaseFallbackCountry),
     needsProject: body.needsProject === true ? true : undefined,
     workProposal: proposal,
     responseVersion: typeof body.responseVersion === "string" ? body.responseVersion : undefined,

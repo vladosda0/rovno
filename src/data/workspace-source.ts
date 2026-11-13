@@ -13,6 +13,7 @@ import type {
   ViewerRegime,
 } from "@/types/entities";
 import { isDemoSessionActive } from "@/lib/auth-state";
+import { type KbCountry, normalizeKbCountry, normalizeKbRegion } from "@/data/kb-regions";
 import type { Database as WorkspaceDatabase } from "../../backend-truth/generated/supabase-types";
 
 export type WorkspaceProjectInvite = WorkspaceDatabase["public"]["Tables"]["project_invites"]["Row"];
@@ -76,6 +77,10 @@ export interface ProfilePreferences {
   weekStart: ProfileWeekStart;
   aiOutputLanguage: ProfileAiOutputLanguage;
   automationLevel: ProfileAutomationLevel;
+  /** Country whose norms Shurik answers by (rovno-db#230). */
+  kbCountry: KbCountry;
+  /** Region name from the country's list; null is «not selected». */
+  kbRegion: string | null;
 }
 
 export type ProfilePreferencesPatch = Partial<ProfilePreferences>;
@@ -107,6 +112,8 @@ export const DEFAULT_PROFILE_PREFERENCES: ProfilePreferences = {
   weekStart: "monday",
   aiOutputLanguage: "auto",
   automationLevel: "manual",
+  kbCountry: "RU",
+  kbRegion: null,
 };
 
 export interface CreateWorkspaceProjectInput {
@@ -150,6 +157,8 @@ const SUPABASE_WORKSPACE_SOURCE = "supabase";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const LOCAL_PROFILE_PREFERENCES_KEY = "profile-preferences";
+const PROFILE_PREFERENCES_COLUMNS =
+  "currency, units, date_format, week_start, ai_output_language, automation_level, kb_country, kb_region";
 
 function normalizeProfilePreferences(raw: Partial<ProfilePreferences> | Record<string, unknown> | null | undefined): ProfilePreferences {
   const value = raw ?? {};
@@ -160,6 +169,7 @@ function normalizeProfilePreferences(raw: Partial<ProfilePreferences> | Record<s
   const weekStart = record.weekStart ?? record.week_start;
   const aiOutputLanguage = record.aiOutputLanguage ?? record.ai_output_language;
   const automationLevel = record.automationLevel ?? record.automation_level;
+  const kbCountry = normalizeKbCountry(record.kbCountry ?? record.kb_country);
 
   return {
     currency: currency === "RUB" || currency === "USD" || currency === "EUR" || currency === "GBP" ? currency : DEFAULT_PROFILE_PREFERENCES.currency,
@@ -168,6 +178,8 @@ function normalizeProfilePreferences(raw: Partial<ProfilePreferences> | Record<s
     weekStart: weekStart === "monday" || weekStart === "sunday" ? weekStart : DEFAULT_PROFILE_PREFERENCES.weekStart,
     aiOutputLanguage: aiOutputLanguage === "ru" || aiOutputLanguage === "en" || aiOutputLanguage === "auto" ? aiOutputLanguage : DEFAULT_PROFILE_PREFERENCES.aiOutputLanguage,
     automationLevel: automationLevel === "manual" || automationLevel === "assisted" || automationLevel === "full" || automationLevel === "observer" ? automationLevel : DEFAULT_PROFILE_PREFERENCES.automationLevel,
+    kbCountry,
+    kbRegion: normalizeKbRegion(kbCountry, record.kbRegion ?? record.kb_region),
   };
 }
 
@@ -195,7 +207,7 @@ function writeLocalProfilePreferences(next: ProfilePreferences): void {
 }
 
 function mapProfileSettingsRowToPreferences(
-  row: Pick<ProfileSettingsRow, "currency" | "units" | "date_format" | "week_start" | "ai_output_language" | "automation_level"> | null | undefined,
+  row: Pick<ProfileSettingsRow, "currency" | "units" | "date_format" | "week_start" | "ai_output_language" | "automation_level" | "kb_country" | "kb_region"> | null | undefined,
 ): ProfilePreferences {
   return normalizeProfilePreferences(row as Record<string, unknown> | null | undefined);
 }
@@ -209,6 +221,8 @@ function profilePreferencesToDbPatch(profileId: string, preferences: ProfilePref
     week_start: preferences.weekStart,
     ai_output_language: preferences.aiOutputLanguage,
     automation_level: preferences.automationLevel,
+    kb_country: preferences.kbCountry,
+    kb_region: preferences.kbRegion,
   };
 }
 
@@ -730,7 +744,7 @@ function createSupabaseWorkspaceSource(
   async function readRemoteProfilePreferences(): Promise<ProfilePreferences> {
     const { data, error } = await supabase
       .from("profile_settings")
-      .select("currency, units, date_format, week_start, ai_output_language, automation_level")
+      .select(PROFILE_PREFERENCES_COLUMNS)
       .eq("profile_id", profileId)
       .maybeSingle();
 
@@ -769,7 +783,7 @@ function createSupabaseWorkspaceSource(
       const { data, error } = await supabase
         .from("profile_settings")
         .upsert(profilePreferencesToDbPatch(profileId, next), { onConflict: "profile_id" })
-        .select("currency, units, date_format, week_start, ai_output_language, automation_level")
+        .select(PROFILE_PREFERENCES_COLUMNS)
         .single();
 
       if (error) {
