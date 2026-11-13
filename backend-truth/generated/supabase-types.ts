@@ -2850,12 +2850,13 @@ export type Database = {
           "text_checked_at": unknown | null
           "text_source_url": string | null
           "text_pdf_url": string | null
-          "text_label": "verified" | "checking" | null
+          "text_label": "verified" | "checking" | "copy" | null
           "pending_amendments": Json
           "applied_amendments": unknown
           "text_base_year": number | null
           "recognized_from_scan": boolean
           "upcoming_amendments": Json
+          "text_unavailable_reason": string | null
           }
           Insert: {
           "doc_id"?: string
@@ -2886,12 +2887,13 @@ export type Database = {
           "text_checked_at"?: unknown | null
           "text_source_url"?: string | null
           "text_pdf_url"?: string | null
-          "text_label"?: "verified" | "checking" | null
+          "text_label"?: "verified" | "checking" | "copy" | null
           "pending_amendments"?: Json
           "applied_amendments"?: unknown
           "text_base_year"?: number | null
           "recognized_from_scan"?: boolean
           "upcoming_amendments"?: Json
+          "text_unavailable_reason"?: string | null
           }
           Update: {
           "doc_id"?: string
@@ -2922,12 +2924,13 @@ export type Database = {
           "text_checked_at"?: unknown | null
           "text_source_url"?: string | null
           "text_pdf_url"?: string | null
-          "text_label"?: "verified" | "checking" | null
+          "text_label"?: "verified" | "checking" | "copy" | null
           "pending_amendments"?: Json
           "applied_amendments"?: unknown
           "text_base_year"?: number | null
           "recognized_from_scan"?: boolean
           "upcoming_amendments"?: Json
+          "text_unavailable_reason"?: string | null
           }
           Relationships: []
         }

@@ -214,6 +214,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261108040000_kb_solution_lock_sources.sql`
 - `supabase/migrations/20261112030000_kb_search_amending_articles.sql`
 - `supabase/migrations/20261112040000_get_card_on_file_partial_refund.sql`
+- `supabase/migrations/20261113030000_kb_text_copy_and_unavailable_reason.sql`
 
 ## Exclusions
 
