@@ -8,6 +8,8 @@ import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { MetrikaPageviewTracker } from "@/components/system/MetrikaPageviewTracker";
 import { ScrollToHash } from "@/components/system/ScrollToHash";
 import { DocumentLanguage } from "@/components/system/DocumentLanguage";
+import { CookieConsentBanner } from "@/components/system/CookieConsentBanner";
+import { CookieSettingsDialog } from "@/components/system/CookieSettingsDialog";
 import { KbPendingWatch } from "@/components/knowledge-base/KbPendingWatch";
 import { queryClient } from "@/lib/query-client";
 
@@ -97,6 +99,8 @@ const App = () => (
         <ScrollToHash />
         <DocumentLanguage />
         <KbPendingWatch />
+        <CookieConsentBanner />
+        <CookieSettingsDialog />
         <Routes>
           {/* Standalone pages */}
           <Route path="/" element={routeElement(<Landing />)} />

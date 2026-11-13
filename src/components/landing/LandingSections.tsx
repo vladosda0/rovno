@@ -19,6 +19,7 @@ import { trackEvent, trackEventOncePerSession } from "@/lib/analytics";
 import { BILLING_ENABLED, formatRubFromKopecks } from "@/lib/billing";
 import type { RuntimeAuthStatus } from "@/hooks/use-runtime-auth";
 import { getActiveLanguage } from "@/i18n";
+import { openCookieSettings } from "@/lib/cookie-consent";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
 const E = "cubic-bezier(0.4,0,0.2,1)";
@@ -818,7 +819,7 @@ export function Footer({ onDemo }: { onDemo: () => void }) {
   ];
   return (
     // Translated chrome, same reasoning as the nav above.
-    <footer lang={getActiveLanguage()} className="rv-section ink" style={{ padding: "48px", display: "flex", flexDirection: "column", gap: 40, borderTop: "1px solid rgba(237,235,215,0.12)" }}>
+    <footer lang={getActiveLanguage()} className="rv-section ink" style={{ padding: "48px 48px calc(48px + var(--cookie-banner-h, 0px))", display: "flex", flexDirection: "column", gap: 40, borderTop: "1px solid rgba(237,235,215,0.12)" }}>
       <div className="rv-cols rv-cols-4" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <span style={{ fontFamily: "var(--font-display)", fontSize: 28, lineHeight: 1, letterSpacing: "-0.02em", color: "var(--rv-cream)" }}>{t("landing.footer.brand")}</span>
@@ -879,6 +880,14 @@ export function Footer({ onDemo }: { onDemo: () => void }) {
               {x.label}
             </Link>
           ))}
+          {/* Opens «Настройки cookie» in place (rovno#333); a button, since it goes nowhere. */}
+          <button
+            type="button"
+            onClick={openCookieSettings}
+            style={{ ...legalLinkStyle, background: "none", border: 0, padding: 0, margin: 0, cursor: "pointer" }}
+          >
+            {t("landing.footer.cookies")}
+          </button>
         </div>
       </div>
     </footer>

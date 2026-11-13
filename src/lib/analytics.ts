@@ -1,4 +1,5 @@
 import { safeNextPath } from "@/lib/safe-next-path";
+import { analyticsDeclined } from "@/lib/cookie-consent";
 
 export type AnalyticsEventName =
   | "estimate_editor_started"
@@ -557,6 +558,16 @@ function carriesSecretRouteValue(params: URLSearchParams): boolean {
 // The provider callbacks carry their `code` (VK also its device id) on their own path.
 const PROVIDER_CALLBACK_PATHS: ReadonlySet<string> = new Set(["/auth/yandex/callback", "/auth/vk/callback"]);
 
+/**
+ * Whether the current address carries a credential or sits on a secret route.
+ * The cookie banner uses it to stay off pages where the address holds a token
+ * (sign-in links, Yandex ID and VK ID callbacks), exactly where Metrika waits too.
+ */
+export function currentUrlCarriesAuthCredential(): boolean {
+  if (typeof window === "undefined") return false;
+  return urlCarriesAuthCredential();
+}
+
 function urlCarriesAuthCredential(): boolean {
   const { hash, search, pathname } = window.location;
   const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
@@ -703,6 +714,10 @@ function bootstrapMetrika(): void {
   if (METRIKA_COUNTER_ID === null) return;
   if (metrikaStarted) return;
   if (documentStartedOnSecretRoute) return;
+  // The visitor switched analytics off in "Настройки cookie" (rovno#333). No
+  // record keeps today's behaviour: Metrika runs until they say no. Checked here,
+  // before the flag, so both entries (initMetrika, ensureMetrikaStarted) obey it.
+  if (analyticsDeclined()) return;
 
   const counterId = METRIKA_COUNTER_ID;
   const src = `https://mc.yandex.ru/metrika/tag.js?id=${counterId}`;

@@ -350,6 +350,65 @@ describe("initMetrika and the Supabase auth fragment", () => {
   });
 });
 
+describe("Metrika and the cookie choice (rovno#333)", () => {
+  const CONSENT_KEY = "rovno.cookieConsent.v1";
+  let ym: YmMock;
+
+  beforeEach(() => {
+    ym = vi.fn();
+    (window as unknown as { ym?: unknown }).ym = ym;
+    removeInjectedTags();
+    localStorage.clear();
+    setUrl("/");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    removeInjectedTags();
+    localStorage.clear();
+    delete (window as unknown as { ym?: unknown }).ym;
+  });
+
+  it("loads the tag as before when the visitor has not chosen", async () => {
+    const analytics = await loadAnalytics();
+
+    analytics.initMetrika();
+
+    expect(initCalls(ym)).toHaveLength(1);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).not.toBeNull();
+  });
+
+  it("loads the tag after 'Хорошо' (analytics: true)", async () => {
+    localStorage.setItem(CONSENT_KEY, JSON.stringify({ analytics: true, at: "2026-11-13T00:00:00Z", v: 1 }));
+    const analytics = await loadAnalytics();
+
+    analytics.initMetrika();
+
+    expect(initCalls(ym)).toHaveLength(1);
+  });
+
+  it("does not load the tag on either entry once analytics is switched off", async () => {
+    localStorage.setItem(CONSENT_KEY, JSON.stringify({ analytics: false, at: "2026-11-13T00:00:00Z", v: 1 }));
+    const analytics = await loadAnalytics();
+
+    analytics.initMetrika();
+    setUrl("/home");
+    expect(analytics.ensureMetrikaStarted()).toBe(false);
+
+    expect(initCalls(ym)).toHaveLength(0);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
+  });
+
+  it("still loads the tag when the stored choice is unreadable", async () => {
+    localStorage.setItem(CONSENT_KEY, "{broken");
+    const analytics = await loadAnalytics();
+
+    analytics.initMetrika();
+
+    expect(initCalls(ym)).toHaveLength(1);
+  });
+});
+
 describe("the secret-route boundary (rovno#153)", () => {
   let ym: YmMock;
 

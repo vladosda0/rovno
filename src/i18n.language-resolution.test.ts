@@ -2,7 +2,7 @@
 //
 // The precedence chain is `?lang=` > stored choice > Russian. The browser's own
 // preference is deliberately NOT a rung: it only decides whether English is
-// OFFERED (see prefersNonRussian and LandingLanguagePrompt). Letting it decide
+// OFFERED anything since the English offer strip was removed (rovno#333). Letting it decide
 // the language made one URL render differently per visitor, which made the
 // canonical a function of who was asking.
 //
@@ -11,7 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getStoredLanguage, getUrlLanguage, prefersNonRussian, resolveInitialLanguage } from "@/i18n";
+import { getStoredLanguage, getUrlLanguage, resolveInitialLanguage } from "@/i18n";
 
 const STORAGE_KEY = "app-language";
 
@@ -56,37 +56,6 @@ describe("getUrlLanguage", () => {
   it("falls back to the live URL when no search string is passed", () => {
     setSearch("?lang=en");
     expect(getUrlLanguage()).toBe("en");
-  });
-});
-
-describe("prefersNonRussian", () => {
-  it("is false when the browser ranks Russian first", () => {
-    setBrowserLanguages(["ru-RU", "en-US"]);
-    expect(prefersNonRussian()).toBe(false);
-  });
-
-  it("is true for an English browser", () => {
-    setBrowserLanguages(["en-US", "ru-RU"]);
-    expect(prefersNonRussian()).toBe(true);
-  });
-
-  it("is true when the browser asks for neither language we ship", () => {
-    // A German browser did not ask for Russian, so English is the useful offer.
-    // Guarding against the earlier bug where this folded into the Russian
-    // default and the prompt never appeared for them.
-    setBrowserLanguages(["de-DE", "fr-FR"]);
-    expect(prefersNonRussian()).toBe(true);
-  });
-
-  it("answers on preference order, not on mere presence of 'ru'", () => {
-    setBrowserLanguages(["de-DE", "ru-RU"]);
-    expect(prefersNonRussian()).toBe(false);
-  });
-
-  it("falls back to navigator.language when navigator.languages is empty", () => {
-    Object.defineProperty(navigator, "languages", { value: [], configurable: true });
-    Object.defineProperty(navigator, "language", { value: "ru-RU", configurable: true });
-    expect(prefersNonRussian()).toBe(false);
   });
 });
 

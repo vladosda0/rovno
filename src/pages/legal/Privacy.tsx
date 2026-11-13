@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { trackEvent } from "@/lib/analytics";
+import { openCookieSettings } from "@/lib/cookie-consent";
 import LegalLayout from "./LegalLayout";
 
 // Политика конфиденциальности и информационной безопасности.
@@ -25,7 +26,7 @@ export default function Privacy() {
   }, []);
 
   return (
-    <LegalLayout title="Политика конфиденциальности" effectiveDate="23 мая 2026 г.">
+    <LegalLayout title="Политика конфиденциальности" effectiveDate="13 ноября 2026 г.">
       <p className="text-body-sm text-muted-foreground">
         Настоящая Политика разработана в соответствии с Федеральным законом от 27.07.2006
         № 152-ФЗ «О персональных данных» и описывает порядок обработки персональных данных
@@ -250,7 +251,17 @@ export default function Privacy() {
         <p>
           Сервис использует технические файлы cookie, необходимые для функционирования
           (поддержание сессии, сохранение настроек), а также аналитические cookie для
-          оценки качества сервиса. Пользователь может отключить cookie в настройках
+          оценки качества сервиса. Аналитические cookie устанавливает сервис Яндекс
+          Метрика (ООО «Яндекс»); он помогает понять, какие разделы удобны, а какие нет.
+          Отключить аналитику можно в любой момент по ссылке «
+          <button
+            type="button"
+            onClick={openCookieSettings}
+            className="cursor-pointer border-0 bg-transparent p-0 underline hover:text-foreground"
+          >
+            Настройки cookie
+          </button>
+          » внизу главной страницы. Пользователь может также отключить cookie в настройках
           браузера; в этом случае часть функциональности может стать недоступной.
         </p>
       </Section>
