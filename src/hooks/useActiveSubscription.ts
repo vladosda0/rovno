@@ -57,7 +57,7 @@ export function useActiveSubscription(): ActiveSubscription {
     status,
     subscription,
     readOnly,
-    isLoading: enabled && query.isLoading,
+    isLoading: enabled && query.isPending,
     isError: enabled && query.isError,
     isLoadingError: enabled && query.isLoadingError,
     refetch: () => {

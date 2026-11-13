@@ -79,7 +79,6 @@ export function TBankAddCardForm({ paymentUrl, onSuccess, onFailed }: TBankAddCa
                 iframe: {
                   container: containerRef.current,
                   config: {
-                    language: (i18n.language === "en" ? "en" : "ru") as "ru" | "en",
                     // Pass the callbacks in both the top-level and the nested `status` shape
                     // so SUCCESS fires regardless of integration.js's exact iframe shape.
                     loadedCallback: markAlive,
@@ -91,7 +90,14 @@ export function TBankAddCardForm({ paymentUrl, onSuccess, onFailed }: TBankAddCa
               },
             },
           })
-          .catch(hardFail);
+          .then((api) => {
+            if (!active || i18n.language !== "en") return;
+            try {
+              void Promise.resolve(api?.setLang?.("en")).catch(() => undefined);
+            } catch {
+              // The language is cosmetic: the mounted form stays, in Russian.
+            }
+          }, hardFail);
       })
       .catch(hardFail);
     return () => {
