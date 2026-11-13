@@ -250,3 +250,67 @@ describe("knowledge base full text (slice 2)", () => {
     expect(fetchKbClauses).not.toHaveBeenCalled();
   });
 });
+
+describe("a document without an official text (slice 9, frame 5)", () => {
+  const VSN = normalizeKbRow({
+    doc_id: "NORM-0002",
+    slug: "vsn-57-88-r",
+    designation: "ВСН 57-88(р)",
+    title: "Положение по техническому обследованию жилых зданий",
+    category: "Ведомственные нормы",
+    folder: "snip",
+    display_mode: "full_text",
+    source_links: [],
+    full_text_available: false,
+    text_unavailable_reason:
+      "Официального текста в открытом доступе нет: документ не опубликован на портале правовой информации и на сайте ведомства.",
+  });
+  const VSN_COPY_ROW = {
+    ...{
+      doc_id: "NORM-0002",
+      slug: "vsn-57-88-r",
+      designation: "ВСН 57-88(р)",
+      title: "Положение по техническому обследованию жилых зданий",
+      category: "Ведомственные нормы",
+      folder: "snip",
+      display_mode: "full_text",
+      source_links: [],
+    },
+    full_text_available: true,
+    text_label: "copy",
+    edition_date: "1988-07-06",
+    text_checked_at: "2026-11-13",
+    text_source_url: "https://meganorm.ru/Data2/1/4294854/4294854948.htm",
+  };
+  const VSN_COPY = normalizeKbRow(VSN_COPY_ROW);
+
+  it("the window says the reason instead of «later» (A)", async () => {
+    fetchKbFolderCounts.mockResolvedValue({ snip: 1 });
+    fetchKbDocumentPage.mockResolvedValue({ rows: [VSN], total: 1 });
+    fetchKbDocumentBySlug.mockResolvedValue(VSN);
+    renderKB("/home?docTab=knowledge-base&kbDoc=vsn-57-88-r");
+    expect(await screen.findByText(/документ не опубликован на портале правовой информации/)).toBeInTheDocument();
+    expect(screen.queryByText("The full text will appear in the base later.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Read the full text" })).not.toBeInTheDocument();
+  });
+
+  it("a text from a copy opens with the copy notice and no label (B)", async () => {
+    fetchKbFolderCounts.mockResolvedValue({ snip: 1 });
+    fetchKbDocumentPage.mockResolvedValue({ rows: [VSN_COPY], total: 1 });
+    fetchKbDocumentBySlug.mockResolvedValue(VSN_COPY);
+    renderKB("/home?docTab=knowledge-base&kbDoc=vsn-57-88-r");
+    expect(await screen.findByText(/The text is taken from a copy on meganorm\.ru/)).toBeInTheDocument();
+    expect(document.querySelector("[data-kb-label]")).toBeNull();
+    expect(await screen.findByText("Учет работ ведут в журнале.")).toBeInTheDocument();
+  });
+
+  it("a copy recognized from a scan does not claim an official PDF", async () => {
+    const scanned = normalizeKbRow({ ...VSN_COPY_ROW, recognized_from_scan: true, text_pdf_url: "https://meganorm.ru/x.pdf" });
+    fetchKbFolderCounts.mockResolvedValue({ snip: 1 });
+    fetchKbDocumentPage.mockResolvedValue({ rows: [scanned], total: 1 });
+    fetchKbDocumentBySlug.mockResolvedValue(scanned);
+    renderKB("/home?docTab=knowledge-base&kbDoc=vsn-57-88-r");
+    expect(await screen.findByText(/The text is taken from a copy on meganorm\.ru/)).toBeInTheDocument();
+    expect(screen.queryByText(/official PDF/i)).not.toBeInTheDocument();
+  });
+});

@@ -5,7 +5,7 @@
 // 4a), then «Закрыть».
 
 import { useTranslation } from "react-i18next";
-import { BookOpen, ExternalLink } from "lucide-react";
+import { BookOpen, ExternalLink, Info } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import type { KbDocument } from "@/lib/knowledge-base/api";
 import { useKbSpFullText } from "@/hooks/use-knowledge-base";
 import { useKbDocumentView } from "./kb-view";
 import { KbTextLabel } from "./KbTextLabel";
+import { KbCopyNotice } from "./KbCopyNotice";
 import { KbWatchButton } from "./KbWatchButton";
 
 interface KbDocumentDialogProps {
@@ -44,6 +45,7 @@ export function KbDocumentDialog({ doc, open, onOpenChange, onRead }: KbDocument
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {view?.copyNotice && <KbCopyNotice text={view.copyNotice} />}
           {view && view.rows.length > 0 && (
             <dl className="rounded-panel border border-border bg-muted/30 p-4 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-[10rem_1fr]">
               {view.rows.map((row) => (
@@ -56,8 +58,11 @@ export function KbDocumentDialog({ doc, open, onOpenChange, onRead }: KbDocument
               ))}
             </dl>
           )}
-          {view?.showFullTextLater && (
-            <p className="text-body-sm text-muted-foreground">{t("home.knowledgeBase.fullTextLater")}</p>
+          {view?.fullTextNote && (
+            <p className="flex items-start gap-2 text-body-sm text-muted-foreground">
+              {doc?.textUnavailableReason && <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />}
+              <span>{view.fullTextNote}</span>
+            </p>
           )}
         </div>
 

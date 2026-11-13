@@ -404,6 +404,8 @@
   "home.knowledgeBase.reader.scannedVerified": "The text was recognised from the official Minstroy PDF and checked. If a clause matters for a dispute or an expert review, check it against the",
   "home.knowledgeBase.reader.scannedChecking": "The text was recognised from the official Minstroy PDF. If a clause matters for a dispute or an expert review, check it against the",
   "home.knowledgeBase.reader.scannedLink": "official PDF",
+  "home.knowledgeBase.reader.copyNotice": "There is no official text in open access. The text is taken from a copy on {{host}} and has not been checked against the official publication.",
+  "home.knowledgeBase.reader.copyNoticeNoHost": "There is no official text in open access. The text is taken from an unofficial copy and has not been checked against the official publication.",
   "home.knowledgeBase.reader.inactiveSince": "This document is not in force since {{date}}.",
   "home.knowledgeBase.reader.inactive": "This document is not in force.",
   "home.knowledgeBase.reader.replacedBy": "Replaced by:",

@@ -47,7 +47,9 @@ export function normalizeKbFullTextFields(row) {
     textCheckedAt: stringOrNull(r.text_checked_at),
     textSourceUrl: httpUrlOrNull(r.text_source_url),
     textPdfUrl: httpUrlOrNull(r.text_pdf_url),
-    textLabel: r.text_label === "verified" ? "verified" : r.text_label === "checking" ? "checking" : null,
+    textLabel: r.text_label === "verified" || r.text_label === "checking" || r.text_label === "copy" ? r.text_label : null,
+    // Slice 9, frame 5 A: what a document without text says instead of «later».
+    textUnavailableReason: stringOrNull(r.text_unavailable_reason),
     textBaseYear: Number.isInteger(r.text_base_year) ? r.text_base_year : null,
     appliedAmendments: intList(r.applied_amendments),
     pendingAmendments: pending
@@ -106,6 +108,9 @@ export function amendmentList(numbers) {
 export function kbTextLabel(doc, t) {
   if (!doc?.fullTextAvailable || !doc.textLabel) return null;
   if (doc.docStatus !== "active") return { kind: "inactive", text: t("home.knowledgeBase.label.inactive") };
+  // A text from an unofficial copy (slice 9, frame 5 B) carries no label: the
+  // copy notice above the text says what it is instead.
+  if (doc.textLabel === "copy") return null;
   if (doc.textLabel === "verified") {
     return { kind: "verified", text: t("home.knowledgeBase.checkedOn", { date: formatKbDate(doc.textCheckedAt) ?? "" }) };
   }
@@ -118,7 +123,7 @@ export function kbTextLabel(doc, t) {
  * 2017 года», the phone header).
  */
 export function kbEditionLine(doc, t, { short = false } = {}) {
-  if (!doc?.fullTextAvailable) return null;
+  if (!doc?.fullTextAvailable || doc.textLabel === "copy") return null;
   if (doc.textLabel === "verified") {
     const date = formatKbDate(doc.editionDate);
     if (!date) return null;
@@ -132,6 +137,25 @@ export function kbEditionLine(doc, t, { short = false } = {}) {
     return t("home.knowledgeBase.edition.textYearWithout", { year: doc.textBaseYear, list: amendmentList(pending) });
   }
   return pending.length && !short ? t("home.knowledgeBase.edition.textWithout", { list: amendmentList(pending) }) : null;
+}
+
+/**
+ * «Официального текста в открытом доступе нет. Текст взят с копии на
+ * meganorm.ru и не сверен с официальной публикацией.» for a text loaded from an
+ * unofficial copy (slice 9, frame 5 B, approved 10.11), on the spot of the
+ * «Документ не действует» plaque. Null for any other document.
+ */
+export function kbCopyNotice(doc, t) {
+  if (!doc?.fullTextAvailable || doc.textLabel !== "copy") return null;
+  let host = "";
+  try {
+    host = new URL(doc.textSourceUrl ?? "").hostname.replace(/^www\./, "");
+  } catch {
+    host = "";
+  }
+  return host
+    ? t("home.knowledgeBase.reader.copyNotice", { host })
+    : t("home.knowledgeBase.reader.copyNoticeNoHost");
 }
 
 /** The window under the yellow label: amendments with a link, and those not found. */

@@ -14,7 +14,7 @@
 // Types live in kbSeo.d.mts.
 
 import { KB_FOLDERS, displayTitle, kbDocPath, kbHeading, sourceHost } from "./kbConfig.mjs";
-import { kbEditionLine, kbEditionNote, kbFullTextReadable, kbTextLabel } from "./kbFullText.mjs";
+import { kbCopyNotice, kbEditionLine, kbEditionNote, kbFullTextReadable, kbTextLabel } from "./kbFullText.mjs";
 import { KB_SOLUTIONS_PATH, kbSolutionDocuments, kbSolutionPath } from "./kbSolutions.mjs";
 import { KB_CHANGES_PATH } from "./kbChanges.mjs";
 
@@ -132,7 +132,8 @@ export function kbDocumentJsonLd(doc, t, { clauses = [], spFullText = true, desc
   const url = abs(kbDocPath(doc.slug));
   const readable = kbFullTextReadable(doc, spFullText) && clauses.length > 0;
   const normative = NORMATIVE_FOLDERS.has(doc.folder);
-  const official = doc.sourceLinks.find((l) => l.kind === "official") ?? doc.sourceLinks[0] ?? null;
+  const official =
+    doc.sourceLinks.find((l) => l.kind === "official") ?? (doc.textLabel === "copy" ? null : doc.sourceLinks[0]) ?? null;
 
   const work = {
     "@type": normative ? "Legislation" : "CreativeWork",
@@ -158,10 +159,11 @@ export function kbDocumentJsonLd(doc, t, { clauses = [], spFullText = true, desc
       if (doc.editionDate) work.legislationDateVersion = doc.editionDate;
       work.legislationLegalForce = LEGAL_FORCE[doc.docStatus] ?? LEGAL_FORCE.active;
     }
-    if (doc.textPdfUrl) work.isBasedOn = doc.textPdfUrl;
+    if (doc.textPdfUrl && doc.textLabel !== "copy") work.isBasedOn = doc.textPdfUrl;
     const label = kbTextLabel(doc, t);
     const edition = kbEditionLine(doc, t);
-    if (label || edition) work.version = [label?.text, edition].filter(Boolean).join(". ");
+    const copy = kbCopyNotice(doc, t);
+    if (label || edition || copy) work.version = [label?.text, edition, copy].filter(Boolean).join(". ");
     const parts = clauses
       .filter((c) => c.heading && c.level <= 2 && c.number && /^\d/.test(c.number))
       .map((c) => ({

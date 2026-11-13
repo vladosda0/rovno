@@ -745,6 +745,8 @@
 .rv-kb-label--checking { background: hsl(42 95% 55%); color: hsl(32 80% 18%); }
 .rv-kb-label--inactive { background: hsl(0 60% 50% / .12); color: hsl(0 60% 38%); }
 .rv-kb-edition { font-size: 14px; opacity: .72; }
+/* Slice 9, frame 5 B: a text from an unofficial copy (amber, the mockup «copyban»). */
+.rv-kb-copy-notice { padding: 10px 12px; border-radius: 10px; font-size: 14px; background: hsl(40 90% 50% / .12); border: 1px solid hsl(40 70% 50% / .35); }
 .rv-kb-reader { margin-top: 32px; max-width: 900px; }
 .rv-kb-folders, .rv-kb-doc-list { list-style: none; padding: 0; margin: 40px 0 0; display: grid; gap: 12px; font-family: var(--font-body); color: var(--rv-blue); }
 .rv-kb-folders { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }

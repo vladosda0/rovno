@@ -162,3 +162,25 @@ describe("source row names the site for known hosts", () => {
     expect(sourceRow(url)).toBe(expected);
   });
 });
+
+describe("the note instead of the full text (docs-library slice 9, frame 5 A)", () => {
+  const t = (key: string) => key;
+  const doc = (over: Record<string, unknown> = {}) =>
+    normalizeKbRow({ title: "Положение по техническому обследованию жилых зданий", display_mode: "full_text", last_checked_at: "2026-10-13", ...over });
+
+  it("says the reason when there is one, «later» otherwise, nothing for a card", () => {
+    expect(buildKbDocumentView(doc({ text_unavailable_reason: "Официального текста нет." }), t).fullTextNote).toBe("Официального текста нет.");
+    expect(buildKbDocumentView(doc(), t).fullTextNote).toBe("home.knowledgeBase.fullTextLater");
+    expect(buildKbDocumentView(doc({ display_mode: "card" }), t).fullTextNote).toBeNull();
+  });
+
+  it("a readable document has no note", () => {
+    const readable = doc({
+      folder: "snip", full_text_available: true, text_label: "copy", edition_date: "1988-07-06",
+      text_checked_at: "2026-11-13", text_source_url: "https://meganorm.ru/x.htm",
+    });
+    expect(buildKbDocumentView(readable, t).fullTextNote).toBeNull();
+    expect(buildKbDocumentView(readable, t).rows.find((r) => r.key === "checked")).toBeUndefined();
+    expect(buildKbDocumentView(readable, t).copyNotice).toBe("home.knowledgeBase.reader.copyNotice");
+  });
+});

@@ -99,6 +99,10 @@ export interface KbDocumentView {
   readable: boolean;
   label: KbTextLabel | null;
   showFullTextLater: boolean;
+  /** Slice 9, frame 5 A: the reason line, or «Полный текст появится в базе позже.»; null when the text is shown or the document is a card. */
+  fullTextNote: string | null;
+  /** Slice 9, frame 5 B: the copy notice of a text from an unofficial copy. */
+  copyNotice: string | null;
 }
 
 export type KbTranslate = (key: string, vars?: Record<string, unknown>) => string;

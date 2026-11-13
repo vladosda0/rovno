@@ -44,7 +44,7 @@ export function KbReadingPage({ slug, onBack }: KbReadingPageProps) {
   if (docQuery.isError) return status(t("home.knowledgeBase.loadError"));
   if (!doc) return status(t("home.knowledgeBase.public.notFoundBody"));
   // The switch is off or the text is gone: the page says so instead of an empty reader.
-  if (!readable) return status(t("home.knowledgeBase.fullTextLater"));
+  if (!readable) return status(doc.textUnavailableReason ?? t("home.knowledgeBase.fullTextLater"));
   if (clauses.isLoading) return status(t("home.knowledgeBase.reader.loading"));
   if (clauses.isError || !clauses.data?.length) return status(t("home.knowledgeBase.reader.loadError"));
 

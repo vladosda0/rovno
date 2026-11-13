@@ -111,6 +111,23 @@ describe("knowledge base search surface", () => {
     expect(work.isBasedOn).toBe("https://minstroyrf.gov.ru/docs/14844/");
   });
 
+  it("a text from an unofficial copy is not based on the copy and says so in its version (docs-library slice 9)", () => {
+    const copy = normalizeKbRow({
+      ...ROW, text_label: "copy", pending_amendments: [], text_base_year: null,
+      text_source_url: "https://meganorm.ru/Data2/1/x.htm", text_pdf_url: "https://meganorm.ru/Data2/1/x.pdf",
+    });
+    const work = (kbDocumentJsonLd(copy, t, { clauses: CLAUSES })["@graph"] as Array<Record<string, unknown>>).find((n) => n["@type"] === "Legislation")!;
+    expect(work.isBasedOn).toBe("https://minstroyrf.gov.ru/docs/14844/");
+    expect(String(work.version)).toContain("Текст взят с копии на meganorm.ru");
+    const onlyCopyLink = normalizeKbRow({
+      ...ROW, text_label: "copy", pending_amendments: [], text_base_year: null,
+      source_links: [{ url: "https://meganorm.ru/Data1/2/2567/index.htm", kind: "copy" }],
+      text_source_url: "https://meganorm.ru/Data1/2/2567/index.htm",
+    });
+    const work2 = (kbDocumentJsonLd(onlyCopyLink, t, { clauses: CLAUSES })["@graph"] as Array<Record<string, unknown>>).find((n) => n["@type"] === "Legislation")!;
+    expect(work2.isBasedOn).toBeUndefined();
+  });
+
   it("marks a manufacturer's document as CreativeWork, not Legislation", () => {
     const ld = kbDocumentJsonLd(normalizeKbRow({ ...ROW, folder: "manufacturers", full_text_available: false }), t);
     const types = (ld["@graph"] as Array<Record<string, unknown>>).map((n) => n["@type"]);

@@ -142,6 +142,7 @@ export default function KbDocumentPage() {
             <h1 className="rv-article-title">{view.heading}</h1>
             {doc.category && <p className="rv-article-subtitle">{doc.category}</p>}
           </header>
+          {view.copyNotice && <p className="rv-kb-copy-notice">{view.copyNotice}</p>}
 
           {view.rows.length > 0 && (
             <dl className="rv-kb-facts">
@@ -153,9 +154,7 @@ export default function KbDocumentPage() {
               ))}
             </dl>
           )}
-          {view.showFullTextLater && (
-            <p style={{ ...textStyle, fontSize: 16, opacity: 0.72 }}>{t("home.knowledgeBase.fullTextLater")}</p>
-          )}
+          {view.fullTextNote && <p style={{ ...textStyle, fontSize: 16, opacity: 0.72 }}>{view.fullTextNote}</p>}
 
           <div className="rv-kb-actions">
             {view.buttons.map((button, index) => (

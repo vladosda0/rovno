@@ -408,6 +408,8 @@
   "home.knowledgeBase.reader.scannedVerified": "Текст распознан с официального PDF Минстроя и сверен. Если пункт нужен для спора или экспертизы, сверьтесь с",
   "home.knowledgeBase.reader.scannedChecking": "Текст распознан с официального PDF Минстроя. Если пункт нужен для спора или экспертизы, сверьтесь с",
   "home.knowledgeBase.reader.scannedLink": "официальным PDF",
+  "home.knowledgeBase.reader.copyNotice": "Официального текста в открытом доступе нет. Текст взят с копии на {{host}} и не сверен с официальной публикацией.",
+  "home.knowledgeBase.reader.copyNoticeNoHost": "Официального текста в открытом доступе нет. Текст взят с неофициальной копии и не сверен с официальной публикацией.",
   "home.knowledgeBase.reader.inactiveSince": "Документ не действует с {{date}}.",
   "home.knowledgeBase.reader.inactive": "Документ не действует.",
   "home.knowledgeBase.reader.replacedBy": "Вместо него:",

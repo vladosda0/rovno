@@ -17,7 +17,7 @@ import {
   normalizeKbSolution,
   sortKbSolutions,
 } from "./kbSolutions.mjs";
-import { kbEditionLine, kbEditionNote, kbIsLawAnchor, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
+import { kbCopyNotice, kbEditionLine, kbEditionNote, kbIsLawAnchor, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
 import { KB_CHANGES_PATH, kbChangeMonths } from "./kbChanges.mjs";
 import {
   KB_INDEX_PATH,
@@ -107,6 +107,9 @@ export function kbFullTextHtml(doc, clauses, t) {
     label ? `<span class="rv-kb-label rv-kb-label--${label.kind}">${escapeHtml(label.text)}</span>` : "",
     edition ? `<span class="rv-kb-edition">${escapeHtml(edition)}</span>` : "",
   ].join(" ");
+  // Slice 9, frame 5 B: a text from an unofficial copy says so above the text.
+  const copy = kbCopyNotice(doc, t);
+  const copyHtml = copy ? `<p class="rv-kb-copy-notice">${escapeHtml(copy)}</p>` : "";
   const number = (c) => (c.number && /^\d/.test(c.number) ? `${escapeHtml(c.number)} ` : "");
   // A law keeps the official text's line per item «1)», «1¹)», as the reader does.
   const lawLines = (text) => escapeHtml(text).replaceAll("\n", "<br>");
@@ -131,7 +134,7 @@ export function kbFullTextHtml(doc, clauses, t) {
       return `<p id="${id}">${heading}${escapeHtml(c.body)}</p>`;
     })
     .join("");
-  return `<section class="rv-kb-text"><p>${head}</p>${body}</section>`;
+  return `<section class="rv-kb-text"><p>${head}</p>${copyHtml}${body}</section>`;
 }
 
 /** The visible trail; the last entry is the current page and not a link. */
@@ -157,8 +160,8 @@ export function kbDocumentRootHtml(row, t, { clauses = [], spFullText = true } =
         .map((r) => `<div class="rv-kb-facts__row"><dt>${escapeHtml(r.label)}</dt><dd>${escapeHtml(r.value)}</dd></div>`)
         .join("")}</dl>`
     : "";
-  const fullTextNote = view.showFullTextLater
-    ? `<p style="font-family:var(--font-body);color:var(--rv-blue);font-size:16px;opacity:.72">${escapeHtml(t("home.knowledgeBase.fullTextLater"))}</p>`
+  const fullTextNote = view.fullTextNote
+    ? `<p style="font-family:var(--font-body);color:var(--rv-blue);font-size:16px;opacity:.72">${escapeHtml(view.fullTextNote)}</p>`
     : "";
   const buttons = view.buttons
     .map(

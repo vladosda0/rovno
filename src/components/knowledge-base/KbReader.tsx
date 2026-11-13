@@ -29,11 +29,13 @@ import {
   kbSearchMatches,
   kbSectionAnchor,
   kbTextLabel,
+  kbCopyNotice,
   kbToc,
   type KbTocEntry,
 } from "@/lib/knowledge-base/kbFullText.mjs";
 import { formatKbDate } from "@/lib/knowledge-base/kbConfig.mjs";
 import { KbTextLabel } from "./KbTextLabel";
+import { KbCopyNotice } from "./KbCopyNotice";
 import type { KbSourceButton } from "./kb-view";
 
 interface KbReaderProps {
@@ -56,6 +58,7 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
   const { t } = useTranslation();
   const tr = (key: string, vars?: Record<string, unknown>) => t(key, vars) as string;
   const label = kbTextLabel(doc, tr);
+  const copyNotice = kbCopyNotice(doc, tr);
   const toc = useMemo(() => kbToc(clauses), [clauses]);
   const replacement = useKbDocumentById(doc.docStatus !== "active" ? doc.replacedBy : null);
 
@@ -265,7 +268,7 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
             <KbTextLabel doc={doc} kind={label.kind} text={label.text} />
           </div>
         )}
-        {doc.recognizedFromScan && (
+        {doc.recognizedFromScan && doc.textLabel !== "copy" && (
           <p className="text-caption text-muted-foreground">
             {t(
               doc.textLabel === "verified"
@@ -284,6 +287,8 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
         )}
         {headerExtra && <div className="flex flex-wrap gap-2">{headerExtra}</div>}
       </header>
+
+      {copyNotice && <KbCopyNotice text={copyNotice} />}
 
       {doc.docStatus !== "active" && (
         <div className="rounded-panel border border-destructive/30 bg-destructive/10 px-4 py-3 text-body-sm text-destructive">

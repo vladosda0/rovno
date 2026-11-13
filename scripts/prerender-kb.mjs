@@ -68,7 +68,7 @@ const COLUMNS =
   "doc_id,slug,designation,title,category,folder,display_mode,object_types,domains," +
   "applicability_note,publisher,country,edition,effective_from,last_checked_at,source_links," +
   "full_text_available,updated_at,doc_status,doc_status_since,replaced_by,edition_date,text_checked_at," +
-  "text_source_url,text_pdf_url,text_label,text_base_year,applied_amendments,pending_amendments,recognized_from_scan,upcoming_amendments";
+  "text_source_url,text_pdf_url,text_label,text_base_year,applied_amendments,pending_amendments,recognized_from_scan,upcoming_amendments,text_unavailable_reason";
 
 function log(message) {
   console.log(`[prerender-kb] ${message}`);

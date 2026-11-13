@@ -7,6 +7,7 @@ import { kbFirstText } from "./kbSeo.mjs";
 import {
   amendmentList,
   kbAnchorFromHash,
+  kbCopyNotice,
   kbArticleAnchor,
   kbClauseUrl,
   kbEditionNote,
@@ -243,5 +244,50 @@ describe("a law (docs-library slice 9)", () => {
     expect(kbLawClauseLabel("st-39-1-p-3-1")).toBe("ст. 39.1 п. 3¹");
     expect(kbLawClauseLabel("p-7-4-17")).toBeNull();
     expect(kbLawClauseLabel(null)).toBeNull();
+  });
+});
+
+describe("a document without an official text (docs-library slice 9, frame 5)", () => {
+  const copy = (over: Record<string, unknown> = {}) =>
+    row({
+      doc_id: "NORM-0002",
+      folder: "snip",
+      designation: "ВСН 57-88(р)",
+      text_label: "copy",
+      text_base_year: null,
+      pending_amendments: [],
+      text_source_url: "https://www.meganorm.ru/Data2/1/4294854/4294854948.htm",
+      ...over,
+    });
+
+  it("a text from a copy has no label and no edition line, and says where it came from (B)", () => {
+    const doc = copy();
+    expect(doc.textLabel).toBe("copy");
+    expect(kbTextLabel(doc, t)).toBeNull();
+    expect(kbEditionLine(doc, t)).toBeNull();
+    expect(kbCopyNotice(doc, t)).toBe(
+      "Официального текста в открытом доступе нет. Текст взят с копии на meganorm.ru и не сверен с официальной публикацией.",
+    );
+    expect(kbCopyNotice(row(), t)).toBeNull();
+    expect(kbCopyNotice(copy({ full_text_available: false }), t)).toBeNull();
+  });
+
+  it("a replaced document from a copy still reads red", () => {
+    expect(kbTextLabel(copy({ doc_status: "replaced" }), t)).toEqual({ kind: "inactive", text: "Не действует" });
+  });
+
+  it("an unknown label is no label", () => {
+    expect(row({ text_label: "official" }).textLabel).toBeNull();
+  });
+
+  it("the static page carries the copy notice above the text", () => {
+    const html = kbFullTextHtml(copy(), clauses.slice(0, 2), t);
+    expect(html).toContain("Текст взят с копии на meganorm.ru");
+    expect(html).not.toContain("rv-kb-label--");
+  });
+
+  it("reads the reason line of a document without text, blank is none", () => {
+    expect(row({ full_text_available: false, text_unavailable_reason: " Причина. " }).textUnavailableReason).toBe("Причина.");
+    expect(row({ full_text_available: false, text_unavailable_reason: "  " }).textUnavailableReason).toBeNull();
   });
 });

@@ -4,7 +4,7 @@
 // run the SAME rules: which links are shown, what the source button says, how a
 // title and a date read. Types live in kbConfig.d.mts.
 
-import { kbEditionLine, kbFullTextReadable, kbTextLabel, normalizeKbFullTextFields } from "./kbFullText.mjs";
+import { kbCopyNotice, kbEditionLine, kbFullTextReadable, kbTextLabel, normalizeKbFullTextFields } from "./kbFullText.mjs";
 
 /** Folder ids in the approved display order (mockup v3, frame 1). */
 export const KB_FOLDERS = [
@@ -233,7 +233,8 @@ export function buildKbDocumentView(doc, t, { spFullText = true } = {}) {
   push("edition", (readable && kbEditionLine(doc, t)) || doc.edition);
   push("effectiveFrom", formatKbDate(doc.effectiveFrom));
   if (label) push("status", label.text, label.kind);
-  else push("checked", formatKbDate(doc.lastCheckedAt));
+  // A text from a copy (slice 9, frame 5 B) has no «Проверено»: the copy notice says what it is.
+  else if (!(readable && doc.textLabel === "copy")) push("checked", formatKbDate(doc.lastCheckedAt));
   const first = doc.sourceLinks[0];
   push("source", first ? sourceRowValue(first.url, t) : t("home.knowledgeBase.noSource"));
 
@@ -249,5 +250,12 @@ export function buildKbDocumentView(doc, t, { spFullText = true } = {}) {
     readable,
     label,
     showFullTextLater: doc.displayMode === "full_text" && !readable,
+    // Slice 9, frame 5 A: the reason line when the base knows why there is no
+    // text, the old promise otherwise.
+    fullTextNote:
+      doc.displayMode === "full_text" && !readable
+        ? doc.textUnavailableReason ?? t("home.knowledgeBase.fullTextLater")
+        : null,
+    copyNotice: readable ? kbCopyNotice(doc, t) : null,
   };
 }

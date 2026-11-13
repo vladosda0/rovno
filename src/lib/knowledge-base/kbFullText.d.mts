@@ -20,7 +20,9 @@ export interface KbFullTextFields {
   textCheckedAt: string | null;
   textSourceUrl: string | null;
   textPdfUrl: string | null;
-  textLabel: "verified" | "checking" | null;
+  textLabel: "verified" | "checking" | "copy" | null;
+  /** Slice 9, frame 5 A: the reason line instead of «Полный текст появится в базе позже.». */
+  textUnavailableReason: string | null;
   textBaseYear: number | null;
   appliedAmendments: number[];
   pendingAmendments: KbPendingAmendment[];
@@ -90,3 +92,6 @@ export declare function kbHighlight(
 ): KbHighlightPiece[];
 export declare function kbClauseUrl(origin: string, slug: string, anchor: string): string;
 export declare function kbAnchorFromHash(hash: string): string | null;
+
+/** Slice 9, frame 5 B: the notice of a text from an unofficial copy, else null. */
+export declare function kbCopyNotice(doc: KbDocLike | null | undefined, t: KbTranslate): string | null;
