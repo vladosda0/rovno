@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
+import { isSecondStepRequired, mfaPathFor } from "@/lib/mfa";
 
 export default function AuthResetPassword() {
   const { t } = useTranslation();
@@ -25,6 +26,12 @@ export default function AuthResetPassword() {
         const { data } = await supabase.auth.getSession();
 
         if (data.session) {
+          // Two-factor protection (epic external-login, slice 4): Auth changes the password of
+          // a protected account only after the code from the app, so that comes first.
+          if (await isSecondStepRequired()) {
+            navigate(mfaPathFor("/auth/reset-password"), { replace: true });
+            return;
+          }
           setValidSession(true);
         } else {
           setValidSession(false);

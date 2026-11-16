@@ -17,6 +17,7 @@ import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 import { setAnalyticsUserId, trackEventOncePerUser, type AuthMethod } from "@/lib/analytics";
 import { isSameScreenReply } from "@/lib/email-code";
 import { safeNextPath } from "@/lib/safe-next-path";
+import { isSecondStepRequired, mfaPathFor } from "@/lib/mfa";
 
 type LoginMode = "password" | "code" | "code-sent";
 
@@ -65,6 +66,12 @@ export default function Login() {
     // Set the analytics user id now so the once-per-user guard below keys on
     // the real user id (AppLayout also sets it post-navigation; idempotent).
     setAnalyticsUserId(user.id);
+
+    // Two-factor protection (epic external-login, slice 4): the code from the app comes first.
+    if (await isSecondStepRequired()) {
+      navigate(mfaPathFor(safeNext ?? "/home"), { replace: true });
+      return;
+    }
 
     // "First login" = the user's first sign-in while still in the signup
     // funnel (onboarding not completed). Once-per-user guarded so repeated

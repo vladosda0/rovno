@@ -5,7 +5,8 @@ import Login from "@/pages/auth/Login";
 import { getAuthRole, setAuthRole } from "@/lib/auth-state";
 import { toast } from "@/hooks/use-toast";
 
-const { signInWithPasswordMock, signInWithOtpMock, verifyOtpMock, trackEventOncePerUserMock, invokeMock } = vi.hoisted(() => ({
+const { signInWithPasswordMock, signInWithOtpMock, verifyOtpMock, trackEventOncePerUserMock, invokeMock, aalMock } = vi.hoisted(() => ({
+  aalMock: vi.fn(),
   signInWithPasswordMock: vi.fn(),
   signInWithOtpMock: vi.fn(),
   verifyOtpMock: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       signInWithPassword: signInWithPasswordMock,
       signInWithOtp: signInWithOtpMock,
       verifyOtp: verifyOtpMock,
+      mfa: { getAuthenticatorAssuranceLevel: aalMock },
     },
     functions: { invoke: invokeMock },
   },
@@ -111,6 +113,33 @@ describe("Login", () => {
     await waitFor(() => {
       expect(screen.getByTestId("location-marker")).toHaveTextContent("/invite/accept/token-123");
     });
+  });
+
+  it("a person with two-factor protection goes to the code from the app first, keeping next", async () => {
+    setAuthRole("guest");
+    aalMock.mockResolvedValueOnce({ data: { currentLevel: "aal1", nextLevel: "aal2" }, error: null });
+    signInWithPasswordMock.mockResolvedValue({
+      data: { session: { user: { id: "profile-1" } } },
+      error: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/auth/login?next=/invite/accept/token-123"]}>
+        <Routes>
+          <Route path="/auth/login" element={<Login />} />
+          <Route path="*" element={<LocationMarker />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location-marker")).toHaveTextContent("/auth/mfa?next=%2Finvite%2Faccept%2Ftoken-123");
+    });
+    expect(trackEventOncePerUserMock).not.toHaveBeenCalledWith("first_login", expect.anything());
   });
 
   it.each(["//evil.example", "/\\evil.example", "/.//evil.example"])("ignores an off-origin next param %s after sign in", async (next) => {

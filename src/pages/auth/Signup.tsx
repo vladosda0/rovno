@@ -16,6 +16,7 @@ import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/aut
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 import { setAnalyticsUserId, trackEvent, trackEventOncePerUser } from "@/lib/analytics";
 import { safeNextPath } from "@/lib/safe-next-path";
+import { isSecondStepRequired, mfaPathFor } from "@/lib/mfa";
 
 export default function Signup() {
   const { t } = useTranslation();
@@ -94,6 +95,11 @@ export default function Signup() {
       return;
     }
 
+    // Two-factor protection (slice 4): an existing protected account passes the code first.
+    if (await isSecondStepRequired()) {
+      navigate(mfaPathFor(safeNext ?? "/home"), { replace: true });
+      return;
+    }
     const completedOnboarding = await hasCompletedOnboarding(user.id);
     toast({ title: t("auth.login.successTitle"), description: t("auth.login.successDescription") });
     navigate(safeNext ?? (completedOnboarding ? "/home" : "/onboarding"));

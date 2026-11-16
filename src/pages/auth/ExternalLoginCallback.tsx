@@ -15,12 +15,14 @@ import { safeNextPath } from "@/lib/safe-next-path";
 import {
   confirmExternalProof,
   finishExternalCallback,
+  savePendingLink,
   takeStartedAttempt,
   type ExternalMode,
   type ExternalProof,
   type ExternalResult,
   type LoginProvider,
 } from "@/lib/external-login";
+import { isSecondStepRequired, mfaPathFor } from "@/lib/mfa";
 
 type SignedInResult = Extract<ExternalResult, { outcome: "verify" | "session" }>;
 type SettingsNotice = "linked" | "taken" | "has_yandex" | "has_vk" | "failed";
@@ -72,6 +74,12 @@ export default function ExternalLoginCallback({ provider }: { provider: LoginPro
       trackEventOncePerUser("first_login", { user_id: user.id, via: provider, method: provider });
       toast({ title: t("auth.signup.successTitle"), description: t("auth.signup.welcomeToApp") });
       navigate(safeNext ?? "/onboarding", { replace: true });
+      return;
+    }
+
+    // Two-factor protection (epic external-login, slice 4): the code from the app comes first.
+    if (await isSecondStepRequired()) {
+      navigate(mfaPathFor(safeNext ?? "/home"), { replace: true });
       return;
     }
 
@@ -146,10 +154,14 @@ export default function ExternalLoginCallback({ provider }: { provider: LoginPro
 
   const handleProven = async (user: User) => {
     if (!proof) return;
-    const result = await confirmExternalProof(provider, proof.token).catch(() => ({ outcome: "failed" as const }));
+    const result: ExternalResult = await confirmExternalProof(provider, proof.token).catch(() => ({ outcome: "failed" as const }));
     // The sign-in itself succeeded, only the link did not: the person goes in and the
     // screen comes back next time.
-    if (result.outcome === "has_yandex" || result.outcome === "has_vk") {
+    if (result.outcome === "failed" && result.reason === "mfa_required") {
+      // Two-factor protection: the link waits for the six digits (slice 4, Vlad 2026-11-13),
+      // and finishSignIn sends the person to /auth/mfa, which finishes it.
+      savePendingLink(provider, proof.token, user.id);
+    } else if (result.outcome === "has_yandex" || result.outcome === "has_vk") {
       toast({ title: t(HAS_OWN[provider]), variant: "destructive" });
     } else if (result.outcome !== "linked") {
       toast({ title: t(FAILED[provider]), variant: "destructive" });

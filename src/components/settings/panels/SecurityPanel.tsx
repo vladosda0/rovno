@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { ConnectedAccountsSection } from "@/components/settings/panels/ConnectedAccountsSection";
+import { TwoFactorSection } from "@/components/settings/panels/TwoFactorSection";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Monitor } from "lucide-react";
@@ -184,6 +185,9 @@ export function SecurityPanel() {
 
       {status === "authenticated" && user && <PasswordSection key={user.id} user={user} />}
 
+      {status === "authenticated" && user ? (
+        <TwoFactorSection key={`two-factor-${user.id}`} email={user.email ?? null} />
+      ) : (
       <SettingsSection title={t("security.twoFa.title")} description={t("security.twoFa.description")}>
         <div className="rounded-panel bg-muted/40 p-1.5 px-sp-2">
           <div className="space-y-0.5">
@@ -195,6 +199,7 @@ export function SecurityPanel() {
           </div>
         </div>
       </SettingsSection>
+      )}
 
       {status === "authenticated" ? (
         <ConnectedAccountsSection />

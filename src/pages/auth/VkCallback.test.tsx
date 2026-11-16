@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   trackEventOncePerUser: vi.fn(),
   hasCompletedOnboarding: vi.fn(),
   toast: vi.fn(),
+  aal: vi.fn(),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -22,6 +23,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       signInWithPassword: mocks.signInWithPassword,
       signInWithOtp: mocks.signInWithOtp,
       verifyOtp: mocks.verifyOtp,
+      mfa: { getAuthenticatorAssuranceLevel: mocks.aal },
     },
   },
 }));
@@ -76,6 +78,7 @@ describe("VkCallback", () => {
     mocks.verifyOtp.mockResolvedValue({ data: { user: USER, session: { user: USER } }, error: null });
     mocks.signInWithOtp.mockResolvedValue({ error: null });
     mocks.hasCompletedOnboarding.mockResolvedValue(true);
+    mocks.aal.mockResolvedValue({ data: { currentLevel: "aal1", nextLevel: "aal1" }, error: null });
   });
 
   it("shows «Signing in with VK ID» while it checks", async () => {
@@ -244,6 +247,21 @@ describe("VkCallback", () => {
       title: "Another VK ID is already linked to this account. Unlink it in Settings and try again.",
       variant: "destructive",
     });
+  });
+
+  it("a protected account: the link waits for the six digits, no failure is shown", async () => {
+    // Vlad 2026-11-13 «Привязка после шести цифр»: the password alone links nothing.
+    startedAttempt();
+    mocks.invoke.mockResolvedValueOnce(proof("password"));
+    mocks.invoke.mockResolvedValueOnce({ data: { outcome: "failed", reason: "mfa_required" }, error: null });
+    mocks.signInWithPassword.mockResolvedValue({ data: { session: { user: USER } }, error: null });
+    mocks.aal.mockResolvedValue({ data: { currentLevel: "aal1", nextLevel: "aal2" }, error: null });
+    renderCallback();
+    fireEvent.change(await screen.findByLabelText("Password"), { target: { value: "secret1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect((await location()).textContent).toBe("/auth/mfa?next=%2Fhome");
+    expect(mocks.toast).not.toHaveBeenCalled();
+    expect(JSON.parse(sessionStorage.getItem("rovno.external-link-after-mfa") ?? "null")).toMatchObject({ provider: "vk", token: "t1" });
   });
 
   it("linking returns to Security with the result", async () => {

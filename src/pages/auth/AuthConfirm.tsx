@@ -7,6 +7,7 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/auth-state";
+import { isSecondStepRequired, mfaPathFor } from "@/lib/mfa";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
 type VerifyOtpType = "signup" | "recovery" | "invite" | "email_change" | "magiclink";
@@ -58,6 +59,12 @@ export default function AuthConfirm() {
         clearDemoSession();
         clearAiSidebarSessionPreference();
         setAuthRole("owner");
+
+        // Two-factor protection (slice 4): the code from the app comes before anything is read.
+        if (await isSecondStepRequired()) {
+          navigate(mfaPathFor("/home"), { replace: true });
+          return;
+        }
 
         // Check onboarding status
         const destination = await hasCompletedOnboarding(userId) ? "/home" : "/onboarding";

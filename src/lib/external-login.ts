@@ -120,6 +120,54 @@ export function confirmExternalProof(provider: LoginProvider, token: string): Pr
   return callFunction<ExternalResult>(provider, { action: "confirm", token });
 }
 
+// «Привязка после шести цифр» (epic external-login, slice 4, Vlad 2026-11-13): for an account
+// with two-factor protection, confirm answers «mfa_required» without spending the attempt,
+// and the same token links once /auth/mfa has the session at aal2. The token lives in this
+// tab for the attempt's own 15 minutes, never longer.
+const PENDING_LINK_KEY = "rovno.external-link-after-mfa";
+const PENDING_LINK_TTL_MS = 15 * 60 * 1000;
+
+export interface PendingLink {
+  provider: LoginProvider;
+  token: string;
+  /** The account that proved it: another account signing in in this tab never gets it. */
+  userId: string;
+  savedAt: number;
+}
+
+export function savePendingLink(provider: LoginProvider, token: string, userId: string, now = Date.now()): void {
+  try {
+    const pending: PendingLink = { provider, token, userId, savedAt: now };
+    sessionStorage.setItem(PENDING_LINK_KEY, JSON.stringify(pending));
+  } catch {
+    // No storage: the person goes in and sees the proof screen again next time.
+  }
+}
+
+/** The link waiting for the second step, once, for this account; null otherwise or when stale. */
+export function takePendingLink(userId: string | null | undefined, now = Date.now()): PendingLink | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_LINK_KEY);
+    sessionStorage.removeItem(PENDING_LINK_KEY);
+    if (!raw) return null;
+    const pending = JSON.parse(raw) as Partial<PendingLink>;
+    const fresh = typeof pending.savedAt === "number" && now - pending.savedAt <= PENDING_LINK_TTL_MS;
+    const known = pending.provider === "yandex" || pending.provider === "vk";
+    const mine = !!userId && pending.userId === userId;
+    return fresh && known && mine && typeof pending.token === "string" && pending.token ? (pending as PendingLink) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function dropPendingLink(): void {
+  try {
+    sessionStorage.removeItem(PENDING_LINK_KEY);
+  } catch {
+    // Nothing to forget.
+  }
+}
+
 export async function listLoginIdentities(): Promise<LoginIdentity[]> {
   const { data, error } = await rawSupabase.rpc("list_my_login_identities");
   if (error) throw new Error(error.message);

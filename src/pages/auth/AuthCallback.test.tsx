@@ -18,6 +18,12 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: { auth: { getSession: getSessionMock, signOut: signOutMock } },
 }));
 
+const { secondStepMock } = vi.hoisted(() => ({ secondStepMock: vi.fn() }));
+vi.mock("@/lib/mfa", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/mfa")>()),
+  isSecondStepRequired: secondStepMock,
+}));
+
 function LocationMarker() {
   const location = useLocation();
   return <div data-testid="location-marker">{`${location.pathname}${location.search}`}</div>;
@@ -39,6 +45,14 @@ describe("AuthCallback", () => {
     localStorage.clear();
     vi.clearAllMocks();
     signOutMock.mockResolvedValue({ error: null });
+    secondStepMock.mockResolvedValue(false);
+  });
+
+  it("a protected account passes the code from the app before anything is read", async () => {
+    secondStepMock.mockResolvedValue(true);
+    getSessionMock.mockResolvedValue({ data: { session: { user: { id: "u2", user_metadata: { passwordless: true } } } } });
+    renderCallback("/auth/callback?next=%2Finvite%2Faccept%2Fa");
+    await waitFor(() => expect(screen.getByTestId("location-marker")).toHaveTextContent("/auth/mfa?next=%2Finvite%2Faccept%2Fa"));
   });
 
   it("a just-confirmed password account is signed out and asked to sign in", async () => {

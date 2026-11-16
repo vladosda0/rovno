@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { startExternalAuth, takeStartedAttempt } from "@/lib/external-login";
+import { dropPendingLink, savePendingLink, startExternalAuth, takePendingLink, takeStartedAttempt } from "@/lib/external-login";
 
 const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
 
@@ -36,5 +36,27 @@ describe("external-login", () => {
     sessionStorage.setItem("rovno.yandex-login-attempt", attempt);
     expect(takeStartedAttempt("yandex", "s1")?.state).toBe("s1");
     expect(takeStartedAttempt("yandex", "s1")).toBeNull();
+  });
+
+  it("keeps a link waiting for the six digits once, for 15 minutes", () => {
+    const t0 = Date.parse("2026-11-13T12:00:00Z");
+    savePendingLink("vk", "t1", "u1", t0);
+    expect(takePendingLink("u1", t0 + 60_000)).toEqual({ provider: "vk", token: "t1", userId: "u1", savedAt: t0 });
+    expect(takePendingLink("u1", t0 + 60_000)).toBeNull();
+    savePendingLink("yandex", "t2", "u1", t0);
+    expect(takePendingLink("u1", t0 + 15 * 60_000 + 1)).toBeNull();
+    savePendingLink("yandex", "t3", "u1", t0);
+    dropPendingLink();
+    expect(takePendingLink("u1", t0)).toBeNull();
+    sessionStorage.setItem("rovno.external-link-after-mfa", "{not json");
+    expect(takePendingLink("u1", t0)).toBeNull();
+  });
+
+  it("never hands a waiting link to another account signing in in the same tab", () => {
+    const t0 = Date.parse("2026-11-13T12:00:00Z");
+    savePendingLink("vk", "t1", "u1", t0);
+    expect(takePendingLink("u2", t0)).toBeNull();
+    savePendingLink("vk", "t1", "u1", t0);
+    expect(takePendingLink(null, t0)).toBeNull();
   });
 });

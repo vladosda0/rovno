@@ -11,6 +11,7 @@ import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/aut
 import { setAnalyticsUserId, trackEvent, trackEventOncePerUser } from "@/lib/analytics";
 import { isJustConfirmed } from "@/lib/email-code";
 import { safeNextPath } from "@/lib/safe-next-path";
+import { isSecondStepRequired, mfaPathFor } from "@/lib/mfa";
 
 export default function AuthCallback() {
   const { t } = useTranslation();
@@ -58,6 +59,12 @@ export default function AuthCallback() {
             method: "email_code",
           });
           trackEventOncePerUser("first_login", { user_id: userId, via: "signup_letter_button", method: "email_code" });
+        }
+        // Two-factor protection (slice 4): the code from the app comes before anything is read.
+        if (await isSecondStepRequired()) {
+          if (cancelled) return;
+          navigate(mfaPathFor(safeNext ?? "/home"), { replace: true });
+          return;
         }
         const completedOnboarding = await hasCompletedOnboarding(userId);
         if (cancelled) return;

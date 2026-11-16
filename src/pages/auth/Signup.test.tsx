@@ -32,6 +32,12 @@ vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
 
+const { secondStepMock } = vi.hoisted(() => ({ secondStepMock: vi.fn() }));
+vi.mock("@/lib/mfa", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/mfa")>()),
+  isSecondStepRequired: secondStepMock,
+}));
+
 function newUserSession(id = "profile-1") {
   return {
     user: {
@@ -71,6 +77,7 @@ describe("Signup", () => {
     localStorage.clear();
     sessionStorage.clear();
     vi.clearAllMocks();
+    secondStepMock.mockResolvedValue(false);
   });
 
   it("has no password fields and names the button in the consent", () => {
@@ -179,6 +186,19 @@ describe("Signup", () => {
       expect(screen.getByTestId("location-marker").textContent).toMatch(/^\/(home|onboarding)$/);
     });
     expect(trackEventOncePerUserMock).not.toHaveBeenCalledWith("registration_complete", expect.anything());
+  });
+
+  it("a taken email of a protected account passes the code from the app first", async () => {
+    secondStepMock.mockResolvedValue(true);
+    signInWithOtpMock.mockResolvedValue({ data: {}, error: null });
+    verifyOtpMock.mockResolvedValue({
+      data: { session: { user: { id: "existing", created_at: "2026-01-10T10:00:00Z", email_confirmed_at: "2026-01-10T10:05:00Z", last_sign_in_at: "2026-10-29T15:00:01Z", user_metadata: {} } } },
+      error: null,
+    });
+    renderSignup();
+    requestCode("taken@example.com");
+    fireEvent.change(await screen.findByLabelText("Code from email"), { target: { value: "482913" } });
+    await waitFor(() => expect(screen.getByTestId("location-marker")).toHaveTextContent("/auth/mfa?next=%2Fhome"));
   });
 
   it("does not ask for a code without a name", async () => {

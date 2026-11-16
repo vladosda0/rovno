@@ -12,6 +12,7 @@ import { CookieConsentBanner } from "@/components/system/CookieConsentBanner";
 import { CookieSettingsDialog } from "@/components/system/CookieSettingsDialog";
 import { KbPendingWatch } from "@/components/knowledge-base/KbPendingWatch";
 import { queryClient } from "@/lib/query-client";
+import { MfaGate } from "@/components/auth/MfaGate";
 
 const AppLayout = lazy(() => import("@/layouts/AppLayout"));
 const AuthLayout = lazy(() => import("@/layouts/AuthLayout"));
@@ -28,6 +29,7 @@ const EmailSent = lazy(() => import("@/pages/auth/EmailSent"));
 const AuthCallback = lazy(() => import("@/pages/auth/AuthCallback"));
 const YandexCallback = lazy(() => import("@/pages/auth/YandexCallback"));
 const VkCallback = lazy(() => import("@/pages/auth/VkCallback"));
+const MfaChallenge = lazy(() => import("@/pages/auth/MfaChallenge"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Home = lazy(() => import("@/pages/Home"));
 const CatalogUploadReview = lazy(() => import("@/pages/catalogs/CatalogUploadReview"));
@@ -101,6 +103,7 @@ const App = () => (
         <KbPendingWatch />
         <CookieConsentBanner />
         <CookieSettingsDialog />
+        <MfaGate>
         <Routes>
           {/* Standalone pages */}
           <Route path="/" element={routeElement(<Landing />)} />
@@ -146,6 +149,7 @@ const App = () => (
             <Route path="/auth/callback" element={routeElement(<AuthCallback />)} />
             <Route path="/auth/yandex/callback" element={routeElement(<YandexCallback />)} />
             <Route path="/auth/vk/callback" element={routeElement(<VkCallback />)} />
+            <Route path="/auth/mfa" element={routeElement(<MfaChallenge />)} />
           </Route>
 
           {/* App layout (sidebar + topbar) */}
@@ -191,6 +195,7 @@ const App = () => (
 
           <Route path="*" element={routeElement(<NotFound />)} />
         </Routes>
+        </MfaGate>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
