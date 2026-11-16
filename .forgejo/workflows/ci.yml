@@ -65,10 +65,11 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     # Худший случай цикла ниже: входной assert (curl до 15с) + 16 POST x 10с +
-    # 15 пауз x (sleep 30с + assert до 15с) ≈ 14.2 мин. Потолок выше него с
-    # запасом, чтобы джоба всегда умирала СВОИМ exit-путём с внятным
+    # 15 пауз x (sleep 30с + assert до 15с) ≈ 14.2 мин, плюс ожидание новой
+    # сборки на сайте до STAGING_FLIP_TIMEOUT (15 мин) ≈ 29.5 мин. Потолок выше
+    # него с запасом, чтобы джоба всегда умирала СВОИМ exit-путём с внятным
     # сообщением, а не киллом раннера. Меняешь ретраи/таймауты — пересчитай.
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Trigger the Timeweb staging deploy
         env:
@@ -78,6 +79,9 @@ jobs:
           TIMEWEB_APP_ID: "236591"
           COMMIT_SHA: ${{ github.sha }}
           FORGE_TOKEN: ${{ github.token }}
+          STAGING_URL: "https://vladosda0-rovno-90e7.twc1.net/"
+          STAGING_FLIP_TIMEOUT: "900"
+          STAGING_FLIP_INTERVAL: "20"
         run: |
           set -euo pipefail
 
@@ -132,6 +136,48 @@ jobs:
           }
           assert_still_head
 
+          # Принятый POST значит только «Timeweb взял задачу». Зелёной джоба
+          # становится, когда Last-Modified главной не раньше момента перед
+          # POST. Какой коммит в этой сборке, проверка не сверяет.
+          await_staging_flip() {
+            local deadline headers curl_err last_err="" lm lm_epoch status="" answered=0
+            deadline=$(( $(date +%s) + STAGING_FLIP_TIMEOUT ))
+            while :; do
+              curl_err=""
+              headers=$(curl -sSI --max-time 15 -H 'Cache-Control: no-cache' "$STAGING_URL" 2>/tmp/staging-curl.err) \
+                || curl_err=$(tr '\n' ' ' </tmp/staging-curl.err)
+              if [ -z "$curl_err" ]; then
+                answered=1
+                status=$(printf '%s\n' "$headers" | tr -d '\r' | awk 'NR==1 { print; exit }')
+              else
+                last_err="$curl_err"
+              fi
+              lm=$(printf '%s\n' "$headers" | tr -d '\r' \
+                | awk 'tolower($1)=="last-modified:" { sub(/^[^:]*:[ ]*/, ""); print; exit }')
+              lm_epoch=0
+              if [ -n "$lm" ]; then
+                lm_epoch=$(python3 -c 'import sys, email.utils; print(int(email.utils.parsedate_to_datetime(sys.argv[1]).timestamp()))' "$lm" 2>/dev/null) || lm_epoch=0
+              fi
+              if [ "$lm_epoch" -ge "$DEPLOY_STARTED_AT" ]; then
+                echo "Staging отдаёт новую сборку: Last-Modified ${lm}."
+                return 0
+              fi
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                if [ "$answered" = 0 ]; then
+                  echo "Staging недоступен с раннера: ${last_err}" >&2
+                  echo "Деплой ${COMMIT_SHA} принят Timeweb, но сайт с раннера не проверить. Проверьте сайт вручную." >&2
+                  return 1
+                fi
+                echo "За ${STAGING_FLIP_TIMEOUT}с staging не сменил сборку (последний ответ: '${status}', Last-Modified: '${lm:-нет}')." >&2
+                [ -n "$curl_err" ] && echo "Последний опрос не дошёл до сайта: ${curl_err}" >&2
+                echo "Timeweb принял деплой ${COMMIT_SHA}. Проверьте сборку в кабинете Timeweb" >&2
+                echo "(приложение ${TIMEWEB_APP_ID}) и перезапустите джобу." >&2
+                return 1
+              fi
+              sleep "$STAGING_FLIP_INTERVAL"
+            done
+          }
+
           # 409 = Timeweb уже собирает другой деплой (он их сериализует), 000 =
           # сетевой сбой curl (DNS/TLS/таймаут) — оба ЖДЁМ и повторяем, а не
           # падаем и не выходим нулём: зелёная джоба обязана значить «этот sha
@@ -145,6 +191,7 @@ jobs:
             # Свежий файл на каждую попытку: иначе после сетевого сбоя (000)
             # под кодом печаталось бы тело ПРЕДЫДУЩЕГО ответа.
             rm -f /tmp/tw.json
+            DEPLOY_STARTED_AT=$(date +%s)
             code=$(curl -sS -o /tmp/tw.json -w '%{http_code}' --max-time 10 \
               -X POST "https://api.timeweb.cloud/api/v1/apps/${TIMEWEB_APP_ID}/deploy" \
               -H "Authorization: Bearer ${TIMEWEB_API_TOKEN}" \
@@ -154,7 +201,7 @@ jobs:
             # Тело печатаем всегда: токена в нём нет, а причина отказа нужна в логе.
             cat /tmp/tw.json 2>/dev/null || true; echo
             case "$code" in
-              2*) echo "Деплой ${COMMIT_SHA} запущен."; exit 0 ;;
+              2*) echo "Деплой ${COMMIT_SHA} запущен."; if await_staging_flip; then exit 0; else exit 1; fi ;;
               409|000) if [ "$attempt" -lt 16 ]; then sleep 30; assert_still_head; fi ;;
               401|403) echo "Timeweb не принял токен ($code). Проверьте TIMEWEB_API_TOKEN." >&2; exit 1 ;;
               *) echo "Timeweb ответил $code." >&2; exit 1 ;;

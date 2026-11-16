@@ -3345,10 +3345,11 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       )}
       <div
         ref={panelRootRef}
-        onPointerDownCapture={() => {
-          if (!aiSidebarClickedInside && !collapsed && !isGuest) {
-            setAiSidebarClickedInside(true);
-          }
+        onPointerDownCapture={(event) => {
+          if (aiSidebarClickedInside || collapsed || isGuest || showNotifications) return;
+          const target = event.target as Element | null;
+          if (target?.closest?.(`#${SHURIK_PANEL_TAB_IDS.notifications.tab}`)) return;
+          setAiSidebarClickedInside(true);
         }}
         className={cn(SHURIK_PANEL_CARD_CLASS, "flex flex-col shrink-0 box-border")}
         style={{
