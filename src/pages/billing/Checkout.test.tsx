@@ -41,7 +41,13 @@ vi.mock("@/hooks/useActiveSubscription", () => ({
 }));
 
 // Settable payment-status row + a refetch spy (Fix I); the terminal check is the real one (Fix G).
-type StatusRow = { id: string; status: string; error_code: string | null; plan_code?: string };
+type StatusRow = {
+  id: string;
+  status: string;
+  error_code: string | null;
+  plan_code?: string;
+  confirmed_at?: string | null;
+};
 let statusData: StatusRow | undefined = undefined;
 const refetchStatus = vi.fn();
 vi.mock("@/hooks/usePaymentStatus", async (importOriginal) => {
@@ -699,8 +705,25 @@ describe("Checkout", () => {
     );
   });
 
-  it("G: routes to the fail screen on a partial_refund payment_intent too", async () => {
-    statusData = { id: "i10", status: "partial_refund", error_code: null, plan_code: "master" };
+  it("G: a partial_refund payment_intent with no confirmation yet stays on the checkout", async () => {
+    statusData = { id: "i11", status: "partial_refund", error_code: null, plan_code: "master", confirmed_at: null };
+
+    renderCheckout();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("G: routes a confirmed partial_refund payment_intent to the success screen", async () => {
+    statusData = {
+      id: "i10",
+      status: "partial_refund",
+      error_code: null,
+      plan_code: "master",
+      confirmed_at: "2026-11-12T15:20:26Z",
+    };
 
     renderCheckout();
     await act(async () => {
@@ -708,7 +731,7 @@ describe("Checkout", () => {
     });
 
     expect(mockNavigate).toHaveBeenCalledWith(
-      "/billing/fail?intent=i10&reason=partial_refund",
+      "/billing/success?intent=i10",
       { replace: true },
     );
   });

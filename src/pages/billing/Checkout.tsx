@@ -13,7 +13,7 @@ import type { TbankIntegrationStatus } from "@/lib/tbank-widget";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { InitPaymentError, useInitPayment } from "@/hooks/useInitPayment";
-import { isTerminalPaymentStatus, usePaymentStatus } from "@/hooks/usePaymentStatus";
+import { isSettledPaymentIntent, usePaymentStatus } from "@/hooks/usePaymentStatus";
 import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
 
@@ -225,14 +225,14 @@ export default function Checkout() {
   // Navigate on terminal payment status (realtime + polling backup).
   useEffect(() => {
     const row = statusQuery.data;
-    if (!row || !isTerminalPaymentStatus(row.status)) return;
-    if (row.status === "confirmed") {
+    if (!row || !isSettledPaymentIntent(row)) return;
+    if (row.status === "confirmed" || row.status === "partial_refund") {
       navigate(`/billing/success?intent=${row.id}`, { replace: true });
     } else if (row.status === "rejected" || row.status === "cancelled") {
       const reason = row.error_code ? `&reason=${encodeURIComponent(row.error_code)}` : "";
       navigate(`/billing/fail?intent=${row.id}${reason}`, { replace: true });
-    } else if (row.status === "refunded" || row.status === "partial_refund") {
-      // G: usePaymentStatus marks refunded/partial_refund terminal (polling stops),
+    } else if (row.status === "refunded") {
+      // G: usePaymentStatus marks refunded terminal (polling stops),
       // so without a nav branch here the user is stranded on a live-looking checkout
       // (audit Fix G / P2-7). Route to the fail screen with a refund-specific reason.
       navigate(`/billing/fail?intent=${row.id}&reason=${encodeURIComponent(row.status)}`, { replace: true });
