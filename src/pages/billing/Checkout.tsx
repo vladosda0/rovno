@@ -246,6 +246,12 @@ export default function Checkout() {
   if (subLoading) {
     return (
       <div className="mx-auto w-full max-w-xl px-sp-3 py-sp-4">
+        <Button variant="ghost" size="sm" asChild className="mb-sp-3 -ml-2">
+          <Link to={backHref}>
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            {t("billing.checkout.back")}
+          </Link>
+        </Button>
         <p className="text-body-sm text-muted-foreground">{t("common.loading")}</p>
       </div>
     );

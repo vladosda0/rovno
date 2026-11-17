@@ -222,6 +222,16 @@ describe("Checkout", () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
+  it("a subscription read that is still loading keeps the way back to plans", () => {
+    activeSubReturn = { ...noSubscription(), isLoading: true };
+
+    renderCheckout();
+
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to plans" })).toHaveAttribute("href", "/settings?tab=billing");
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
   it("a failed subscription read shows the load error with retry and never inits", async () => {
     const refetch = vi.fn();
     activeSubReturn = { ...noSubscription(), isError: true, isLoadingError: true, refetch };
