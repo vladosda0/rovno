@@ -743,6 +743,10 @@
     {
       "path": "supabase/migrations/20261114020000_kb_country_and_text_rights.sql",
       "sha256": "fa513b3d8e3f99670d93390c09c45207705f8690d7c85e93e6a2f5162e9c80d4"
+    },
+    {
+      "path": "supabase/migrations/20261118020000_change_task_status_v2_done_override.sql",
+      "sha256": "8e323dee35c21e98fc099d855c0b166b43fd79e7c2ff4eb14c2866da9eaed64b"
     }
   ],
   "generated_artifacts": [

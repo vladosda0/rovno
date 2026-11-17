@@ -3494,6 +3494,7 @@ export type Database = {
           "p_new_status": string
           "p_comment_body": unknown
           "p_expected_status": unknown
+          "p_override_final_proof": unknown
           }
           Returns: Json
         }
