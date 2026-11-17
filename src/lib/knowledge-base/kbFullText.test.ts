@@ -13,6 +13,7 @@ import {
   kbEditionNote,
   kbIsLawAnchor,
   kbLawClauseLabel,
+  kbIsLawNote,
   kbEditionLine,
   kbFullTextReadable,
   kbHighlight,
@@ -232,6 +233,24 @@ describe("a law (docs-library slice 9)", () => {
     expect(kbFullTextHtml(doc, [items], t)).toContain('<p id="st-51-ch-17"><strong>17 </strong>Не требуется в случае:<br>1) гаража;<br>2) киоска.</p>');
   });
 
+  it("the guest page: the preamble without a heading, notes with their caption and «пр.», the signature muted (show 9.2в)", () => {
+    const doc = normalizeKbRow({ doc_id: "LAW-019", slug: "koap-rf", folder: "laws", full_text_available: true, text_label: "verified", edition_date: "2026-08-04", text_checked_at: "2026-11-17", text_source_url: "http://pravo.gov.ru/" });
+    const rows = [
+      { anchor: "gl-pre", number: null, level: 1, heading: "Преамбула", body: "Настоящий Кодекс принимается.", position: 1, amendments: [] },
+      { anchor: "st-2-4", number: null, level: 2, heading: "Статья 2.4. Ответственность", body: "", position: 2, amendments: [] },
+      { anchor: "st-2-4-pr", number: "пр.", level: 3, heading: null, body: "Под должностным лицом.", position: 3, amendments: [] },
+      { anchor: "st-9", number: null, level: 2, heading: "Статья 9. Индекс", body: "", position: 4, amendments: [] },
+      { anchor: "st-9-pr-1-1", number: "пр. 1¹", level: 3, heading: null, body: "Первое с индексом.", position: 5, amendments: [] },
+      { anchor: "gl-sig", number: null, level: 1, heading: null, body: "Президент Российской Федерации\nМосква, Кремль", position: 6, amendments: [] },
+    ].map(normalizeKbClause);
+    const html = kbFullTextHtml(doc, rows, t);
+    expect(html).toContain('<p><strong>Примечания:</strong></p><p id="st-9-pr-1-1">');
+    expect(html).toContain('<p id="gl-pre">Настоящий Кодекс принимается.</p>');
+    expect(html).not.toContain(">Преамбула<");
+    expect(html).toContain('<p><strong>Примечание.</strong></p><p id="st-2-4-pr"><strong>пр. </strong>Под должностным лицом.</p>');
+    expect(html).toContain('<p id="gl-sig" class="rv-kb-edition">Президент Российской Федерации<br>Москва, Кремль</p>');
+  });
+
   it("the source label of a law part reads «ст. N ч. M»", () => {
     expect(kbLawClauseLabel("st-51-ch-17")).toBe("ст. 51 ч. 17");
     expect(kbLawClauseLabel("st-51-ch-1-1")).toBe("ст. 51 ч. 1¹");
@@ -242,6 +261,29 @@ describe("a law (docs-library slice 9)", () => {
     // A law whose article is split into points (ЗК РФ, step 9.2в): «п.», not «ч.».
     expect(kbLawClauseLabel("st-39-1-p-1")).toBe("ст. 39.1 п. 1");
     expect(kbLawClauseLabel("st-39-1-p-3-1")).toBe("ст. 39.1 п. 3¹");
+    // Show 9.2в: a note to the article (КоАП), an index inside the number, an index with a dot (НК).
+    expect(kbLawClauseLabel("st-2-4-pr")).toBe("ст. 2.4 прим.");
+    expect(kbLawClauseLabel("st-4-8-pr-1")).toBe("ст. 4.8 прим. 1");
+    expect(kbLawClauseLabel("st-9-1-pr-2-1")).toBe("ст. 9.1 прим. 2¹");
+    expect(kbLawClauseLabel("st-29s1-1-ch-2")).toBe("ст. 29¹.1 ч. 2");
+    expect(kbLawClauseLabel("st-214s2d1-p-3")).toBe("ст. 214²·¹ п. 3");
+    expect(kbLawClauseLabel("st-214s2d1-p-3-2d1")).toBe("ст. 214²·¹ п. 3²·¹");
+    expect(kbLawClauseLabel("st-9-1-pr-2-2d1")).toBe("ст. 9.1 прим. 2²·¹");
+    expect(kbIsLawNote("st-9-1-pr-2-2d1")).toBe(true);
+    expect(kbLawClauseLabel("st-333s32d1")).toBe("ст. 333³²·¹");
+    expect(kbLawClauseLabel("gl-pre")).toBeNull();
+    expect(kbIsLawNote("st-9-1-pr-2-1")).toBe(true);
+    expect(kbIsLawNote("st-2-4-pr")).toBe(true);
+    expect(kbIsLawNote("st-2-4-ch-1")).toBe(false);
+    // A law with a preamble and no chapters (256-ФЗ): the preamble is no article's section.
+    const short = [{ anchor: "gl-pre", level: 1 }, { anchor: "st-1", level: 2 }, { anchor: "st-1-ch-1", level: 3 }, { anchor: "gl-sig", level: 1 }];
+    expect(kbSectionAnchor(short as never, "st-1-ch-1")).toBe("st-1-ch-1");
+    expect(kbSectionAnchor(short as never, "gl-sig")).toBe("gl-sig");
+    // The reader draws no heading for the preamble: search does not count «Преамбула».
+    expect(kbSearchMatches([{ anchor: "gl-pre", heading: "Преамбула", body: "Текст" }] as never, "преамбул")).toEqual([]);
+    expect(kbSearchMatches([{ anchor: "gl-pre", heading: "Преамбула", body: "Текст" }] as never, "текст")).toHaveLength(1);
+    expect(kbSectionAnchor(short as never, "gl-pre")).toBe("gl-pre");
+    expect(kbLawClauseLabel("gl-37-pg-3")).toBeNull();
     expect(kbLawClauseLabel("p-7-4-17")).toBeNull();
     expect(kbLawClauseLabel(null)).toBeNull();
   });

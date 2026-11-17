@@ -416,6 +416,8 @@
   "home.knowledgeBase.reader.toc": "Оглавление",
   "home.knowledgeBase.reader.tocCurrent": "Оглавление: {{section}}",
   "home.knowledgeBase.reader.appendices": "Приложения",
+  "home.knowledgeBase.reader.lawNoteOne": "Примечание.",
+  "home.knowledgeBase.reader.lawNoteMany": "Примечания:",
   "home.knowledgeBase.reader.search": "Поиск по документу",
   "home.knowledgeBase.reader.searchCount": "{{current}} из {{total}}",
   "home.knowledgeBase.reader.prevMatch": "Предыдущее совпадение",

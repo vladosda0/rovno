@@ -81,6 +81,7 @@ export declare function kbPendingAmendmentsView(doc: KbDocLike): {
 export declare function kbToc(clauses: KbClause[]): { main: KbTocEntry[]; back: KbTocEntry[] };
 export declare function kbLawClauseLabel(anchor: string | null | undefined): string | null;
 export declare function kbIsLawAnchor(anchor: string | null | undefined): boolean;
+export declare function kbIsLawNote(anchor: string | null | undefined): boolean;
 export declare function kbArticleAnchor(clauses: KbClause[], anchor: string): string | null;
 export declare function kbEditionNote(clause: KbClause | null | undefined): { text: string; note: string | null; noteStart: number };
 export declare function kbSectionAnchor(clauses: KbClause[], anchor: string): string | null;

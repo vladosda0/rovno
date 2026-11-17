@@ -225,6 +225,72 @@ describe("knowledge base full text (slice 2)", () => {
     expect(document.querySelector("[data-kb-edition-note] mark")).toHaveTextContent("ФЗ");
   });
 
+  it("a law's preamble, ГК paragraph, КоАП notes and signature (show 9.2в, frames 1-3)", async () => {
+    const law = normalizeKbRow({
+      doc_id: "LAW-019", slug: "koap-rf", designation: "КоАП РФ", title: "КоАП РФ", category: "Закон",
+      folder: "laws", display_mode: "full_text", full_text_available: true, text_label: "verified",
+      edition_date: "2026-08-04", text_checked_at: "2026-11-17", text_source_url: "http://pravo.gov.ru/proxy/ips/?doc_itself=&nd=102074277&fulltext=1",
+    });
+    fetchKbDocumentBySlug.mockResolvedValue(law);
+    fetchKbClauses.mockResolvedValue([
+      { anchor: "gl-pre", number: null, level: 1, heading: "Преамбула", body: "Настоящий Кодекс принимается в целях защиты.", position: 1 },
+      { anchor: "rz-iv-pz-2", number: null, level: 1, heading: "Подраздел 2. Отдельные виды обязательств", body: "", position: 2 },
+      { anchor: "gl-37", number: null, level: 1, heading: "Глава 37. Подряд", body: "", position: 2 },
+      { anchor: "gl-37-pg-3", number: null, level: 1, heading: "§ 3. Строительный подряд", body: "", position: 3 },
+      { anchor: "st-2-4", number: null, level: 2, heading: "Статья 2.4. Ответственность должностных лиц", body: "Подлежит должностное лицо.", position: 4 },
+      { anchor: "st-2-4-pr", number: "пр.", level: 3, heading: null, body: "Под должностным лицом следует понимать лицо.", position: 5 },
+      { anchor: "st-4-8", number: null, level: 2, heading: "Статья 4.8. Исчисление сроков", body: "", position: 6 },
+      { anchor: "st-4-8-ch-1", number: "1", level: 3, heading: null, body: "Сроки исчисляются часами.", position: 7 },
+      { anchor: "st-4-8-pr-1", number: "пр. 1", level: 3, heading: null, body: "Положения не применяются.", position: 8 },
+      { anchor: "st-4-8-pr-2", number: "пр. 2", level: 3, heading: null, body: "Положения частей не применяются.", position: 9 },
+      { anchor: "st-9", number: null, level: 2, heading: "Статья 9. Индекс", body: "", position: 9 },
+      { anchor: "st-9-pr-1-1", number: "пр. 1¹", level: 3, heading: null, body: "Первое примечание с индексом.", position: 9 },
+      { anchor: "gl-sig", number: null, level: 1, heading: null, body: "Президент Российской Федерации В.Путин\nМосква, Кремль", position: 10 },
+    ].map(normalizeKbClause));
+    window.location.hash = "#st-2-4-pr";
+    renderKB("/home?docTab=knowledge-base&kbDoc=koap-rf");
+    expect(await screen.findByText("Статья 2.4. Ответственность должностных лиц")).toBeInTheDocument();
+    // Preamble: paragraphs with no heading in the text; «Преамбула» only in the contents.
+    expect(document.querySelector("[data-kb-law-preamble]")).toHaveTextContent("Настоящий Кодекс принимается в целях защиты.");
+    expect(document.getElementById("gl-pre")?.querySelector("h2")).toBeNull();
+    // Paragraph: a heading between the chapter caption and the article, not muted like the chapter.
+    const pg = screen.getByText("§ 3. Строительный подряд");
+    expect(pg.className).toMatch(/text-body\b/);
+    expect(pg.className).not.toMatch(/text-muted-foreground/);
+    // «Подраздел» sits above the chapter: a quiet caption like the section and the chapter.
+    expect(screen.getByText("Подраздел 2. Отдельные виды обязательств").className).toMatch(/text-muted-foreground/);
+    // Notes: the caption the law writes over the first note, numbers «пр.», «пр. 1» that copy the link.
+    const captions = [...document.querySelectorAll("[data-kb-law-note-caption]")].map((n) => n.textContent);
+    expect(captions).toEqual(["Note.", "Notes:", "Notes:"]);
+    expect(screen.getByRole("button", { name: "пр. Copy link to this clause" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "пр. 2. Copy link to this clause" })).toBeInTheDocument();
+    expect(document.getElementById("st-2-4-pr")?.className).toMatch(/border-l-2/);
+    // Signature: muted, after the last article.
+    expect(document.querySelector("[data-kb-law-signature]")).toHaveTextContent("Москва, Кремль");
+    expect(document.querySelector("[data-kb-law-signature]")?.className).toMatch(/text-muted-foreground/);
+  });
+
+  it("a link to the law's signature lands on it with the left marker, the top rule stays neutral", async () => {
+    const law = normalizeKbRow({
+      doc_id: "LAW-102", slug: "7-fz", designation: "7-ФЗ", title: "Об охране окружающей среды", category: "Закон",
+      folder: "laws", display_mode: "full_text", full_text_available: true, text_label: "verified",
+      edition_date: "2026-08-04", text_checked_at: "2026-11-17", text_source_url: "http://pravo.gov.ru/proxy/ips/?doc_itself=&nd=1&fulltext=1",
+    });
+    fetchKbDocumentBySlug.mockResolvedValue(law);
+    fetchKbClauses.mockResolvedValue([
+      { anchor: "st-1", number: null, level: 2, heading: "Статья 1. Понятия", body: "Текст.", position: 1 },
+      { anchor: "st-2", number: null, level: 2, heading: "Статья 2. Предмет", body: "Текст.", position: 2 },
+      { anchor: "gl-sig", number: null, level: 1, heading: null, body: "Москва, Кремль", position: 3 },
+    ].map(normalizeKbClause));
+    window.location.hash = "#gl-sig";
+    renderKB("/home?docTab=knowledge-base&kbDoc=7-fz");
+    expect(await screen.findByText("Статья 1. Понятия")).toBeInTheDocument();
+    const sig = document.querySelector("[data-kb-law-signature]")!;
+    expect(sig.className).toMatch(/scroll-mt-20/);
+    expect(sig.className).toMatch(/border-l-2 border-l-accent/);
+    expect(sig.className).toMatch(/border-border/);
+  });
+
   it("copies the clause link to the public page", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });

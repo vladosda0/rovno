@@ -412,6 +412,8 @@
   "home.knowledgeBase.reader.toc": "Contents",
   "home.knowledgeBase.reader.tocCurrent": "Contents: {{section}}",
   "home.knowledgeBase.reader.appendices": "Appendices",
+  "home.knowledgeBase.reader.lawNoteOne": "Note.",
+  "home.knowledgeBase.reader.lawNoteMany": "Notes:",
   "home.knowledgeBase.reader.search": "Search this document",
   "home.knowledgeBase.reader.searchCount": "{{current}} of {{total}}",
   "home.knowledgeBase.reader.prevMatch": "Previous match",

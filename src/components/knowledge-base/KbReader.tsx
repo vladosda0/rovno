@@ -26,6 +26,7 @@ import {
   kbEditionNote,
   kbHighlight,
   kbIsLawAnchor,
+  kbIsLawNote,
   kbSearchMatches,
   kbSectionAnchor,
   kbTextLabel,
@@ -310,7 +311,7 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
           <div className={cn(variant === "app" && "md:hidden")}>{tocDropdown}</div>
           {searchBar}
           <div className="space-y-2">
-            {clauses.map((c) => {
+            {clauses.map((c, i) => {
               const isTarget = c.anchor === highlighted;
               const isSection = c.level === 1 || !c.number || !/^\d/.test(c.number);
               const law = kbIsLawAnchor(c.anchor);
@@ -321,15 +322,47 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
                   {renderText(note, c.anchor, "body", noteStart)}
                 </p>
               );
-              // A law (slice 9, frame 1): the chapter is a quiet caption, the article the heading.
+              // The law's signature after the last article (show 9.2в, frame 3): small and muted, not in the contents.
+              if (c.anchor === "gl-sig") {
+                return (
+                  <p
+                    key={c.anchor}
+                    id={c.anchor}
+                    className={cn(
+                      "mt-4 scroll-mt-20 whitespace-pre-line border-t border-border pt-3 text-caption text-muted-foreground",
+                      isTarget && "border-l-2 border-l-accent pl-2",
+                    )}
+                    data-kb-law-signature
+                  >
+                    {renderText(c.body, c.anchor, "body")}
+                  </p>
+                );
+              }
+              // The preamble (show 9.2в, frame 3): paragraphs above chapter 1 with no number and no heading in the text;
+              // «Преамбула» is its line in the contents.
+              if (c.anchor === "gl-pre") {
+                return (
+                  <div key={c.anchor} id={c.anchor} className={cn("scroll-mt-20", isTarget && "border-l-2 border-accent pl-2")} data-kb-law-preamble>
+                    <p className="whitespace-pre-line text-body-sm leading-relaxed text-foreground">{renderText(text, c.anchor, "body")}</p>
+                    {noteLine}
+                  </div>
+                );
+              }
+              // A law (slice 9, frame 1): the section, «Подраздел» and chapter are quiet captions, the article the heading;
+              // a ГК paragraph «§ 3. …» and its subparagraph «2. Полное товарищество» sit between chapter and article (show 9.2в, frame 2).
               if (law && c.level <= 2 && c.heading) {
+                const paragraph = /-pg-/.test(c.anchor);
                 const Tag = c.level === 1 ? "h2" : "h3";
                 return (
                   <div key={c.anchor} id={c.anchor} className={cn("scroll-mt-20", isTarget && "border-l-2 border-accent pl-2")}>
                     <Tag
                       className={cn(
                         "font-semibold",
-                        c.level === 1 ? "pt-6 text-body-sm text-muted-foreground" : "pt-4 text-h3 text-foreground",
+                        paragraph
+                          ? "pt-5 text-body text-foreground"
+                          : c.level === 1
+                            ? "pt-6 text-body-sm text-muted-foreground"
+                            : "pt-4 text-h3 text-foreground",
                       )}
                     >
                       {renderText(c.heading, c.anchor, "heading")}
@@ -356,6 +389,13 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
                   </Tag>
                 );
               }
+              // «Примечание.» / «Примечания:» over an article's first note (show 9.2в, frame 1 A).
+              const noteCaption =
+                law && kbIsLawNote(c.anchor) && !kbIsLawNote(clauses[i - 1]?.anchor) ? (
+                  <p className="pt-2 text-body-sm font-semibold text-muted-foreground" data-kb-law-note-caption>
+                    {t(/-pr-\d/.test(c.anchor) ? "home.knowledgeBase.reader.lawNoteMany" : "home.knowledgeBase.reader.lawNoteOne")}
+                  </p>
+                ) : null;
               return (
                 <section
                   key={c.anchor}
@@ -365,6 +405,7 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
                     isTarget && "border-l-2 border-accent bg-accent/5 pl-2",
                   )}
                 >
+                  {noteCaption}
                   {c.heading && (
                     <p className={cn("font-semibold text-foreground", isSection ? "pt-4 text-h3" : "text-body")}>
                       {c.number && /^\d/.test(c.number) ? `${c.number} ` : ""}
@@ -378,7 +419,7 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
                         type="button"
                         onClick={() => void copyLink(c.anchor)}
                         title={t("home.knowledgeBase.reader.copyLink")}
-                        aria-label={`${c.number}. ${t("home.knowledgeBase.reader.copyLink")}`}
+                        aria-label={`${c.number.replace(/\.$/, "")}. ${t("home.knowledgeBase.reader.copyLink")}`}
                         className="mr-1.5 inline-flex items-center gap-0.5 font-semibold text-foreground hover:text-accent"
                       >
                         {c.number}

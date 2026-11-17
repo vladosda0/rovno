@@ -198,6 +198,12 @@ export function kbToc(clauses) {
 export function kbSectionAnchor(clauses, anchor) {
   let section = null;
   for (const c of clauses) {
+    // A law's preamble and signature (show 9.2в) head no articles: an article after them has no section.
+    if (c.anchor === "gl-pre" || c.anchor === "gl-sig") {
+      if (c.anchor === anchor) return c.anchor;
+      section = null;
+      continue;
+    }
     if (c.level === 1) section = c.anchor;
     if (c.anchor === anchor) return section ?? c.anchor;
   }
@@ -210,15 +216,31 @@ const sup = (digits) => [...digits].map((d) => SUPERSCRIPT[Number(d)]).join("");
 /**
  * «ст. 51 ч. 17» from a law anchor (slice 9, frame 4), the same rule as the
  * server's source line: `st-51s1` is article 51¹, `st-55s5s1` article 55⁵⁻¹, `st-51-1` article 51.1,
+ * `st-29s1-1` article 29¹.1 (КоАП), `st-214s2d1` article 214²·¹ (НК, index 2.1),
  * `-ch-1-1` part 1¹, `-ch-7-1-1` part 7¹⁻¹; `-p-1` is point 1 of a law whose article is
- * split into points, not parts (ЗК РФ: «ст. 39.1 п. 1», step 9.2в). Null for any other anchor.
+ * split into points, not parts (ЗК РФ: «ст. 39.1 п. 1», step 9.2в); `-pr` the note to the
+ * article, `-pr-1` its first note (КоАП: «ст. 2.4 прим.», «ст. 4.8 прим. 1», show 9.2в, frame 5).
+ * Null for any other anchor.
  */
 export function kbLawClauseLabel(anchor) {
-  const m = anchor ? /^st-(\d+(?:-\d+)*)((?:s\d+)*)(?:-(ch|p)-(\d+)((?:-\d+)*))?$/.exec(anchor) : null;
+  const m = anchor
+    ? /^st-(\d+(?:s\d+(?:d\d+)*)*(?:-\d+(?:s\d+(?:d\d+)*)*)*)(?:-(ch|p)-(\d+)((?:-\d+(?:d\d+)*)*)|-(pr)(?:-(\d+)((?:-\d+(?:d\d+)*)*))?)?$/.exec(anchor)
+    : null;
   if (!m) return null;
-  const index = (groups, sep) => groups.split(sep).filter(Boolean).map(sup).join("⁻");
-  const article = `${m[1].replace(/-/g, ".")}${index(m[2], "s")}`;
-  return m[3] ? `ст. ${article} ${m[3] === "p" ? "п." : "ч."} ${m[4]}${index(m[5], "-")}` : `ст. ${article}`;
+  // One number piece: «29s1» is 29¹, «55s5s1» 55⁵⁻¹, «214s2d1» 214²·¹.
+  const piece = (p) => {
+    const [digits, ...groups] = p.split("s");
+    return `${digits}${groups.map((g) => g.split("d").map(sup).join("·")).join("⁻")}`;
+  };
+  const article = m[1].split("-").map(piece).join(".");
+  const index = (groups) => groups.split("-").filter(Boolean).map((g) => g.split("d").map(sup).join("·")).join("⁻");
+  if (m[5]) return `ст. ${article} прим.${m[6] ? ` ${m[6]}${index(m[7] ?? "")}` : ""}`;
+  return m[2] ? `ст. ${article} ${m[2] === "p" ? "п." : "ч."} ${m[3]}${index(m[4])}` : `ст. ${article}`;
+}
+
+/** A law article's note (`st-2-4-pr`, `st-4-8-pr-1`; КоАП, show 9.2в, frame 1 A). */
+export function kbIsLawNote(anchor) {
+  return /^st-.+-pr(?:-\d+(?:d\d+)*)*$/.test(String(anchor ?? ""));
 }
 
 /** The article a law clause belongs to (its level-2 ancestor), for the TOC highlight. */
@@ -264,6 +286,8 @@ export function kbSearchMatches(clauses, query) {
   const out = [];
   for (const c of clauses) {
     for (const field of ["heading", "body"]) {
+      // The reader draws no heading for the preamble and the signature: nothing to highlight there.
+      if (field === "heading" && (c.anchor === "gl-pre" || c.anchor === "gl-sig")) continue;
       const text = c[field];
       if (!text) continue;
       const hay = fold(text);

@@ -17,7 +17,7 @@ import {
   normalizeKbSolution,
   sortKbSolutions,
 } from "./kbSolutions.mjs";
-import { kbCopyNotice, kbEditionLine, kbEditionNote, kbIsLawAnchor, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
+import { kbCopyNotice, kbEditionLine, kbEditionNote, kbIsLawAnchor, kbIsLawNote, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
 import { KB_CHANGES_PATH, kbChangeMonths } from "./kbChanges.mjs";
 import {
   KB_INDEX_PATH,
@@ -114,17 +114,25 @@ export function kbFullTextHtml(doc, clauses, t) {
   // A law keeps the official text's line per item «1)», «1¹)», as the reader does.
   const lawLines = (text) => escapeHtml(text).replaceAll("\n", "<br>");
   const body = clauses
-    .map((c) => {
+    .map((c, i) => {
       const id = escapeHtml(c.anchor);
       // A law (slice 9): chapter h2, article h3, the edition note in its own muted line.
       if (kbIsLawAnchor(c.anchor)) {
         const { text, note } = kbEditionNote(c);
         const noteHtml = note ? `<p class="rv-kb-edition">${escapeHtml(note)}</p>` : "";
+        // Show 9.2в, frame 3: the signature muted after the last article, the preamble as paragraphs without a heading.
+        if (c.anchor === "gl-sig") return `<p id="${id}" class="rv-kb-edition">${lawLines(c.body)}</p>`;
+        if (c.anchor === "gl-pre") return `<p id="${id}">${lawLines(text)}</p>${noteHtml}`;
         if (c.level <= 2 && c.heading) {
           const tag = c.level === 1 ? "h2" : "h3";
           return `<${tag} id="${id}">${escapeHtml(c.heading)}</${tag}>${text ? `<p>${lawLines(text)}</p>` : ""}${noteHtml}`;
         }
-        return `<p id="${id}"><strong>${number(c)}</strong>${lawLines(text)}</p>${noteHtml}`;
+        // A note to the article (КоАП, show 9.2в, frame 1 A): «Примечание.» over the first one, number «пр.».
+        const caption = kbIsLawNote(c.anchor) && !kbIsLawNote(clauses[i - 1]?.anchor)
+          ? `<p><strong>${escapeHtml(t(/-pr-\d/.test(c.anchor) ? "home.knowledgeBase.reader.lawNoteMany" : "home.knowledgeBase.reader.lawNoteOne"))}</strong></p>`
+          : "";
+        const lawNumber = c.number ? `${escapeHtml(c.number)} ` : "";
+        return `${caption}<p id="${id}"><strong>${lawNumber}</strong>${lawLines(text)}</p>${noteHtml}`;
       }
       if (c.heading && !c.body) {
         const tag = c.level === 1 || !/^\d/.test(c.number ?? "") ? "h2" : "h3";

@@ -95,11 +95,11 @@ export function KbNavContents({ slug, onFolder }: KbNavContentsProps) {
         <FileText className="h-3.5 w-3.5 shrink-0" />
         <span className="line-clamp-2">{kbHeading(doc)}</span>
       </div>
-      {toc.main.some((e) => e.level === 1)
+      {toc.main.some((e) => e.level === 1 && e.anchor !== "gl-pre")
         ? toc.main
           .filter((e) => e.level === 1)
-          .flatMap((e) => (kbIsLawAnchor(e.anchor) && e.anchor === section ? [entry(e), ...articlesOf(e.anchor).map(entry)] : [entry(e)]))
-        : // A short law without chapters: its articles are the contents.
+          .flatMap((e) => (kbIsLawAnchor(e.anchor) && e.anchor === section && e.anchor !== "gl-pre" ? [entry(e), ...articlesOf(e.anchor).map(entry)] : [entry(e)]))
+        : // A short law without chapters: its articles (after «Преамбула», show 9.2в) are the contents.
           toc.main.filter((e) => kbIsLawAnchor(e.anchor)).map(entry)}
       {toc.back.length > 0 && (
         <>

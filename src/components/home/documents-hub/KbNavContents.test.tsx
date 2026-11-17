@@ -97,6 +97,36 @@ describe("KbNavContents", () => {
     expect(screen.getByText("Статья 2. Понятия").closest("button")).toHaveAttribute("aria-current", "location");
   });
 
+  it("a law with a preamble and no chapters lists «Преамбула» and its articles (show 9.2в, frame 3)", async () => {
+    clausesNow = [
+      { anchor: "gl-pre", number: null, level: 1, heading: "Преамбула", body: "Настоящий закон устанавливает.", position: 1 },
+      { anchor: "st-1", number: null, level: 2, heading: "Статья 1. Предмет", body: "Текст.", position: 2 },
+      { anchor: "st-2", number: null, level: 2, heading: "Статья 2. Понятия", body: "Текст.", position: 3 },
+      { anchor: "gl-sig", number: null, level: 1, heading: null, body: "Президент Российской Федерации", position: 4 },
+    ].map(normalizeKbClause);
+    window.location.hash = "#st-2";
+    renderNav();
+    expect(await screen.findByText("Преамбула")).toBeInTheDocument();
+    expect(screen.getByText("Статья 1. Предмет")).toBeInTheDocument();
+    expect(screen.getByText("Статья 2. Понятия").closest("button")).toHaveAttribute("aria-current", "location");
+  });
+
+  it("a law with a preamble and chapters: «Преамбула» is a row of its own, the open chapter shows its articles", async () => {
+    clausesNow = [
+      { anchor: "gl-pre", number: null, level: 1, heading: "Преамбула", body: "Настоящий закон устанавливает.", position: 1 },
+      { anchor: "gl-1", number: null, level: 1, heading: "Глава 1. Общие положения", body: "", position: 2 },
+      { anchor: "st-1", number: null, level: 2, heading: "Статья 1. Предмет", body: "Текст.", position: 3 },
+      { anchor: "gl-2", number: null, level: 1, heading: "Глава 2. Права", body: "", position: 4 },
+      { anchor: "st-5", number: null, level: 2, heading: "Статья 5. Право", body: "Текст.", position: 5 },
+    ].map(normalizeKbClause);
+    window.location.hash = "#st-5";
+    renderNav();
+    expect(await screen.findByText("Преамбула")).toBeInTheDocument();
+    expect(screen.getByText("Глава 1. Общие положения")).toBeInTheDocument();
+    expect(screen.getByText("Статья 5. Право").closest("button")).toHaveAttribute("aria-current", "location");
+    expect(screen.queryByText("Статья 1. Предмет")).not.toBeInTheDocument();
+  });
+
   it("an open appendix stays marked in a building code (slice 9 keeps SP as it was)", async () => {
     window.location.hash = "#p-pril-a";
     renderNav();
