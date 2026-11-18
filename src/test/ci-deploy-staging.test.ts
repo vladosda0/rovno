@@ -81,6 +81,32 @@ describe("deploy-staging job", () => {
     expect(CI_YML).toMatch(/DEPLOY_STARTED_AT=\$\(date \+%s\)\n\s*code=\$\(curl [^\n]*\n[^\n]*-X POST/);
   });
 
+  it("gives the runner more time than the job's own worst case, so the job exits with its own message", () => {
+    const num = (re: RegExp) => {
+      const m = CI_YML.match(re);
+      if (!m) throw new Error(`not found in ci.yml: ${re}`);
+      return Number(m[1]);
+    };
+    const jobMinutes = num(/deploy-staging:[\s\S]*?timeout-minutes:\s*(\d+)/);
+    const flip = num(/STAGING_FLIP_TIMEOUT:\s*"(\d+)"/);
+    const interval = num(/STAGING_FLIP_INTERVAL:\s*"(\d+)"/);
+    const attempts = num(/for attempt in \$\(seq 1 (\d+)\)/);
+    const assertCurl = num(/resolve_dev_head\(\) \{\n\s*curl -sS --max-time (\d+)/);
+    const postCurl = num(/code=\$\(curl [^\n]*--max-time (\d+)/);
+    const retrySleep = num(/409\|000\)[^\n]*sleep (\d+)/);
+    const pollCurl = num(/headers=\$\(curl -sSI --max-time (\d+)/);
+    const setupAllowance = 60;
+    const worstSeconds =
+      assertCurl +
+      attempts * postCurl +
+      (attempts - 1) * (retrySleep + assertCurl) +
+      flip +
+      interval +
+      pollCurl +
+      setupAllowance;
+    expect(jobMinutes * 60).toBeGreaterThan(worstSeconds);
+  });
+
   it("fails when staging keeps serving a build older than the deploy", async () => {
     const startedAt = Math.floor(Date.now() / 1000);
     const url = await serveLastModified(() => httpDate(startedAt - 86_400));

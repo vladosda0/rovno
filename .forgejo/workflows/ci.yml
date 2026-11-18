@@ -66,10 +66,13 @@ jobs:
     runs-on: ubuntu-latest
     # Худший случай цикла ниже: входной assert (curl до 15с) + 16 POST x 10с +
     # 15 пауз x (sleep 30с + assert до 15с) ≈ 14.2 мин, плюс ожидание новой
-    # сборки на сайте до STAGING_FLIP_TIMEOUT (15 мин) ≈ 29.5 мин. Потолок выше
-    # него с запасом, чтобы джоба всегда умирала СВОИМ exit-путём с внятным
+    # сборки на сайте до STAGING_FLIP_TIMEOUT (40 мин) и последний опрос после
+    # дедлайна ≈ 55 мин. Потолок выше него с запасом, чтобы джоба всегда
+    # умирала СВОИМ exit-путём с внятным
     # сообщением, а не киллом раннера. Меняешь ретраи/таймауты — пересчитай.
-    timeout-minutes: 35
+    # Тест ci-deploy-staging.test.ts держит timeout-minutes выше худшего
+    # случая, посчитанного из значений ниже; числа в этом комментарии он не сверяет.
+    timeout-minutes: 60
     steps:
       - name: Trigger the Timeweb staging deploy
         env:
@@ -80,7 +83,10 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           FORGE_TOKEN: ${{ github.token }}
           STAGING_URL: "https://vladosda0-rovno-90e7.twc1.net/"
-          STAGING_FLIP_TIMEOUT: "900"
+          # 40 минут ожидания новой сборки. Сборка дольше 40 минут даёт красную
+          # джобу при, возможно, живом стенде. Цена: упавшая сборка держит
+          # раннер все 40 минут. Откат: "900" и timeout-minutes 35.
+          STAGING_FLIP_TIMEOUT: "2400"
           STAGING_FLIP_INTERVAL: "20"
         run: |
           set -euo pipefail
