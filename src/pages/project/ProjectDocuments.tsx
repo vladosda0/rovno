@@ -50,6 +50,7 @@ import { DocumentListItem } from "@/components/documents/DocumentListItem";
 import { VisibilityClassBadge } from "@/components/documents/VisibilityClassBadge";
 import { DocumentsViewModeToggle, type DocumentViewMode } from "@/components/documents/DocumentsViewModeToggle";
 import { DocumentShareDialog } from "@/components/documents/DocumentShareDialog";
+import { DocumentNewVersionDialog } from "@/components/documents/DocumentNewVersionDialog";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
@@ -197,6 +198,7 @@ export default function ProjectDocuments() {
   } = useProjectDocumentMutations(pid);
   const {
     prepareUpload,
+    prepareVersionUpload,
     uploadBytes,
     finalizeUpload,
   } = useDocumentUploadMutations(pid);
@@ -232,6 +234,10 @@ export default function ProjectDocuments() {
   const [generateContent, setGenerateContent] = useState("");
   const [showGenPreview, setShowGenPreview] = useState(false);
   const [viewDoc, setViewDoc] = useState<DocType | null>(null);
+  const [newVersionOpen, setNewVersionOpen] = useState(false);
+  // An uploaded file whose finalize failed: a retry with the same file only
+  // finalizes, so it neither re-uploads nor adds a second version.
+  const pendingVersionRef = useRef<{ documentId: string; file: File; intentId: string } | null>(null);
   const [archiveDocId, setArchiveDocId] = useState<string | null>(null);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
   const [commentOpen, setCommentOpen] = useState(false);
@@ -307,6 +313,15 @@ export default function ProjectDocuments() {
     consumedDocumentIdRef.current = requestedId;
     setViewDoc(target);
   }, [documents, location.state]);
+
+  // The preview holds a snapshot; a new version arrives with the refetch.
+  useEffect(() => {
+    setViewDoc((prev) => {
+      if (!prev) return prev;
+      const fresh = documents.find((entry) => entry.id === prev.id);
+      return fresh && fresh.versions.length !== prev.versions.length ? fresh : prev;
+    });
+  }, [documents]);
 
   const effectiveInternalDocs = useMemo(
     () => effectiveInternalDocsVisibilityForSeam(perm.seam.membership),
@@ -496,6 +511,63 @@ export default function ProjectDocuments() {
         description: error instanceof Error ? error.message : t("documents.upload.failedFallback"),
         variant: "destructive",
       });
+    }
+  }
+
+  async function handleUploadNewVersion(file: File): Promise<boolean> {
+    const target = viewDoc;
+    if (!target) return false;
+    if (isSvgFile(file)) {
+      toast({
+        title: t("documents.newVersion.failed"),
+        description: t("documents.upload.svgNotAllowed"),
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!isSupabaseMode) {
+      const lastNumber = target.versions[target.versions.length - 1]?.number ?? 0;
+      addDocumentVersion(target.id, {
+        id: `dv-${Date.now()}`,
+        document_id: target.id,
+        number: lastNumber + 1,
+        status: "draft",
+        content: "Uploaded document content placeholder.",
+      });
+      toast({ title: t("documents.newVersion.success"), description: target.title });
+      return true;
+    }
+
+    try {
+      const pending = pendingVersionRef.current;
+      let intentId: string;
+      if (pending && pending.documentId === target.id && pending.file === file) {
+        intentId = pending.intentId;
+      } else {
+        pendingVersionRef.current = null;
+        const intent = await prepareVersionUpload({
+          documentId: target.id,
+          clientFilename: file.name,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+        });
+        await uploadBytes(intent.bucket, intent.objectPath, file);
+        intentId = intent.uploadIntentId;
+        pendingVersionRef.current = { documentId: target.id, file, intentId };
+      }
+      await finalizeUpload(intentId);
+      pendingVersionRef.current = null;
+      trackEvent("document_uploaded", { project_id: pid, origin: "uploaded", kind: "version" });
+      toast({ title: t("documents.newVersion.success"), description: target.title });
+      return true;
+    } catch (error) {
+      toast({
+        title: t("documents.newVersion.failed"),
+        description: error instanceof Error ? error.message : t("documents.upload.failedFallback"),
+        variant: "destructive",
+      });
+      return false;
     }
   }
 
@@ -1574,6 +1646,11 @@ export default function ProjectDocuments() {
                       <Share2 className="h-3.5 w-3.5 mr-1.5" /> {t("documents.preview.action.share")}
                     </Button>
                   )}
+                  {canUploadDocuments && !viewedDocumentIsArchived && (
+                    <Button size="sm" variant="outline" onClick={() => setNewVersionOpen(true)}>
+                      <Upload className="h-3.5 w-3.5 mr-1.5" /> {t("documents.preview.action.newVersion")}
+                    </Button>
+                  )}
                 </div>
                 {canShareDocuments && !viewedDocumentIsArchived && viewDoc.visibility_class === "internal" && (
                   <div
@@ -1615,6 +1692,17 @@ export default function ProjectDocuments() {
           )}
         </DialogContent>
       </Dialog>
+
+      <DocumentNewVersionDialog
+        open={newVersionOpen && !!viewDoc}
+        documentTitle={viewDoc?.title ?? ""}
+        showShareHint={canShareDocuments && !!viewDoc && sharesByDocumentId.has(viewDoc.id)}
+        onOpenChange={(open) => {
+          if (!open) pendingVersionRef.current = null;
+          setNewVersionOpen(open);
+        }}
+        onUpload={handleUploadNewVersion}
+      />
 
       <AlertDialog open={commentOpen} onOpenChange={setCommentOpen}>
         <AlertDialogContent className="glass-modal rounded-modal">

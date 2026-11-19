@@ -227,4 +227,81 @@ describe("ShareDocument", () => {
     await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" })));
     expect(clickSpy).not.toHaveBeenCalled();
   });
+
+  describe("newer version from the owner", () => {
+    it("shows no banner when the link has no newer version", async () => {
+      mockInvoke.mockResolvedValue({ data: readyFile({ hasNewerVersion: false, showingLatest: false }), error: null });
+
+      renderPage();
+
+      expect(await screen.findByRole("heading", { name: "Договор №5" })).toBeInTheDocument();
+      expect(screen.queryByText("This document has a newer version")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Show the latest" })).toBeNull();
+    });
+
+    it("shows the banner and, on request, the latest file with a way back", async () => {
+      const LATEST_URL = "https://signed.example/storage/v1/object/sign/project-documents/p/proj-1/v2.pdf?token=def";
+      mockInvoke.mockImplementation((_name: string, options: { body: { token: string; latest?: boolean } }) =>
+        Promise.resolve({
+          data: options.body.latest
+            ? readyFile({ filename: "dogovor-5-v2.pdf", signedUrl: LATEST_URL, hasNewerVersion: true, showingLatest: true })
+            : readyFile({ hasNewerVersion: true, showingLatest: false }),
+          error: null,
+        }));
+
+      renderPage();
+
+      expect(await screen.findByText("This document has a newer version")).toBeInTheDocument();
+      expect(screen.getByText("dogovor-5.pdf")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Show the latest" }));
+
+      expect(await screen.findByText("The latest version is shown.")).toBeInTheDocument();
+      expect(mockInvoke).toHaveBeenCalledWith("get-shared-document", { body: { token: TOKEN, latest: true } });
+      expect(screen.getByText("dogovor-5-v2.pdf")).toBeInTheDocument();
+      expect(screen.getByTitle("Договор №5")).toHaveAttribute("src", LATEST_URL);
+      expect(screen.queryByText("This document has a newer version")).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "Back to the shared file" }));
+
+      expect(await screen.findByText("This document has a newer version")).toBeInTheDocument();
+      expect(screen.getByText("dogovor-5.pdf")).toBeInTheDocument();
+      expect(screen.queryByText("The latest version is shown.")).toBeNull();
+    });
+
+    it("offers the way back to the shared file when loading the latest fails", async () => {
+      mockInvoke.mockImplementation((_name: string, options: { body: { token: string; latest?: boolean } }) =>
+        options.body.latest
+          ? Promise.resolve({ data: null, error: Object.assign(new Error("boom"), { context: new Response(null, { status: 500 }) }) })
+          : Promise.resolve({ data: readyFile({ hasNewerVersion: true, showingLatest: false }), error: null }));
+
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: "Show the latest" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Back to the shared file" }, { timeout: 5000 }));
+
+      expect(await screen.findByText("This document has a newer version")).toBeInTheDocument();
+      expect(screen.getByText("dogovor-5.pdf")).toBeInTheDocument();
+    });
+
+    it("keeps the shared file without a banner when the latest is no longer available", async () => {
+      mockInvoke.mockImplementation((_name: string, options: { body: { token: string; latest?: boolean } }) =>
+        Promise.resolve({
+          data: options.body.latest
+            ? readyFile({ hasNewerVersion: false, showingLatest: false })
+            : readyFile({ hasNewerVersion: true, showingLatest: false }),
+          error: null,
+        }));
+
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: "Show the latest" }));
+
+      await waitFor(() =>
+        expect(mockInvoke).toHaveBeenCalledWith("get-shared-document", { body: { token: TOKEN, latest: true } }));
+      await waitFor(() => expect(screen.queryByText("This document has a newer version")).toBeNull());
+      expect(screen.queryByText("The latest version is shown.")).toBeNull();
+      expect(screen.getByText("dogovor-5.pdf")).toBeInTheDocument();
+    });
+  });
 });
