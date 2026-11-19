@@ -745,8 +745,16 @@
       "sha256": "fa513b3d8e3f99670d93390c09c45207705f8690d7c85e93e6a2f5162e9c80d4"
     },
     {
+      "path": "supabase/migrations/20261118010000_get_card_on_file_superseded_renewal.sql",
+      "sha256": "316b0fe769528028d3d4dd847f933b7e3ebac970ab0f3c85bc4a84e3e4a3e7e3"
+    },
+    {
       "path": "supabase/migrations/20261118020000_change_task_status_v2_done_override.sql",
       "sha256": "8e323dee35c21e98fc099d855c0b166b43fd79e7c2ff4eb14c2866da9eaed64b"
+    },
+    {
+      "path": "supabase/migrations/20261120010000_document_new_version_upload.sql",
+      "sha256": "e190c3005521f487d7c23d7bd432ede62194a1de358ec8fb59fb167a5a7ce8d4"
     }
   ],
   "generated_artifacts": [

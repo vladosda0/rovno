@@ -1538,6 +1538,8 @@ export type Database = {
           "created_at": string
           "finalized_at": string | null
           "visibility_class": "shared_project" | "internal"
+          "version_of_document_id": string | null
+          "document_version_id": string | null
           }
           Insert: {
           "id"?: string
@@ -1555,6 +1557,8 @@ export type Database = {
           "created_at"?: string
           "finalized_at"?: string | null
           "visibility_class"?: "shared_project" | "internal"
+          "version_of_document_id"?: string | null
+          "document_version_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -1572,6 +1576,8 @@ export type Database = {
           "created_at"?: string
           "finalized_at"?: string | null
           "visibility_class"?: "shared_project" | "internal"
+          "version_of_document_id"?: string | null
+          "document_version_id"?: string | null
           }
           Relationships: []
         }
@@ -3888,6 +3894,15 @@ export type Database = {
           "p_size_bytes": number
           "p_description": unknown
           "p_visibility_class": unknown
+          }
+          Returns: unknown
+        }
+        "prepare_document_version_upload": {
+          Args: {
+          "p_document_id": string
+          "p_client_filename": string
+          "p_mime_type": string
+          "p_size_bytes": number
           }
           Returns: unknown
         }
