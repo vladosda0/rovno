@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -6,6 +6,19 @@ import { QuickActions } from "@/components/dashboard/QuickActions";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import { closeClientReportDialog, getClientReportDialogProjectId } from "@/lib/client-report-dialog";
+
+const media = vi.hoisted(() => ({
+  prepareUpload: vi.fn(async () => ({ bucket: "media", objectPath: "p/x.jpg", uploadIntentId: "intent-1" })),
+  uploadBytes: vi.fn(async () => undefined),
+  finalizeUpload: vi.fn(async () => undefined),
+}));
+
+vi.mock("@/hooks/use-documents-media-source", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-documents-media-source")>()),
+  useMediaUploadMutations: () => media,
+}));
+vi.mock("heic2any", () => ({ default: async () => new Blob(["decoded"], { type: "image/jpeg" }) }));
+vi.mock("browser-image-compression", () => ({ default: async (file: File) => file }));
 
 function createQueryClient() {
   return new QueryClient({
@@ -137,5 +150,43 @@ describe("QuickActions", () => {
 
     expect(screen.getByRole("button", { name: "Document" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Client report" })).not.toBeInTheDocument();
+  });
+
+  it("uploads a HEIC photo typed as PNG as a JPEG", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
+    authenticateRuntimeAuth("profile-77");
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <TooltipProvider>
+          <MemoryRouter>
+            <QuickActions
+              projectId="project-1"
+              members={[]}
+              stages={[]}
+              tasks={[]}
+              canCreateTask={false}
+              canCreateDocument={false}
+              canCreatePhoto
+              canManageProcurement={false}
+              canManageParticipants={false}
+              actorRole="owner"
+            />
+          </MemoryRouter>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Photo" }));
+    const dialog = screen.getByRole("dialog");
+    const header = new Uint8Array([0, 0, 0, 0x18, ...new TextEncoder().encode("ftypheic"), 0, 0, 0, 0]);
+    const files = [new File([header], "img_3641.png", { type: "image/png" })];
+    fireEvent.change(dialog.querySelector('input[type="file"]') as HTMLInputElement, { target: { files } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload" }));
+
+    await waitFor(() => expect(media.finalizeUpload).toHaveBeenCalled());
+    expect(media.prepareUpload).toHaveBeenCalledWith(
+      expect.objectContaining({ clientFilename: "img_3641.jpg", mimeType: "image/jpeg" }),
+    );
+    expect((media.uploadBytes.mock.calls[0] as unknown[])[2]).toMatchObject({ type: "image/jpeg" });
   });
 });

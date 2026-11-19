@@ -65,6 +65,7 @@ import {
 } from "lucide-react";
 import { ReceiveOrderPickerModal } from "@/components/procurement/ReceiveOrderPickerModal";
 import { openClientReportDialog } from "@/lib/client-report-dialog";
+import { prepareMediaPhotoForUpload } from "@/lib/image-optimization";
 import type { AIAccess, DocMediaVisibilityClass, Member, MemberRole, Stage, Task, TaskStatus } from "@/types/entities";
 
 type ModalKey = "task" | "document" | "photo" | "credits";
@@ -440,15 +441,16 @@ export function QuickActions({
       }
       setPhotoUploading(true);
       try {
+        const uploadFile = await prepareMediaPhotoForUpload(photoFile, t("quickActions.photo.uploadFailedDescription"));
         const intent = await prepareMediaUpload({
           mediaType: "photo",
-          clientFilename: photoFile.name,
-          mimeType: photoFile.type || "image/jpeg",
-          sizeBytes: photoFile.size,
+          clientFilename: uploadFile.name,
+          mimeType: uploadFile.type || "image/jpeg",
+          sizeBytes: uploadFile.size,
           caption: photoDescription.trim() || undefined,
           visibilityClass: photoVisibilityClass,
         });
-        await uploadMediaBytes(intent.bucket, intent.objectPath, photoFile);
+        await uploadMediaBytes(intent.bucket, intent.objectPath, uploadFile);
         await finalizeMediaUpload(intent.uploadIntentId);
         toast({ title: t("quickActions.photo.uploaded") });
         forceClose("photo");

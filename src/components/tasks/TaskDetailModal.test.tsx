@@ -6,6 +6,15 @@ import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import type { Task } from "@/types/entities";
 
 const toastMock = vi.fn();
+const uploadMocks = vi.hoisted(() => ({
+  prepareUpload: vi.fn(),
+  uploadBytes: vi.fn(),
+  finalizeUpload: vi.fn(),
+  heic: vi.fn(),
+}));
+
+vi.mock("heic2any", () => ({ default: (options: unknown) => uploadMocks.heic(options) }));
+vi.mock("browser-image-compression", () => ({ default: async (file: File) => file }));
 
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: toastMock }),
@@ -13,9 +22,9 @@ vi.mock("@/hooks/use-toast", () => ({
 
 vi.mock("@/hooks/use-documents-media-source", () => ({
   useMediaUploadMutations: () => ({
-    prepareUpload: vi.fn(),
-    uploadBytes: vi.fn(),
-    finalizeUpload: vi.fn(),
+    prepareUpload: uploadMocks.prepareUpload,
+    uploadBytes: uploadMocks.uploadBytes,
+    finalizeUpload: uploadMocks.finalizeUpload,
   }),
   useProjectMediaMutations: () => ({ deleteMedia: vi.fn(), updateMediaCaption: vi.fn() }),
 }));
@@ -86,6 +95,16 @@ function task(partial: Partial<Task> = {}): Task {
     deadline: "2026-03-05T00:00:00.000Z",
     ...partial,
   };
+}
+
+function uploadHeicAsPng(before: File[] = []) {
+  const header = new Uint8Array([0, 0, 0, 0x18, ...new TextEncoder().encode("ftypheic"), 0, 0, 0, 0]);
+  renderTaskDetail();
+  fireEvent.click(screen.getByRole("button", { name: /Add photos/i }));
+  const dialog = screen.getByRole("alertdialog");
+  const files = [...before, new File([header], "img_3641.png", { type: "image/png" })];
+  fireEvent.change(dialog.querySelector('input[type="file"]') as HTMLInputElement, { target: { files } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 }
 
 function renderTaskDetail(props: Partial<ComponentProps<typeof TaskDetailModal>> = {}) {
@@ -242,5 +261,32 @@ describe("TaskDetailModal", () => {
     for (const label of ["Not started", "Done", "Blocked"]) {
       expect(within(group).getByRole("button", { name: label, pressed: false })).toBeInTheDocument();
     }
+  });
+
+  it("uploads a HEIC photo typed as PNG as a JPEG", async () => {
+    uploadMocks.heic.mockResolvedValue(new Blob(["decoded"], { type: "image/jpeg" }));
+    uploadMocks.prepareUpload.mockResolvedValue({ bucket: "media", objectPath: "p/x.jpg", uploadIntentId: "intent-1" });
+    uploadMocks.uploadBytes.mockResolvedValue(undefined);
+    uploadMocks.finalizeUpload.mockResolvedValue(undefined);
+    uploadHeicAsPng();
+
+    await waitFor(() => expect(uploadMocks.finalizeUpload).toHaveBeenCalled());
+    expect(uploadMocks.prepareUpload).toHaveBeenCalledWith(
+      expect.objectContaining({ clientFilename: "img_3641.jpg", mimeType: "image/jpeg" }),
+    );
+    expect((uploadMocks.uploadBytes.mock.calls[0][2] as File).type).toBe("image/jpeg");
+  });
+
+  it("refuses a HEIC photo it cannot decode and uploads none of the selection", async () => {
+    uploadMocks.heic.mockRejectedValue(new Error("ERR_LIBHEIF"));
+    uploadMocks.prepareUpload.mockReset();
+    uploadHeicAsPng([new File(["ok"], "ok.jpg", { type: "image/jpeg" })]);
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Upload failed", description: "Unable to upload media.", variant: "destructive" }),
+      ),
+    );
+    expect(uploadMocks.prepareUpload).not.toHaveBeenCalled();
   });
 });
