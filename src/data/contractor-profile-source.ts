@@ -21,6 +21,7 @@ export interface ContractorProfileContacts {
 export interface ContractorProfileAppearance {
   shade?: string;
   cover_url?: string;
+  cover_preset?: string;
   show_requisites?: boolean;
 }
 

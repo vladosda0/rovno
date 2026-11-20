@@ -25,10 +25,9 @@ function SavedCard({ profile, canEdit, onEdit }: { profile: ContractorProfile; c
             </p>
           </div>
           {canEdit ? (
-            <Button type="button" variant="outline" onClick={onEdit}>
+            <Button type="button" variant="outline" onClick={onEdit} className="max-sm:hidden" data-testid="card-edit-top">
               <Pencil className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">{t("home.documentsHub.leaves.orgContractorCard.editButton")}</span>
-              <span className="sm:hidden">{t("contractorCard.editShort")}</span>
+              {t("home.documentsHub.leaves.orgContractorCard.editButton")}
             </Button>
           ) : null}
         </div>
@@ -42,6 +41,11 @@ function SavedCard({ profile, canEdit, onEdit }: { profile: ContractorProfile; c
           className="pb-2 pt-4"
         />
         <p className="text-center text-caption text-muted-foreground">{t("contractorCard.openHint")}</p>
+        {canEdit ? (
+          <Button type="button" onClick={onEdit} className="w-full sm:hidden" data-testid="card-edit-bottom">
+            {t("home.documentsHub.leaves.orgContractorCard.editButton")}
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   );

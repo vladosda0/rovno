@@ -1,7 +1,16 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import ruLocale from "@/locales/ru.json";
 import {
+  CARD_COVER_KEYS,
+  CARD_SHADE_CHOICES,
+  NEW_CARD_SHADE,
+  cardCoverSrc,
   cardInitials,
   cardShade,
+  coverMatches,
+  coverPresetSrc,
+  orderCovers,
   linkLabel,
   mailLink,
   normalizeTelegram,
@@ -111,5 +120,65 @@ describe("requisite lines", () => {
 
   it("shows only the INN when the registry did not answer", () => {
     expect(requisiteLines(" 7800000000 ", null)).toEqual([{ key: "inn", value: "7800000000" }]);
+  });
+});
+
+describe("ready-made covers (rovno#295)", () => {
+  const ru = (ruLocale as unknown) as Record<string, string>;
+  const P = "upload.modal.step3.visitka.appearance.covers.";
+  const covers = CARD_COVER_KEYS.map((key) => ({
+    key,
+    name: ru[`${P}${key}.name`],
+    tags: ru[`${P}${key}.tags`].split(",").map((tag) => tag.trim()),
+  }));
+  const found = (query: string) => covers.filter((cover) => coverMatches(query, cover.name, cover.tags)).map((cover) => cover.key);
+
+  it("has 24 covers, each with a Russian name and up to three tags", () => {
+    expect(CARD_COVER_KEYS).toHaveLength(24);
+    for (const cover of covers) {
+      expect(cover.name).toBeTruthy();
+      expect(cover.tags.length).toBeGreaterThan(0);
+      expect(cover.tags.length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("finds covers by the start of any word of the name or a tag", () => {
+    expect(found("дом")).toEqual(["house", "timber", "smarthome"]);
+    expect(found("Кров")).toEqual(["roofing"]);
+    expect(found("котел")).toEqual(["heating"]);
+    expect(found("гарнитур")).toEqual(["kitchen"]);
+    expect(found("бассейн")).toEqual([]);
+    expect(found("  ")).toHaveLength(24);
+  });
+
+  it("moves the saved cover first only when it would be hidden", () => {
+    const list = covers.map(({ key }) => ({ key }));
+    expect(orderCovers(list, "landscape", 8)[0].key).toBe("landscape");
+    expect(orderCovers(list, "landscape", 8)).toHaveLength(24);
+    expect(orderCovers(list, "tiling", 8)).toBe(list);
+    expect(orderCovers(list, null, 8)).toBe(list);
+  });
+
+  it("shows an uploaded cover over a ready-made one, and drops an unknown key", () => {
+    expect(cardCoverSrc({ cover_preset: "house" })).toBe("/visitka-covers/house.webp");
+    expect(cardCoverSrc({ cover_url: "https://cdn/c.jpg", cover_preset: "house" })).toBe("https://cdn/c.jpg");
+    expect(cardCoverSrc({ cover_preset: "pool" })).toBeNull();
+    expect(cardCoverSrc({})).toBeNull();
+    expect(coverPresetSrc("house", "small")).toBe("/visitka-covers/house-sm.webp");
+  });
+
+  it("offers five shades without graphite, a new card on Rovno blue", () => {
+    expect(CARD_SHADE_CHOICES.map((shade) => shade.key)).toEqual(["rovno_blue", "olive", "brick", "emerald", "sand"]);
+    expect(NEW_CARD_SHADE).toBe("rovno_blue");
+    expect(cardShade("graphite").key).toBe("graphite");
+  });
+});
+
+describe("ready-made cover files", () => {
+  it("ships a full and a small picture for every key", () => {
+    for (const key of CARD_COVER_KEYS) {
+      expect(existsSync(`public${coverPresetSrc(key)}`), key).toBe(true);
+      expect(existsSync(`public${coverPresetSrc(key, "small")}`), key).toBe(true);
+    }
   });
 });

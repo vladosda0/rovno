@@ -4,7 +4,7 @@ import type { ComponentType } from "react";
 import { partyTagKind, PartyStatusBadge } from "@/components/requisites/PartyStatusTag";
 import type { ContractorProfileAppearance, ContractorProfileContacts } from "@/data/contractor-profile-source";
 import type { PartyCheck } from "@/hooks/use-party-status";
-import { cardInitials, cardShade, shadeBackground } from "@/lib/contractor-card";
+import { cardCoverSrc, cardInitials, cardShade, shadeBackground } from "@/lib/contractor-card";
 import { cn } from "@/lib/utils";
 import { MaxIcon, TelegramIcon, VkIcon, WhatsappIcon, YoutubeIcon } from "./brand-icons";
 
@@ -33,7 +33,7 @@ export const CONTACT_ICONS: Array<[keyof ContractorProfileContacts, ComponentTyp
 ];
 
 export function CardCover({ card, className, children }: { card: ContractorCardData; className?: string; children?: React.ReactNode }) {
-  const coverUrl = card.appearance.cover_url;
+  const coverUrl = cardCoverSrc(card.appearance);
   return (
     <div
       data-testid="card-cover"

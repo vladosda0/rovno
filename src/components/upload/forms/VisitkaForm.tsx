@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, Upload } from "lucide-react";
+import { Check, CheckCircle2, Loader2, Search, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,15 +28,24 @@ import { ContractorCard } from "@/components/contractor-card/ContractorCard";
 import { type CardRegistry, useCardRegistry } from "@/components/contractor-card/use-card-registry";
 import type { ContractorCardData } from "@/components/contractor-card/ContractorCardFace";
 import {
-  CARD_SHADES,
+  CARD_COVER_KEYS,
+  CARD_SHADE_CHOICES,
+  NEW_CARD_SHADE,
   cardInitials,
   cardShade,
+  coverMatches,
+  coverPresetSrc,
+  isCardCoverKey,
   normalizeTelegram,
+  orderCovers,
   shadeBackground,
   telegramFieldValue,
   webLink,
+  type CardCoverKey,
 } from "@/lib/contractor-card";
+import { cropImageFile, fitsAspect, readImageSize, type CropArea } from "@/lib/image-file";
 import { cn } from "@/lib/utils";
+import { ImageCropDialog } from "./ImageCropDialog";
 
 export interface VisitkaFormProps {
   onBack: () => void;
@@ -70,6 +79,8 @@ function DesignTile({
   hint,
   thumb,
   filled,
+  removable,
+  removeLabel,
   busy,
   disabled,
   accept,
@@ -80,6 +91,8 @@ function DesignTile({
   hint: string;
   thumb: React.ReactNode;
   filled: boolean;
+  removable: boolean;
+  removeLabel: string;
   busy: boolean;
   disabled: boolean;
   accept: string;
@@ -90,7 +103,21 @@ function DesignTile({
   const inputRef = useRef<HTMLInputElement>(null);
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-background/60 p-2.5">
-      {thumb}
+      <div className="group relative shrink-0">
+        {thumb}
+        {removable ? (
+          <button
+            type="button"
+            aria-label={removeLabel}
+            title={removeLabel}
+            disabled={disabled || busy}
+            onClick={onRemove}
+            className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full border-2 border-card bg-foreground text-background transition-opacity focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-accent [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+          >
+            <X className="h-3 w-3" aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
       <div className="flex min-w-0 flex-[1_1_170px] flex-col gap-0.5">
         <span className="text-body-sm font-medium">{label}</span>
         <span className="text-caption text-muted-foreground">{hint}</span>
@@ -112,11 +139,142 @@ function DesignTile({
         {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Upload className="h-4 w-4" aria-hidden="true" />}
         {t(filled ? "upload.modal.step3.visitka.appearance.replace" : "upload.modal.step3.visitka.appearance.upload")}
       </Button>
-      {filled ? (
-        <Button type="button" variant="ghost" size="sm" disabled={disabled || busy} onClick={onRemove}>
-          {t("upload.modal.step3.visitka.appearance.remove")}
-        </Button>
-      ) : null}
+    </div>
+  );
+}
+
+const APPEARANCE = "upload.modal.step3.visitka.appearance";
+const COVERS_PER_PAGE = 8;
+
+/** Ready-made covers (rovno#295): search, eight at a time, the chosen one outlined. */
+function CoverPresets({
+  selected,
+  disabled,
+  onSelect,
+}: {
+  selected: CardCoverKey | null;
+  disabled: boolean;
+  onSelect: (key: CardCoverKey) => void;
+}) {
+  const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+  const [visible, setVisible] = useState(COVERS_PER_PAGE);
+  const covers = CARD_COVER_KEYS.map((key) => ({
+    key,
+    name: t(`${APPEARANCE}.covers.${key}.name`),
+    tags: t(`${APPEARANCE}.covers.${key}.tags`)
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+  }));
+  const searching = query.trim().length > 0;
+  const found = covers.filter((cover) => coverMatches(query, cover.name, cover.tags));
+  const shown = searching ? found : orderCovers(found, selected, visible).slice(0, visible);
+  const picked = selected ? covers.find((cover) => cover.key === selected) : undefined;
+  return (
+    <div className="flex flex-col gap-2">
+      <Label className="text-body-sm font-medium">{t(`${APPEARANCE}.presets`)}</Label>
+      <div className="flex h-[38px] items-center gap-2 rounded-[10px] border border-input bg-background px-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
+        <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.preventDefault();
+          }}
+          placeholder={t(`${APPEARANCE}.presetsSearch`)}
+          aria-label={t(`${APPEARANCE}.presetsSearchAria`)}
+          disabled={disabled}
+          className="h-full min-w-0 flex-1 bg-transparent text-body-sm outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+        />
+        {searching ? (
+          <button
+            type="button"
+            aria-label={t(`${APPEARANCE}.presetsClear`)}
+            onClick={() => {
+              setQuery("");
+              setVisible(COVERS_PER_PAGE);
+            }}
+            className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-secondary text-foreground"
+          >
+            <X className="h-3 w-3" aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+      {found.length > 0 ? (
+        <>
+          <div className="grid grid-cols-4 gap-2" data-testid="cover-grid">
+            {shown.map((cover) => {
+              const pressed = selected === cover.key;
+              return (
+                <button
+                  key={cover.key}
+                  type="button"
+                  aria-label={cover.name}
+                  title={cover.name}
+                  aria-pressed={pressed}
+                  disabled={disabled}
+                  onClick={() => onSelect(cover.key)}
+                  className={cn(
+                    "relative aspect-video overflow-hidden rounded-[10px] bg-muted outline outline-1 -outline-offset-1 outline-black/10 transition-transform duration-150 ease-out hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+                    pressed && "outline-[2.5px] outline-offset-2 outline-accent",
+                  )}
+                >
+                  <img
+                    src={coverPresetSrc(cover.key, "small")}
+                    alt=""
+                    loading="lazy"
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                  {pressed ? (
+                    <span className="absolute right-[5px] top-[5px] grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground">
+                      <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" />
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex min-h-[30px] flex-wrap items-center justify-between gap-2.5">
+            {picked ? (
+              <span className="text-caption text-muted-foreground" data-testid="cover-picked">
+                {t(`${APPEARANCE}.presetsPicked`)} <b className="font-medium text-foreground">{picked.name}</b>
+              </span>
+            ) : (
+              <span />
+            )}
+            {!searching && visible < found.length ? (
+              <button
+                type="button"
+                onClick={() => setVisible((count) => count + COVERS_PER_PAGE)}
+                className="py-1 text-body-sm font-medium text-accent"
+              >
+                {t(`${APPEARANCE}.presetsMore`)}
+              </button>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col gap-2.5 rounded-xl border-[1.5px] border-dashed border-border p-3.5">
+          <span className="text-body-sm [overflow-wrap:anywhere]">{t(`${APPEARANCE}.presetsEmpty`, { query: query.trim() })}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              aria-disabled="true"
+              className="min-w-0 flex-[1_1_180px] truncate rounded-[10px] border border-input bg-background px-3 py-2 text-body-sm opacity-65"
+            >
+              {query.trim()}
+            </div>
+            <Button type="button" variant="outline" size="sm" disabled>
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              {t(`${APPEARANCE}.generate`)}
+            </Button>
+            <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-1 text-[11px] font-semibold uppercase leading-none tracking-wide text-accent">
+              {t(`${APPEARANCE}.soon`)}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -192,7 +350,11 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [coverUrl, setCoverUrl] = useState("");
   const [coverUploading, setCoverUploading] = useState(false);
-  const [shade, setShade] = useState<string>(CARD_SHADES[0].key);
+  const [coverPreset, setCoverPreset] = useState<CardCoverKey | null>(null);
+  const [cropping, setCropping] = useState<{ kind: "logo" | "cover"; file: File } | null>(null);
+  // Kept after close, so the closing dialog keeps its title and shape.
+  const [cropKind, setCropKind] = useState<"logo" | "cover">("cover");
+  const [shade, setShade] = useState<string>(NEW_CARD_SHADE);
   const [showRequisites, setShowRequisites] = useState(true);
 
   const [contactError, setContactError] = useState(false);
@@ -236,12 +398,12 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
     setSocial({ vk: contacts.vk ?? "", max: contacts.max ?? "", youtube: contacts.youtube ?? "" });
     setAvatarUrl(existingProfile.avatar_url ?? "");
     setCoverUrl(appearance?.cover_url ?? "");
+    setCoverPreset(!appearance?.cover_url && isCardCoverKey(appearance?.cover_preset) ? appearance.cover_preset : null);
     setShade(cardShade(appearance?.shade).key);
     setShowRequisites(appearance?.show_requisites !== false);
   }, [existingProfile, profileQuery.isFetching]);
 
-  async function handleCoverSelect(file: File | null) {
-    if (!file) return;
+  async function uploadCover(file: File) {
     if (file.size > COVER_MAX_BYTES) {
       toast({ title: t("upload.modal.step3.visitka.appearance.coverTooBig"), variant: "destructive" });
       return;
@@ -250,6 +412,7 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
     try {
       const { url } = await uploadAvatar(file);
       setCoverUrl(url);
+      setCoverPreset(null);
     } catch (error) {
       toast({
         title: t("upload.modal.step3.visitka.fields.avatarUploadFailed"),
@@ -261,8 +424,63 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
     }
   }
 
+  async function handleCoverSelect(file: File | null) {
+    if (!file) return;
+    if (file.size > COVER_MAX_BYTES) {
+      toast({ title: t("upload.modal.step3.visitka.appearance.coverTooBig"), variant: "destructive" });
+      return;
+    }
+    setCoverUploading(true);
+    const size = await readImageSize(file);
+    setCoverUploading(false);
+    if (size && !fitsAspect(size, 16 / 9)) {
+      openCrop("cover", file);
+      return;
+    }
+    await uploadCover(file);
+  }
+
   async function handleAvatarSelect(file: File | null) {
     if (!file) return;
+    setAvatarUploading(true);
+    const size = await readImageSize(file);
+    setAvatarUploading(false);
+    if (size && !fitsAspect(size, 1)) {
+      openCrop("logo", file);
+      return;
+    }
+    await uploadLogo(file);
+  }
+
+  function openCrop(kind: "logo" | "cover", file: File) {
+    setCropKind(kind);
+    setCropping({ kind, file });
+  }
+
+  async function handleCropDone(file: File, area: CropArea) {
+    const kind = cropping?.kind;
+    setCropping(null);
+    if (!kind) return;
+    const setBusy = kind === "cover" ? setCoverUploading : setAvatarUploading;
+    setBusy(true);
+    let cut: File;
+    try {
+      cut = await cropImageFile(file, area, kind === "cover" ? 1600 : 800);
+    } catch {
+      toast({ title: t("upload.modal.step3.visitka.appearance.cropFailed"), variant: "destructive" });
+      return;
+    } finally {
+      setBusy(false);
+    }
+    await (kind === "cover" ? uploadCover(cut) : uploadLogo(cut));
+  }
+
+  function handlePresetSelect(key: CardCoverKey) {
+    setCoverPreset(key);
+    setCoverUrl("");
+  }
+
+  async function uploadLogo(file: File) {
     setAvatarUploading(true);
     try {
       const { url } = await uploadAvatar(file);
@@ -314,7 +532,11 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
   }
 
   function buildAppearance(): NonNullable<ContractorProfileData["appearance"]> {
-    return { shade, show_requisites: showRequisites, ...(coverUrl ? { cover_url: coverUrl } : {}) };
+    return {
+      shade,
+      show_requisites: showRequisites,
+      ...(coverUrl ? { cover_url: coverUrl } : coverPreset ? { cover_preset: coverPreset } : {}),
+    };
   }
 
   const specList = [
@@ -492,7 +714,8 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
   }
 
   const profileFailed = hasOrg && firstReadFailed.current;
-  const saveDisabled = submitting || avatarUploading || coverUploading || !canSubmit || profileFailed;
+  const saveDisabled = submitting || avatarUploading || coverUploading || cropping !== null || !canSubmit || profileFailed;
+  const thumbCover = coverUrl || (coverPreset ? coverPresetSrc(coverPreset, "small") : "");
 
   // ---- Form ----------------------------------------------------------------
   return (
@@ -546,12 +769,7 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
               {t("upload.modal.step3.visitka.appearance.heading")}
             </h4>
             <DesignTile
-              label={
-                <>
-                  {t("upload.modal.step3.visitka.fields.avatar")}{" "}
-                  <span className="text-caption text-muted-foreground font-normal">({t("common.optional")})</span>
-                </>
-              }
+              label={t("upload.modal.step3.visitka.fields.avatar")}
               hint={t("upload.modal.step3.visitka.appearance.logoHint")}
               thumb={
                 <div
@@ -562,6 +780,8 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
                 </div>
               }
               filled={Boolean(avatarUrl)}
+              removable={Boolean(avatarUrl)}
+              removeLabel={t(`${APPEARANCE}.removeLogo`)}
               busy={avatarUploading}
               disabled={submitting}
               accept="image/*"
@@ -574,23 +794,29 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
               thumb={
                 <div
                   className="h-14 w-24 shrink-0 overflow-hidden rounded-[10px]"
-                  style={coverUrl ? undefined : { background: shadeBackground(cardShade(shade)) }}
+                  style={thumbCover ? undefined : { background: shadeBackground(cardShade(shade)) }}
                 >
-                  {coverUrl ? <img src={coverUrl} alt="" className="h-full w-full object-cover" /> : null}
+                  {thumbCover ? <img src={thumbCover} alt="" className="h-full w-full object-cover" /> : null}
                 </div>
               }
               filled={Boolean(coverUrl)}
+              removable={Boolean(coverUrl || coverPreset)}
+              removeLabel={t(`${APPEARANCE}.removeCover`)}
               busy={coverUploading}
               disabled={submitting}
               accept="image/jpeg,image/png"
               onSelect={handleCoverSelect}
-              onRemove={() => setCoverUrl("")}
+              onRemove={() => {
+                setCoverUrl("");
+                setCoverPreset(null);
+              }}
             />
+            <CoverPresets selected={coverPreset} disabled={submitting || coverUploading} onSelect={handlePresetSelect} />
             <div className="space-y-1.5">
               <Label className="text-body-sm font-medium">{t("upload.modal.step3.visitka.appearance.shade")}</Label>
               <div className="flex flex-wrap items-center gap-2.5">
-                {CARD_SHADES.map((item) => {
-                  const pressed = !coverUrl && shade === item.key;
+                {CARD_SHADE_CHOICES.map((item) => {
+                  const pressed = !coverUrl && !coverPreset && shade === item.key;
                   const label = t(`upload.modal.step3.visitka.appearance.shades.${item.key}`);
                   return (
                     <button
@@ -599,13 +825,14 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
                       title={label}
                       aria-label={label}
                       aria-pressed={pressed}
-                      disabled={submitting}
+                      disabled={submitting || coverUploading}
                       onClick={() => {
                         setShade(item.key);
                         setCoverUrl("");
+                        setCoverPreset(null);
                       }}
                       className={cn(
-                        "h-[34px] w-[34px] rounded-full border-[3px] border-card outline outline-1 outline-border focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                        "h-[34px] w-[34px] rounded-full border-[3px] border-card outline outline-1 outline-border focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                         pressed && "outline-2 outline-accent",
                       )}
                       style={{ background: `radial-gradient(circle at 70% 25%, ${item.to}, ${item.from} 70%)` }}
@@ -617,6 +844,13 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
           </div>
           <FormPreview card={previewCard} registry={registry} orgId={existingProfile?.org_id ?? null} />
         </div>
+        <ImageCropDialog
+          file={cropping?.file ?? null}
+          aspect={cropKind === "logo" ? 1 : 16 / 9}
+          title={t(`${APPEARANCE}.${cropKind === "logo" ? "cropLogo" : "cropCover"}`)}
+          onCancel={() => setCropping(null)}
+          onDone={handleCropDone}
+        />
 
         <div className="space-y-3 border-t border-border pt-4">
           <h4 className="text-body-sm font-medium text-foreground">{t("upload.modal.step3.visitka.frontSide")}</h4>

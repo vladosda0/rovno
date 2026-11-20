@@ -20,6 +20,84 @@ export function shadeBackground(shade: CardShade): string {
   return `radial-gradient(130% 160% at 100% 0%, ${shade.to} 0%, ${shade.from} 60%)`;
 }
 
+/** Shades offered in the form (rovno#295): graphite only stays on cards saved with it. */
+export const CARD_SHADE_CHOICES = CARD_SHADES.filter((shade) => shade.key !== "graphite");
+
+export const NEW_CARD_SHADE = "rovno_blue";
+
+/**
+ * Ready-made covers (rovno#295), in the order the form shows them. The server keeps
+ * the same keys in contractor_profile_clean_appearance; names and search tags live in
+ * the locale under upload.modal.step3.visitka.appearance.covers.<key>.
+ */
+export const CARD_COVER_KEYS = [
+  "house",
+  "apartment",
+  "finishing",
+  "electrical",
+  "plumbing",
+  "tiling",
+  "roofing",
+  "foundation",
+  "facade",
+  "landscape",
+  "windows",
+  "doors",
+  "timber",
+  "masonry",
+  "heating",
+  "ventilation",
+  "kitchen",
+  "flooring",
+  "ceiling",
+  "bathhouse",
+  "fence",
+  "smarthome",
+  "insulation",
+  "commercial",
+] as const;
+
+export type CardCoverKey = (typeof CARD_COVER_KEYS)[number];
+
+export function isCardCoverKey(value: unknown): value is CardCoverKey {
+  return typeof value === "string" && (CARD_COVER_KEYS as readonly string[]).includes(value);
+}
+
+/** The static file of a ready-made cover: full size for the card, small for the picker. */
+export function coverPresetSrc(key: CardCoverKey, size: "full" | "small" = "full"): string {
+  return `/visitka-covers/${key}${size === "small" ? "-sm" : ""}.webp`;
+}
+
+/** What the card cover shows: an uploaded picture wins over a ready-made one. */
+export function cardCoverSrc(appearance: { cover_url?: string; cover_preset?: string }): string | null {
+  if (appearance.cover_url) return appearance.cover_url;
+  return isCardCoverKey(appearance.cover_preset) ? coverPresetSrc(appearance.cover_preset) : null;
+}
+
+function searchForm(value: string): string {
+  return value.toLowerCase().replace(/ё/g, "е").trim();
+}
+
+/** Search by name and tags: any word that starts with the query, case and «ё» ignored. */
+export function coverMatches(query: string, name: string, tags: string[]): boolean {
+  const q = searchForm(query);
+  if (!q) return true;
+  return [name, ...tags].some((text) => {
+    const form = searchForm(text);
+    return form.startsWith(q) || form.split(/[\s-]+/).some((word) => word.startsWith(q));
+  });
+}
+
+/**
+ * The order of the picker: the saved cover moves first when it would otherwise sit
+ * past the visible part, so a person always sees what is chosen.
+ */
+export function orderCovers<T extends { key: string }>(covers: T[], selected: string | null, visible: number): T[] {
+  const index = selected ? covers.findIndex((cover) => cover.key === selected) : -1;
+  if (index < visible) return covers;
+  return [covers[index], ...covers.slice(0, index), ...covers.slice(index + 1)];
+}
+
 const LEGAL_FORM = /^(ооо|оао|зао|пао|ао|ип)\s+/i;
 
 /** Two letters for a card without a logo: «ООО «Ремонт-Плюс»» gives «РП». */

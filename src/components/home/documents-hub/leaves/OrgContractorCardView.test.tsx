@@ -207,6 +207,34 @@ describe("OrgContractorCardView", () => {
     await waitFor(() => expect(screen.getByTestId("card-spin").style.transform).toBe("rotateY(180deg)"));
   });
 
+  it("shows a ready-made cover on the title and in the window (rovno#295)", async () => {
+    fetchMock.mockResolvedValue({ ...profile, appearance: { cover_preset: "house" } });
+    renderView();
+    await screen.findByRole("button", { name: /Open the card of/ });
+    expect(screen.getAllByTestId("card-cover")[0].querySelector("img")?.getAttribute("src")).toBe("/visitka-covers/house.webp");
+    await openCard();
+    const covers = screen.getAllByTestId("card-cover").map((cover) => cover.querySelector("img")?.getAttribute("src"));
+    expect(covers.every((src) => src === "/visitka-covers/house.webp")).toBe(true);
+  });
+
+  it("puts «Edit business card» at the bottom on a phone, at the top otherwise (rovno#295)", async () => {
+    renderView();
+    await screen.findByRole("button", { name: /Open the card of/ });
+    expect(screen.getByTestId("card-edit-top")).toHaveClass("max-sm:hidden");
+    expect(screen.getByTestId("card-edit-top").textContent).toBe("Edit business card");
+    expect(screen.getByTestId("card-edit-bottom")).toHaveClass("w-full", "sm:hidden");
+    fireEvent.click(screen.getByTestId("card-edit-bottom"));
+    expect(screen.getByTestId("visitka-form")).toBeInTheDocument();
+  });
+
+  it("gives a member no edit button anywhere", async () => {
+    activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "member" });
+    renderView();
+    await screen.findByRole("button", { name: /Open the card of/ });
+    expect(screen.queryByTestId("card-edit-top")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("card-edit-bottom")).not.toBeInTheDocument();
+  });
+
   it("Escape closes the window and returns focus to the card", async () => {
     stubReducedMotion(true);
     renderView();

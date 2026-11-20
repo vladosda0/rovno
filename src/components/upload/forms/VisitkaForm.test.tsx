@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -32,6 +32,23 @@ const uploadAvatarMock = vi.fn();
 vi.mock("@/hooks/use-avatar-upload", () => ({
   useAvatarUpload: () => ({ uploadAvatar: uploadAvatarMock }),
 }));
+
+const imageSizeMock = vi.fn().mockResolvedValue(null);
+const cropMock = vi.fn();
+vi.mock("@/lib/image-file", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/image-file")>()),
+  readImageSize: (...args: unknown[]) => imageSizeMock(...args),
+  cropImageFile: (...args: unknown[]) => cropMock(...args),
+}));
+vi.mock("react-easy-crop", async () => {
+  const { useEffect } = await import("react");
+  function CropperStub({ onCropComplete }: { onCropComplete: (area: unknown, pixels: unknown) => void }) {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => onCropComplete({}, { x: 0, y: 0, width: 10, height: 10 }), []);
+    return <div data-testid="cropper" />;
+  }
+  return { default: CropperStub };
+});
 
 import { VisitkaForm } from "@/components/upload/forms/VisitkaForm";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -405,5 +422,213 @@ describe("VisitkaForm preview window", () => {
     await waitFor(() => expect(screen.queryByTestId("card-window")).not.toBeInTheDocument());
     expect(onOpenChange).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+});
+
+describe("VisitkaForm ready-made covers (rovno#295)", () => {
+  const owner = { id: "o1", name: "Org", role: "owner" };
+
+  afterEach(() => {
+    delete (URL as { createObjectURL?: unknown }).createObjectURL;
+  });
+
+  function stubObjectUrl() {
+    (URL as { createObjectURL?: unknown }).createObjectURL = () => "blob:picked";
+  }
+
+  beforeEach(() => {
+    orgsMock.mockReset().mockReturnValue({ data: [owner], isLoading: false });
+    activeOrgMock.mockReset().mockReturnValue(owner);
+    fetchMock.mockReset().mockResolvedValue(null);
+    upsertMock.mockReset().mockResolvedValue({ org_id: "o1", profile_id: "p1" });
+    uploadAvatarMock.mockReset().mockResolvedValue({ url: "https://cdn/avatars/a.jpg", path: "u/a.jpg" });
+    imageSizeMock.mockReset().mockResolvedValue(null);
+    cropMock.mockReset().mockResolvedValue(new File(["y"], "cut.jpg", { type: "image/jpeg" }));
+  });
+
+  async function openEmpty() {
+    const view = renderForm();
+    await screen.findByPlaceholderText(/How clients will see you/i);
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "builder" } });
+    return view;
+  }
+
+  async function save() {
+    fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+    await waitFor(() => expect(upsertMock).toHaveBeenCalledTimes(1));
+    return upsertMock.mock.calls[0][1];
+  }
+
+  const grid = () => within(screen.getByTestId("cover-grid")).getAllByRole("button");
+
+  it("starts a new card on Rovno blue and offers no graphite", async () => {
+    await openEmpty();
+    expect(screen.getByRole("button", { name: "Rovno blue" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "Graphite" })).not.toBeInTheDocument();
+    expect((await save()).appearance).toEqual({ shade: "rovno_blue", show_requisites: true });
+  });
+
+  it("keeps graphite on a card saved with it until the person picks another shade", async () => {
+    fetchMock.mockResolvedValue({ id: "p1", org_id: "o1", display_name: "ООО Ремонт", contacts: { telegram: "@r" }, appearance: { shade: "graphite" }, status: "draft" });
+    renderForm();
+    await screen.findByDisplayValue("ООО Ремонт");
+    for (const name of ["Rovno blue", "Olive", "Brick", "Emerald", "Sand"]) {
+      expect(screen.getByRole("button", { name })).toHaveAttribute("aria-pressed", "false");
+    }
+    expect((await save()).appearance).toEqual({ shade: "graphite", show_requisites: true });
+  });
+
+  it("picks a ready-made cover, says which, and sends its key", async () => {
+    await openEmpty();
+    expect(grid()).toHaveLength(8);
+    fireEvent.click(screen.getByRole("button", { name: "Roofing" }));
+    expect(screen.getByRole("button", { name: "Roofing" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("cover-picked").textContent).toBe("Selected: Roofing");
+    expect(screen.getByRole("button", { name: "Rovno blue" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByTestId("card-cover").querySelector("img")?.getAttribute("src")).toBe("/visitka-covers/roofing.webp");
+    expect((await save()).appearance).toEqual({ shade: "rovno_blue", show_requisites: true, cover_preset: "roofing" });
+  });
+
+  it("drops the ready-made cover for an uploaded one, and both for a shade", async () => {
+    const { container } = await openEmpty();
+    fireEvent.click(screen.getByRole("button", { name: "Roofing" }));
+    imageSizeMock.mockResolvedValue({ width: 1600, height: 900 });
+    const coverInput = container.querySelectorAll('input[type="file"]')[1] as HTMLInputElement;
+    fireEvent.change(coverInput, { target: { files: [new File(["x"], "c.jpg", { type: "image/jpeg" })] } });
+    await waitFor(() => expect(uploadAvatarMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Roofing" })).toHaveAttribute("aria-pressed", "false"));
+    fireEvent.click(screen.getByRole("button", { name: "Brick" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tiling" }));
+    fireEvent.click(screen.getByRole("button", { name: "Olive" }));
+    expect((await save()).appearance).toEqual({ shade: "olive", show_requisites: true });
+  });
+
+  it("an uploaded cover is sent alone", async () => {
+    const { container } = await openEmpty();
+    fireEvent.click(screen.getByRole("button", { name: "Roofing" }));
+    imageSizeMock.mockResolvedValue({ width: 1600, height: 900 });
+    const coverInput = container.querySelectorAll('input[type="file"]')[1] as HTMLInputElement;
+    fireEvent.change(coverInput, { target: { files: [new File(["x"], "c.jpg", { type: "image/jpeg" })] } });
+    await waitFor(() => expect(uploadAvatarMock).toHaveBeenCalledTimes(1));
+    expect((await save()).appearance).toEqual({ shade: "rovno_blue", show_requisites: true, cover_url: "https://cdn/avatars/a.jpg" });
+  });
+
+  it("shows eight at a time, with a saved cover past them first", async () => {
+    fetchMock.mockResolvedValue({ id: "p1", org_id: "o1", display_name: "ООО Ремонт", contacts: { telegram: "@r" }, appearance: { shade: "olive", cover_preset: "landscape" }, status: "draft" });
+    renderForm();
+    await screen.findByDisplayValue("ООО Ремонт");
+    expect(grid()).toHaveLength(8);
+    expect(grid()[0]).toHaveAccessibleName("Landscaping");
+    expect(grid()[0]).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(grid()).toHaveLength(16);
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(grid()).toHaveLength(24);
+    expect(screen.queryByRole("button", { name: "Show more" })).not.toBeInTheDocument();
+    expect((await save()).appearance).toEqual({ shade: "olive", show_requisites: true, cover_preset: "landscape" });
+  });
+
+  it("finds covers by name and tags, and offers a switched-off Generate when nothing fits", async () => {
+    await openEmpty();
+    const search = screen.getByRole("searchbox", { name: "Find a cover" });
+    fireEvent.change(search, { target: { value: "House" } });
+    expect(grid().map((button) => button.getAttribute("aria-label"))).toEqual(["Private house", "Timber frame house"]);
+    expect(screen.queryByRole("button", { name: "Show more" })).not.toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "pool" } });
+    expect(screen.getByText("No ready-made covers for «pool». Generate one?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Generate/ })).toBeDisabled();
+    expect(screen.getByText("Soon")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(grid()).toHaveLength(8);
+  });
+
+  it("Enter in the cover search does not save the card", async () => {
+    await openEmpty();
+    const search = screen.getByRole("searchbox", { name: "Find a cover" });
+    fireEvent.change(search, { target: { value: "roof" } });
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    search.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+    expect(upsertMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the outline of the chosen cover when it has focus", async () => {
+    await openEmpty();
+    const roofing = screen.getByRole("button", { name: "Roofing" });
+    expect(roofing.className).not.toContain("focus:outline-none");
+    expect(screen.getByRole("button", { name: "Olive" }).className).not.toContain("focus:outline-none");
+    expect(screen.getByRole("button", { name: "Rovno blue" }).className).toContain("focus-visible:ring-offset-2");
+  });
+
+  it("does not let a ready-made cover or a shade be picked while a cover uploads", async () => {
+    let finish: (value: { url: string; path: string }) => void = () => {};
+    uploadAvatarMock.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+    imageSizeMock.mockResolvedValue({ width: 1600, height: 900 });
+    const { container } = await openEmpty();
+    const coverInput = container.querySelectorAll('input[type="file"]')[1] as HTMLInputElement;
+    fireEvent.change(coverInput, { target: { files: [new File(["x"], "c.jpg", { type: "image/jpeg" })] } });
+    await waitFor(() => expect(uploadAvatarMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Roofing" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Olive" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save as draft" })).toBeDisabled();
+    finish({ url: "https://cdn/c.jpg", path: "c" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Roofing" })).toBeEnabled());
+  });
+
+  it("removes the logo and the cover with the cross on the thumbnail", async () => {
+    fetchMock.mockResolvedValue({ id: "p1", org_id: "o1", display_name: "ООО Ремонт", contacts: { telegram: "@r" }, avatar_url: "https://cdn/a.jpg", appearance: { shade: "olive", cover_url: "https://cdn/c.jpg" }, status: "draft" });
+    renderForm();
+    await screen.findByDisplayValue("ООО Ремонт");
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove cover" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove logo" }));
+    expect(screen.queryByRole("button", { name: "Remove cover" })).not.toBeInTheDocument();
+    const profile = await save();
+    expect(profile.avatar_url).toBe("");
+    expect(profile.appearance).toEqual({ shade: "olive", show_requisites: true });
+  });
+
+  it("gives the new hints and no «optional» by the logo", async () => {
+    await openEmpty();
+    expect(screen.getByText("400×400, JPG or PNG")).toBeInTheDocument();
+    expect(screen.getByText("1600×900, no text, JPG or PNG up to 5 MB")).toBeInTheDocument();
+    expect(screen.getByText("Photo / logo").textContent).toBe("Photo / logo");
+  });
+
+  it("crops a logo that is not square before uploading it", async () => {
+    stubObjectUrl();
+    const { container } = await openEmpty();
+    imageSizeMock.mockResolvedValue({ width: 800, height: 400 });
+    const original = new File(["x"], "logo.png", { type: "image/png" });
+    fireEvent.change(container.querySelectorAll('input[type="file"]')[0] as HTMLInputElement, { target: { files: [original] } });
+    const dialog = await screen.findByRole("dialog", { name: "Crop logo" });
+    expect(uploadAvatarMock).not.toHaveBeenCalled();
+    const done = within(dialog).getByRole("button", { name: "Done" });
+    await waitFor(() => expect(done).toBeEnabled());
+    fireEvent.click(done);
+    await waitFor(() => expect(uploadAvatarMock).toHaveBeenCalledTimes(1));
+    expect(cropMock).toHaveBeenCalledWith(original, { x: 0, y: 0, width: 10, height: 10 }, 800);
+    expect(uploadAvatarMock.mock.calls[0][0].name).toBe("cut.jpg");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Crop logo" })).not.toBeInTheDocument());
+  });
+
+  it("crops a cover that is not 16:9, and cancelling uploads nothing", async () => {
+    stubObjectUrl();
+    const { container } = await openEmpty();
+    imageSizeMock.mockResolvedValue({ width: 1000, height: 1000 });
+    const coverInput = container.querySelectorAll('input[type="file"]')[1] as HTMLInputElement;
+    const original = new File(["x"], "c.jpg", { type: "image/jpeg" });
+    fireEvent.change(coverInput, { target: { files: [original] } });
+    let dialog = await screen.findByRole("dialog", { name: "Crop cover" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Crop cover" })).not.toBeInTheDocument());
+    expect(uploadAvatarMock).not.toHaveBeenCalled();
+    fireEvent.change(coverInput, { target: { files: [original] } });
+    dialog = await screen.findByRole("dialog", { name: "Crop cover" });
+    const done = within(dialog).getByRole("button", { name: "Done" });
+    await waitFor(() => expect(done).toBeEnabled());
+    fireEvent.click(done);
+    await waitFor(() => expect(uploadAvatarMock).toHaveBeenCalledTimes(1));
+    expect(cropMock).toHaveBeenCalledWith(original, { x: 0, y: 0, width: 10, height: 10 }, 1600);
   });
 });
