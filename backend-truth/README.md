@@ -219,6 +219,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20261118010000_get_card_on_file_superseded_renewal.sql`
 - `supabase/migrations/20261118020000_change_task_status_v2_done_override.sql`
 - `supabase/migrations/20261120010000_document_new_version_upload.sql`
+- `supabase/migrations/20261120180100_passkey_credential_known.sql`
 
 ## Exclusions
 

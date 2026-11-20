@@ -3873,6 +3873,12 @@ export type Database = {
           }
           Returns: string
         }
+        "passkey_credential_known": {
+          Args: {
+          "p_credential_id": string
+          }
+          Returns: boolean
+        }
         "place_cross_project_stock_transfer": {
           Args: {
           "p_from_project": string

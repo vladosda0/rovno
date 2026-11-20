@@ -755,6 +755,10 @@
     {
       "path": "supabase/migrations/20261120010000_document_new_version_upload.sql",
       "sha256": "e190c3005521f487d7c23d7bd432ede62194a1de358ec8fb59fb167a5a7ce8d4"
+    },
+    {
+      "path": "supabase/migrations/20261120180100_passkey_credential_known.sql",
+      "sha256": "266117f73b5bab1c9db0ce3afb36ade1e4ce154bee888cc1238f8e0fbc91de40"
     }
   ],
   "generated_artifacts": [
