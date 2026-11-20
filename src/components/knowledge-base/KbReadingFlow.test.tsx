@@ -225,6 +225,57 @@ describe("knowledge base full text (slice 2)", () => {
     expect(document.querySelector("[data-kb-edition-note] mark")).toHaveTextContent("ФЗ");
   });
 
+  it("a SanPiN: decree, Roman section, point with a table drawn as a table with spans (step 9.3, show 9.2в frame 3)", async () => {
+    const sanpin = normalizeKbRow({
+      doc_id: "SAN-001", slug: "sanpin-2-1-3684-21", designation: "СанПиН 2.1.3684-21", title: "Санитарно-эпидемиологические требования", category: "СанПиН",
+      folder: "sanpin", display_mode: "full_text", full_text_available: true, text_label: "checking",
+      edition_date: "2022-02-14", text_checked_at: "2026-11-20", text_source_url: "http://pravo.gov.ru/proxy/ips/?doc_itself=&nd=602024221&fulltext=1",
+    });
+    const table = '⟦таблица⟧[["Виды показателей","Количество проб"],[{"t":"Микробиологические","r":2},"4"],["12"]]';
+    fetchKbDocumentBySlug.mockResolvedValue(sanpin);
+    fetchKbClauses.mockResolvedValue([
+      { anchor: "gl-pre", number: null, level: 1, heading: "Постановление", body: "1. Утвердить санитарные правила.\nА.Ю.Попова", position: 1 },
+      { anchor: "rz-iv", number: "IV", level: 1, heading: "IV. Требования к качеству воды", body: "", position: 2 },
+      { anchor: "p-75", number: "75", level: 2, heading: null, body: `Количество проб воды устанавливается с учётом таблицы 1.\nТаблица 1\n${table}\nПробы отбираются ежемесячно.`, position: 3 },
+    ].map(normalizeKbClause));
+    window.location.hash = "";
+    renderKB("/home?docTab=knowledge-base&kbDoc=sanpin-2-1-3684-21");
+    expect(await screen.findByText("IV. Требования к качеству воды")).toBeInTheDocument();
+    const cell = screen.getByText("Микробиологические");
+    expect(cell.tagName).toBe("TD");
+    expect(cell).toHaveAttribute("rowspan", "2");
+    expect(cell.closest("[data-kb-table]")?.className).toMatch(/overflow-x-auto/);
+    expect(document.getElementById("p-75")?.textContent).not.toContain("⟦таблица⟧");
+    expect(screen.getByText("Пробы отбираются ежемесячно.")).toBeInTheDocument();
+    // Search finds the text after the table and highlights it; a word only inside the table is not counted.
+    fireEvent.change(screen.getByRole("textbox", { name: "Search this document" }), { target: { value: "ежемесячно" } });
+    expect(screen.getByText("1 of 1")).toBeInTheDocument();
+    expect(document.querySelector("#p-75 mark")).toHaveTextContent("ежемесячно");
+    fireEvent.change(screen.getByRole("textbox", { name: "Search this document" }), { target: { value: "Микробиологические" } });
+    expect(screen.queryByText("1 of 1")).not.toBeInTheDocument();
+    expect(document.querySelector("#p-75 mark")).toBeNull();  });
+
+  it("a law's signature with a table: the table sits in the signature, not inside a paragraph", async () => {
+    const law = normalizeKbRow({
+      doc_id: "LAW-006", slug: "123-fz", designation: "123-ФЗ", title: "Технический регламент", category: "Закон",
+      folder: "laws", display_mode: "full_text", full_text_available: true, text_label: "verified",
+      edition_date: "2025-01-01", text_checked_at: "2026-11-20", text_source_url: "http://pravo.gov.ru/proxy/ips/?doc_itself=&nd=1&fulltext=1",
+    });
+    fetchKbDocumentBySlug.mockResolvedValue(law);
+    fetchKbClauses.mockResolvedValue([
+      { anchor: "st-1", number: null, level: 2, heading: "Статья 1. Понятия", body: "", position: 1 },
+      { anchor: "st-1-ch-1", number: "1", level: 3, heading: null, body: "Понятие.", position: 2 },
+      { anchor: "gl-sig", number: null, level: 1, heading: null, body: 'Президент\n⟦таблица⟧[["Класс","12"]]\nМосква', position: 3 },
+    ].map(normalizeKbClause));
+    window.location.hash = "";
+    renderKB("/home?docTab=knowledge-base&kbDoc=123-fz");
+    expect(await screen.findByText("Статья 1. Понятия")).toBeInTheDocument();
+    const cell = document.querySelector("[data-kb-law-signature] [data-kb-table] td");
+    expect(cell).toHaveTextContent("Класс");
+    expect(cell?.closest("p")).toBeNull();
+    expect(screen.getByText("Москва")).toBeInTheDocument();
+  });
+
   it("a law's preamble, ГК paragraph, КоАП notes and signature (show 9.2в, frames 1-3)", async () => {
     const law = normalizeKbRow({
       doc_id: "LAW-019", slug: "koap-rf", designation: "КоАП РФ", title: "КоАП РФ", category: "Закон",

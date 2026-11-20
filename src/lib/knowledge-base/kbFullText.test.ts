@@ -7,6 +7,8 @@ import { kbFirstText } from "./kbSeo.mjs";
 import {
   amendmentList,
   kbAnchorFromHash,
+  kbBodyPieces,
+  KB_TABLE,
   kbCopyNotice,
   kbArticleAnchor,
   kbClauseUrl,
@@ -331,5 +333,72 @@ describe("a document without an official text (docs-library slice 9, frame 5)", 
   it("reads the reason line of a document without text, blank is none", () => {
     expect(row({ full_text_available: false, text_unavailable_reason: " Причина. " }).textUnavailableReason).toBe("Причина.");
     expect(row({ full_text_available: false, text_unavailable_reason: "  " }).textUnavailableReason).toBeNull();
+  });
+});
+
+// Slice 9, step 9.3 (show 9.2в, frame 3 approved 17.11): a SanPiN or law table comes from the
+// portal as one line of cells; the reader and the guest page draw it as a table.
+describe("tables in a clause body", () => {
+  const table = `${KB_TABLE}[["Виды показателей","Количество проб"],[{"t":"Микробиологические","r":2},"4 <b>"],["12"]]`;
+  const body = `Количество проб устанавливается с учётом таблицы 1.\nТаблица 1\n${table}\n3. После таблицы.`;
+
+  it("splits the body into text runs and tables with their offsets", () => {
+    const pieces = kbBodyPieces(body);
+    expect(pieces).toEqual([
+      { kind: "text", text: "Количество проб устанавливается с учётом таблицы 1.\nТаблица 1", offset: 0 },
+      { kind: "table", rows: [["Виды показателей", "Количество проб"], [{ t: "Микробиологические", r: 2 }, "4 <b>"], ["12"]], offset: body.indexOf(KB_TABLE) },
+      { kind: "text", text: "3. После таблицы.", offset: body.indexOf("3. После") },
+    ]);
+    expect(kbBodyPieces("Просто текст.")).toEqual([{ kind: "text", text: "Просто текст.", offset: 0 }]);
+    // A broken table line stays text, it is not dropped.
+    expect(kbBodyPieces(`${KB_TABLE}[oops`)).toEqual([{ kind: "text", text: `${KB_TABLE}[oops`, offset: 0 }]);
+  });
+
+  it("a law clause with a table: no table inside a paragraph on the guest page; a numeric cell keeps its value", () => {
+    const lawTable = `${KB_TABLE}[["Класс",12,{"t":"x","c":"2","r":0}]]`;
+    const html = kbFullTextHtml(
+      normalizeKbRow({ doc_id: "LAW-006", slug: "123-fz", designation: "123-ФЗ", folder: "laws", full_text_available: true, text_label: "verified", edition_date: "2025-01-01" }) as never,
+      [{ anchor: "st-5-ch-1", number: "1", level: 3, heading: null, body: `До\n${lawTable}\nПосле`, position: 1, amendments: [] }] as never,
+      t,
+    );
+    expect(html).toContain('<p id="st-5-ch-1"><strong>1 </strong>До</p><div class="rv-kb-table-wrap"><table class="rv-kb-table"><tbody><tr><td>Класс</td><td>12</td><td colspan="2">x</td></tr></tbody></table></div><p>После</p>');
+    expect(kbBodyPieces(lawTable)).toHaveLength(1);
+  });
+
+  it("a table in a law's signature, preamble and article heading: between paragraphs, the signature style kept", () => {
+    const tb = `${KB_TABLE}[["a","b"]]`;
+    const wrap = '<div class="rv-kb-table-wrap"><table class="rv-kb-table"><tbody><tr><td>a</td><td>b</td></tr></tbody></table></div>';
+    const html = kbFullTextHtml(
+      normalizeKbRow({ doc_id: "LAW-006", slug: "123-fz", designation: "123-ФЗ", folder: "laws", full_text_available: true, text_label: "verified", edition_date: "2025-01-01" }) as never,
+      [
+        { anchor: "gl-pre", number: null, level: 1, heading: "Преамбула", body: `${tb}\nТекст преамбулы`, position: 1, amendments: [] },
+        { anchor: "st-1", number: null, level: 2, heading: "Статья 1. Понятия", body: `${tb}\n`, position: 2, amendments: [] },
+        { anchor: "gl-sig", number: null, level: 1, heading: null, body: `Президент\n${tb}\nМосква`, position: 3, amendments: [] },
+      ] as never,
+      t,
+    );
+    expect(html).toContain(`<p id="gl-pre"></p>${wrap}<p>Текст преамбулы</p>`);
+    expect(html).toContain(`<h3 id="st-1">Статья 1. Понятия</h3>${wrap}<p id="gl-sig"`);
+    expect(html).not.toContain("<p></p>");
+    expect(html).toContain(`<p id="gl-sig" class="rv-kb-edition">Президент</p>${wrap}<p class="rv-kb-edition">Москва</p>`);
+  });
+
+  it("search does not count matches inside a table the reader cannot highlight", () => {
+    const matches = kbSearchMatches([{ anchor: "p-2", number: "2", level: 2, heading: null, body, position: 1, amendments: [] }], "проб");
+    expect(matches.map((m) => m.start)).toEqual([body.indexOf("проб")]);
+  });
+
+  it("the guest page renders the table with spans, escaped", () => {
+    const html = kbFullTextHtml(
+      normalizeKbRow({ doc_id: "SAN-001", slug: "sanpin-2-1-3684-21", designation: "СанПиН 2.1.3684-21", folder: "sanpin", full_text_available: true, text_label: "verified", edition_date: "2022-02-14" }) as never,
+      [{ anchor: "p-2", number: "2", level: 2, heading: null, body, position: 1, amendments: [] }] as never,
+      t,
+    );
+    expect(html).toContain('<td rowspan="2">Микробиологические</td><td>4 &lt;b&gt;</td>');
+    expect(html).not.toContain(KB_TABLE);
+    // The table sits in its scrolling frame between paragraphs, never inside one.
+    expect(html).toContain('<p id="p-2"><strong>2 </strong>Количество проб устанавливается с учётом таблицы 1.\nТаблица 1</p><div class="rv-kb-table-wrap"><table class="rv-kb-table">');
+    expect(html).toContain('</table></div><p>3. После таблицы.</p>');
+    expect(kbFirstText([{ anchor: "p-1", number: "1", level: 2, heading: null, body: table, position: 1, amendments: [] }] as never)).toBeNull();
   });
 });

@@ -22,6 +22,9 @@ import { kbDocPath, kbHeading } from "@/lib/knowledge-base/kbConfig.mjs";
 import {
   kbAnchorFromHash,
   kbArticleAnchor,
+  kbBodyPieces,
+  kbTableCell,
+  type KbTableCellValue,
   kbClauseUrl,
   kbEditionNote,
   kbHighlight,
@@ -140,6 +143,40 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
       ),
     );
   }
+
+  // A table in the official text (step 9.3; show 9.2в, frame 3): cells with their spans,
+  // a wide one scrolls sideways inside its frame and the page stays put.
+  const tableBlock = (rows: KbTableCellValue[][], key: string) => (
+    <div key={key} className="my-2 overflow-x-auto rounded-md border border-border" data-kb-table>
+      <table className="min-w-full border-collapse text-caption text-foreground [border-style:hidden]">
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i}>
+              {row.map((cell, j) => {
+                const { t: text, c, r } = kbTableCell(cell);
+                return (
+                  <td key={j} colSpan={c > 1 ? c : undefined} rowSpan={r > 1 ? r : undefined} className="border border-border px-2 py-1 align-top">
+                    {text}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+  // A body's text runs in paragraphs of `className`, its tables as tables; a body without a table is one paragraph.
+  const bodyBlocks = (text: string, anchor: string, className: string) =>
+    kbBodyPieces(text).map((piece) =>
+      piece.kind === "table" ? (
+        tableBlock(piece.rows, `${anchor}-t${piece.offset}`)
+      ) : (
+        <p key={`${anchor}-p${piece.offset}`} className={className}>
+          {renderText(piece.text, anchor, "body", piece.offset)}
+        </p>
+      ),
+    );
 
   const tocList = (entries: KbTocEntry[], onPick?: () => void) =>
     entries.map((entry) => (
@@ -325,17 +362,14 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
               // The law's signature after the last article (show 9.2в, frame 3): small and muted, not in the contents.
               if (c.anchor === "gl-sig") {
                 return (
-                  <p
+                  <div
                     key={c.anchor}
                     id={c.anchor}
-                    className={cn(
-                      "mt-4 scroll-mt-20 whitespace-pre-line border-t border-border pt-3 text-caption text-muted-foreground",
-                      isTarget && "border-l-2 border-l-accent pl-2",
-                    )}
+                    className={cn("mt-4 scroll-mt-20 border-t border-border pt-3 text-caption text-muted-foreground", isTarget && "border-l-2 border-l-accent pl-2")}
                     data-kb-law-signature
                   >
-                    {renderText(c.body, c.anchor, "body")}
-                  </p>
+                    {bodyBlocks(c.body, c.anchor, "whitespace-pre-line")}
+                  </div>
                 );
               }
               // The preamble (show 9.2в, frame 3): paragraphs above chapter 1 with no number and no heading in the text;
@@ -343,7 +377,7 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
               if (c.anchor === "gl-pre") {
                 return (
                   <div key={c.anchor} id={c.anchor} className={cn("scroll-mt-20", isTarget && "border-l-2 border-accent pl-2")} data-kb-law-preamble>
-                    <p className="whitespace-pre-line text-body-sm leading-relaxed text-foreground">{renderText(text, c.anchor, "body")}</p>
+                    {bodyBlocks(text, c.anchor, "whitespace-pre-line text-body-sm leading-relaxed text-foreground")}
                     {noteLine}
                   </div>
                 );
@@ -367,7 +401,7 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
                     >
                       {renderText(c.heading, c.anchor, "heading")}
                     </Tag>
-                    {text && <p className="mt-2 whitespace-pre-line text-body-sm leading-relaxed text-foreground">{renderText(text, c.anchor, "body")}</p>}
+                    {text && bodyBlocks(text, c.anchor, "mt-2 whitespace-pre-line text-body-sm leading-relaxed text-foreground")}
                     {noteLine}
                   </div>
                 );
@@ -396,6 +430,10 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
                     {t(/-pr-\d/.test(c.anchor) ? "home.knowledgeBase.reader.lawNoteMany" : "home.knowledgeBase.reader.lawNoteOne")}
                   </p>
                 ) : null;
+              const bodyClass = cn("overflow-x-auto text-body-sm leading-relaxed text-foreground", law && "whitespace-pre-line");
+              const pieces = kbBodyPieces(text);
+              const [firstText, ...restPieces] =
+                pieces[0]?.kind === "text" ? (pieces as [{ kind: "text"; text: string; offset: number }, ...typeof pieces]) : [{ kind: "text" as const, text: "", offset: 0 }, ...pieces];
               return (
                 <section
                   key={c.anchor}
@@ -413,7 +451,7 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
                     </p>
                   )}
                   {/* A law keeps the official text's line per item «1)», «1¹)», «а)» (slice 9, live check 11.11). */}
-                  <p className={cn("overflow-x-auto text-body-sm leading-relaxed text-foreground", law && "whitespace-pre-line")}>
+                  <p className={bodyClass}>
                     {!c.heading && c.number && (
                       <button
                         type="button"
@@ -426,8 +464,17 @@ export function KbReader({ doc, clauses, source, variant, headerExtra }: KbReade
                         <Link2 className="h-3 w-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
                       </button>
                     )}
-                    {renderText(text, c.anchor, "body")}
+                    {renderText(firstText.text, c.anchor, "body", firstText.offset)}
                   </p>
+                  {restPieces.map((piece) =>
+                    piece.kind === "table" ? (
+                      tableBlock(piece.rows, `${c.anchor}-t${piece.offset}`)
+                    ) : (
+                      <p key={`${c.anchor}-p${piece.offset}`} className={bodyClass}>
+                        {renderText(piece.text, c.anchor, "body", piece.offset)}
+                      </p>
+                    ),
+                  )}
                   {noteLine}
                   {c.amendments.length > 0 && (
                     <p className="mt-1 text-caption text-muted-foreground">

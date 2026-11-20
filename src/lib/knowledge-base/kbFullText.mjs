@@ -273,6 +273,54 @@ export function kbEditionNote(clause) {
   return { text: at >= 0 ? body.slice(0, at).replace(/\r$/, "") : "", note: last.slice(1, -1), noteStart: at + 2 };
 }
 
+/**
+ * A table line in a clause body (slice 9, step 9.3; show 9.2в, frame 3): the
+ * portal collector writes a table as `⟦таблица⟧` and its rows of cells, a cell
+ * being a text or `{ t, c, r }` with its column and row span.
+ */
+export const KB_TABLE = "⟦таблица⟧";
+
+function tableRows(line) {
+  if (!line.startsWith(KB_TABLE)) return null;
+  try {
+    const rows = JSON.parse(line.slice(KB_TABLE.length));
+    return Array.isArray(rows) && rows.every(Array.isArray) ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The body as text runs and tables, each with where it starts in the body (for search highlights). */
+export function kbBodyPieces(text) {
+  const body = String(text ?? "");
+  const pieces = [];
+  let run = null;
+  let at = 0;
+  for (const line of body.split("\n")) {
+    const rows = tableRows(line);
+    if (rows) {
+      if (run) pieces.push(run);
+      run = null;
+      pieces.push({ kind: "table", rows, offset: at });
+    } else if (run) {
+      run.text += `\n${line}`;
+    } else {
+      run = { kind: "text", text: line, offset: at };
+    }
+    at += line.length + 1;
+  }
+  if (run) pieces.push(run);
+  return pieces;
+}
+
+/** A table's cell: its text and spans. */
+export function kbTableCell(cell) {
+  const span = (v) => (Number.isInteger(Number(v)) && Number(v) > 1 ? Number(v) : 1);
+  return cell && typeof cell === "object"
+    ? { t: String(cell.t ?? ""), c: span(cell.c), r: span(cell.r) }
+    : { t: String(cell ?? ""), c: 1, r: 1 };
+}
+
 const fold = (s) => s.toLocaleLowerCase("ru").replace(/ё/g, "е");
 
 /**
@@ -291,9 +339,15 @@ export function kbSearchMatches(clauses, query) {
       const text = c[field];
       if (!text) continue;
       const hay = fold(text);
+      // A table is drawn as cells, not as its line of text: a match there could not be highlighted.
+      const tables = field === "body" ? kbBodyPieces(text).filter((p) => p.kind === "table") : [];
+      const inTable = (i) => tables.some((p) => {
+        const end = text.indexOf("\n", p.offset);
+        return i >= p.offset && i < (end < 0 ? text.length : end);
+      });
       let i = hay.indexOf(q);
       while (i >= 0) {
-        out.push({ anchor: c.anchor, field, start: i, end: i + q.length });
+        if (!inTable(i)) out.push({ anchor: c.anchor, field, start: i, end: i + q.length });
         i = hay.indexOf(q, i + q.length);
       }
     }

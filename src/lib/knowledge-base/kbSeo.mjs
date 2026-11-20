@@ -14,7 +14,7 @@
 // Types live in kbSeo.d.mts.
 
 import { KB_FOLDERS, displayTitle, kbDocPath, kbHeading, sourceHost } from "./kbConfig.mjs";
-import { kbCopyNotice, kbEditionLine, kbEditionNote, kbFullTextReadable, kbTextLabel } from "./kbFullText.mjs";
+import { kbBodyPieces, kbCopyNotice, kbEditionLine, kbEditionNote, kbFullTextReadable, kbTextLabel } from "./kbFullText.mjs";
 import { KB_SOLUTIONS_PATH, kbSolutionDocuments, kbSolutionPath } from "./kbSolutions.mjs";
 import { KB_CHANGES_PATH } from "./kbChanges.mjs";
 
@@ -114,7 +114,8 @@ export function kbDocumentDescription(doc, t, { spFullText = true, firstText = n
 /** The first body text of a document, for the description. */
 export function kbFirstText(clauses) {
   // A law clause's edition note is not its text (slice 9).
-  const texts = (clauses ?? []).map((x) => kbEditionNote(x).text);
+  // A table line (step 9.3) is cells, not prose for a description.
+  const texts = (clauses ?? []).map((x) => kbBodyPieces(kbEditionNote(x).text).filter((p) => p.kind === "text").map((p) => p.text).join("\n"));
   const text = texts.find((x) => x && x.length > 40);
   return text ? clip(text, 90) : null;
 }

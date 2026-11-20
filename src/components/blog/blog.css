@@ -740,6 +740,9 @@
 .rv-kb-text h2 { font-size: 22px; margin: 32px 0 8px; }
 .rv-kb-text h3 { font-size: 18px; margin: 24px 0 8px; }
 .rv-kb-text p { margin: 0 0 10px; overflow-x: auto; }
+.rv-kb-table-wrap { max-width: 100%; overflow-x: auto; margin: 0 0 10px; border: 1px solid var(--line-blue-soft); border-radius: 10px; }
+.rv-kb-table { border-collapse: collapse; border-style: hidden; min-width: 100%; font-size: 14px; line-height: 1.4; }
+.rv-kb-table td { border: 1px solid var(--line-blue-soft); padding: 4px 8px; vertical-align: top; }
 .rv-kb-label { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
 .rv-kb-label--verified { background: hsl(152 55% 38% / .15); color: hsl(152 55% 30%); }
 .rv-kb-label--checking { background: hsl(42 95% 55%); color: hsl(32 80% 18%); }

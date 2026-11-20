@@ -83,6 +83,13 @@ export declare function kbLawClauseLabel(anchor: string | null | undefined): str
 export declare function kbIsLawAnchor(anchor: string | null | undefined): boolean;
 export declare function kbIsLawNote(anchor: string | null | undefined): boolean;
 export declare function kbArticleAnchor(clauses: KbClause[], anchor: string): string | null;
+export declare const KB_TABLE: string;
+export type KbTableCellValue = string | { t: string; c?: number; r?: number };
+export type KbBodyPiece =
+  | { kind: "text"; text: string; offset: number }
+  | { kind: "table"; rows: KbTableCellValue[][]; offset: number };
+export declare function kbBodyPieces(text: string | null | undefined): KbBodyPiece[];
+export declare function kbTableCell(cell: KbTableCellValue): { t: string; c: number; r: number };
 export declare function kbEditionNote(clause: KbClause | null | undefined): { text: string; note: string | null; noteStart: number };
 export declare function kbSectionAnchor(clauses: KbClause[], anchor: string): string | null;
 export declare function kbSearchMatches(clauses: KbClause[], query: string): KbSearchMatch[];

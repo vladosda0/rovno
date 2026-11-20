@@ -17,7 +17,7 @@ import {
   normalizeKbSolution,
   sortKbSolutions,
 } from "./kbSolutions.mjs";
-import { kbCopyNotice, kbEditionLine, kbEditionNote, kbIsLawAnchor, kbIsLawNote, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
+import { kbBodyPieces, kbCopyNotice, kbEditionLine, kbEditionNote, kbIsLawAnchor, kbIsLawNote, kbTableCell, kbTextLabel, normalizeKbClause } from "./kbFullText.mjs";
 import { KB_CHANGES_PATH, kbChangeMonths } from "./kbChanges.mjs";
 import {
   KB_INDEX_PATH,
@@ -111,6 +111,22 @@ export function kbFullTextHtml(doc, clauses, t) {
   const copy = kbCopyNotice(doc, t);
   const copyHtml = copy ? `<p class="rv-kb-copy-notice">${escapeHtml(copy)}</p>` : "";
   const number = (c) => (c.number && /^\d/.test(c.number) ? `${escapeHtml(c.number)} ` : "");
+  // Slice 9, step 9.3 (show 9.2в, frame 3): a table line is drawn as a table with its spans,
+  // in a frame that scrolls sideways so the page does not.
+  const table = (rows) => `<div class="rv-kb-table-wrap"><table class="rv-kb-table"><tbody>${rows.map((r) => `<tr>${r.map((cell) => {
+    const { t: text, c, r: span } = kbTableCell(cell);
+    return `<td${c > 1 ? ` colspan="${c}"` : ""}${span > 1 ? ` rowspan="${span}"` : ""}>${escapeHtml(text)}</td>`;
+  }).join("")}</tr>`).join("")}</tbody></table></div>`;
+  // A body as paragraphs: the first text piece in `<p attrs>` after `lead`, later text pieces in their own
+  // `<p>`, tables between them (a table never sits inside a paragraph). Without a table: one paragraph, as before.
+  const blocks = (text, draw, attrs = "", lead = "", cls = "") => {
+    const pieces = kbBodyPieces(text);
+    const [first, ...rest] = pieces[0]?.kind === "text" ? pieces : [{ kind: "text", text: "" }, ...pieces];
+    const c = cls ? ` class="${cls}"` : "";
+    // The first paragraph carries the anchor id; without an id, a lead or text it is left out, as are empty later pieces.
+    const head = attrs || lead || first.text ? `<p${attrs}${c}>${lead}${draw(first.text)}</p>` : "";
+    return `${head}${rest.map((p) => (p.kind === "table" ? table(p.rows) : p.text ? `<p${c}>${draw(p.text)}</p>` : "")).join("")}`;
+  };
   // A law keeps the official text's line per item «1)», «1¹)», as the reader does.
   const lawLines = (text) => escapeHtml(text).replaceAll("\n", "<br>");
   const body = clauses
@@ -121,25 +137,25 @@ export function kbFullTextHtml(doc, clauses, t) {
         const { text, note } = kbEditionNote(c);
         const noteHtml = note ? `<p class="rv-kb-edition">${escapeHtml(note)}</p>` : "";
         // Show 9.2в, frame 3: the signature muted after the last article, the preamble as paragraphs without a heading.
-        if (c.anchor === "gl-sig") return `<p id="${id}" class="rv-kb-edition">${lawLines(c.body)}</p>`;
-        if (c.anchor === "gl-pre") return `<p id="${id}">${lawLines(text)}</p>${noteHtml}`;
+        if (c.anchor === "gl-sig") return blocks(c.body, lawLines, ` id="${id}"`, "", "rv-kb-edition");
+        if (c.anchor === "gl-pre") return `${blocks(text, lawLines, ` id="${id}"`)}${noteHtml}`;
         if (c.level <= 2 && c.heading) {
           const tag = c.level === 1 ? "h2" : "h3";
-          return `<${tag} id="${id}">${escapeHtml(c.heading)}</${tag}>${text ? `<p>${lawLines(text)}</p>` : ""}${noteHtml}`;
+          return `<${tag} id="${id}">${escapeHtml(c.heading)}</${tag}>${text ? blocks(text, lawLines) : ""}${noteHtml}`;
         }
         // A note to the article (КоАП, show 9.2в, frame 1 A): «Примечание.» over the first one, number «пр.».
         const caption = kbIsLawNote(c.anchor) && !kbIsLawNote(clauses[i - 1]?.anchor)
           ? `<p><strong>${escapeHtml(t(/-pr-\d/.test(c.anchor) ? "home.knowledgeBase.reader.lawNoteMany" : "home.knowledgeBase.reader.lawNoteOne"))}</strong></p>`
           : "";
         const lawNumber = c.number ? `${escapeHtml(c.number)} ` : "";
-        return `${caption}<p id="${id}"><strong>${lawNumber}</strong>${lawLines(text)}</p>${noteHtml}`;
+        return `${caption}${blocks(text, lawLines, ` id="${id}"`, `<strong>${lawNumber}</strong>`)}${noteHtml}`;
       }
       if (c.heading && !c.body) {
         const tag = c.level === 1 || !/^\d/.test(c.number ?? "") ? "h2" : "h3";
         return `<${tag} id="${id}">${number(c)}${escapeHtml(c.heading)}</${tag}>`;
       }
       const heading = c.heading ? `<strong>${number(c)}${escapeHtml(c.heading)}</strong> ` : `<strong>${number(c)}</strong>`;
-      return `<p id="${id}">${heading}${escapeHtml(c.body)}</p>`;
+      return blocks(c.body, escapeHtml, ` id="${id}"`, heading);
     })
     .join("");
   return `<section class="rv-kb-text"><p>${head}</p>${copyHtml}${body}</section>`;
