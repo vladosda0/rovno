@@ -17,4 +17,9 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   },
   // Second sign-in step (epic external-login, slice 4): PostgREST's «mfa_required» reaches the app.
   global: { fetch: mfaAwareFetch() },
+  // supabase-js 2.10x+ retries failed reads by itself (1 s, 2 s, 4 s). Off, as before the SDK
+  // update (epic external-login, step 5.5, «без изменений поведения»): the app's own retries
+  // (react-query) stay the only ones, and a transient 503/520 or network failure is not retried
+  // for up to seven seconds.
+  db: { retry: false },
 });

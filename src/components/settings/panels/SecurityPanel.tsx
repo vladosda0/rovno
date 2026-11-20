@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { ConnectedAccountsSection } from "@/components/settings/panels/ConnectedAccountsSection";
+import { PasskeySection } from "@/components/settings/panels/PasskeySection";
 import { TwoFactorSection } from "@/components/settings/panels/TwoFactorSection";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
+import { usePasskeysEnabled } from "@/hooks/use-passkeys-enabled";
 import { supabase } from "@/integrations/supabase/client";
 import { Monitor } from "lucide-react";
 
@@ -153,6 +155,8 @@ export function SecurityPanel() {
   const { t } = useTranslation();
   const { status, user } = useRuntimeAuth();
   const currentDevice = useMemo(() => parseCurrentDevice(), []);
+  // The section exists only once Auth has the sign-in switched on (prod: at its own release).
+  const passkeysOn = usePasskeysEnabled(status === "authenticated");
   return (
     <div className="space-y-sp-3">
       <SettingsSection title={t("security.sessions.title")} description={t("security.sessions.description")}>
@@ -182,6 +186,9 @@ export function SecurityPanel() {
           </div>
         </div>
       </SettingsSection>
+
+      {/* A way to sign in, so above «Пароль» (epic external-login, slice 5, frame 5). */}
+      {status === "authenticated" && user && passkeysOn && <PasskeySection key={`passkey-${user.id}`} userId={user.id} />}
 
       {status === "authenticated" && user && <PasswordSection key={user.id} user={user} />}
 

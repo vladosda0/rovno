@@ -2,11 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { auth: {}, functions: {} } }));
 
-import { aalOfToken, groupKey, isMfaFreePath, mfaNext, mfaPathFor, recoveryCodesFile } from "@/lib/mfa";
+import { aalOfToken, groupKey, isMfaFreePath, mfaNext, mfaPathFor, recoveryCodesFile, signedInByPasskey } from "@/lib/mfa";
 import { MFA_REQUIRED_EVENT, mfaAwareFetch } from "@/lib/mfa-fetch";
 import { normalizeAppCode } from "@/lib/app-code";
 
 describe("mfa helpers", () => {
+  it("counts a sign-in by face or fingerprint (amr «passkey») as the second step, a password not (5.10)", () => {
+    expect(signedInByPasskey([{ method: "passkey" }])).toBe(true);
+    expect(signedInByPasskey(["password", "passkey"])).toBe(false);
+    expect(signedInByPasskey([{ method: "password" }, { method: "otp" }])).toBe(false);
+    expect(signedInByPasskey(undefined)).toBe(false);
+  });
+
   it("lets only sign-in and the static legal pages open without the second step, in any letter case", () => {
     for (const path of ["/auth/login", "/auth/mfa", "/auth/vk/callback", "/AUTH/Login", "/privacy", "/offer", "/Privacy", "/refund/", "/contacts", "/theme"]) {
       expect(isMfaFreePath(path), path).toBe(true);

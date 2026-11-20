@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { Session, User } from "@supabase/supabase-js";
 import { SecurityPanel } from "@/components/settings/panels/SecurityPanel";
 import { __unsafeSetRuntimeAuthStateForTests } from "@/hooks/use-runtime-auth";
 
-const { updateUserMock, rpcMock, invokeMock, toastMock } = vi.hoisted(() => ({
+const { updateUserMock, rpcMock, invokeMock, toastMock, passkeyListMock } = vi.hoisted(() => ({
+  passkeyListMock: vi.fn(),
   updateUserMock: vi.fn(),
   rpcMock: vi.fn(),
   invokeMock: vi.fn(),
@@ -13,13 +14,27 @@ const { updateUserMock, rpcMock, invokeMock, toastMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { auth: { updateUser: updateUserMock }, rpc: rpcMock, functions: { invoke: invokeMock } },
+  supabase: {
+    auth: {
+      updateUser: updateUserMock,
+      passkey: { list: passkeyListMock },
+      mfa: {
+        getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({ data: { currentLevel: "aal1", nextLevel: "aal1" }, error: null }),
+        listFactors: vi.fn().mockResolvedValue({ data: { all: [] }, error: null }),
+      },
+    },
+    rpc: rpcMock,
+    functions: { invoke: invokeMock },
+  },
 }));
 
 vi.mock("@/hooks/use-toast", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/hooks/use-toast")>()),
   toast: toastMock,
 }));
+
+const { passkeysOnMock } = vi.hoisted(() => ({ passkeysOnMock: vi.fn() }));
+vi.mock("@/lib/passkey-availability", () => ({ passkeysEnabledOnServer: () => passkeysOnMock() ?? Promise.resolve(false) }));
 
 function renderPanel(url = "/settings?tab=security") {
   return render(
@@ -293,5 +308,36 @@ describe("SecurityPanel · password", () => {
     __unsafeSetRuntimeAuthStateForTests({ status: "guest", session: null, user: null, profileId: null });
     renderPanel();
     expect(screen.queryByText("Password")).toBeNull();
+  });
+});
+
+describe("SecurityPanel · sign-in with face or fingerprint (slice 5, frame 5)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rpcMock.mockResolvedValue({ data: [], error: null });
+    invokeMock.mockResolvedValue({ data: {}, error: null });
+    passkeyListMock.mockResolvedValue({ data: [], error: null });
+    passkeysOnMock.mockResolvedValue(true);
+    vi.stubGlobal("PublicKeyCredential", {});
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("is its own section right above «Password», and no «Coming soon» about sign-in remains", async () => {
+    signInAs({});
+    renderPanel();
+    expect(await screen.findByRole("button", { name: "Set up on this device" })).toBeInTheDocument();
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings.indexOf("Sign-in with face or fingerprint")).toBe(headings.indexOf("Password") - 1);
+    expect(screen.queryByText("Passkey")).toBeNull();
+  });
+
+  it("Auth has it off: no section at all, and the list is never asked", async () => {
+    passkeysOnMock.mockResolvedValue(false);
+    signInAs({});
+    renderPanel();
+    expect(await screen.findByRole("heading", { name: "Password" })).toBeInTheDocument();
+    await waitFor(() => expect(passkeysOnMock).toHaveBeenCalled());
+    expect(screen.queryByRole("heading", { name: "Sign-in with face or fingerprint" })).toBeNull();
+    expect(passkeyListMock).not.toHaveBeenCalled();
   });
 });

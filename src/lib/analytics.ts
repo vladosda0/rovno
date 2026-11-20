@@ -365,6 +365,7 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/auth/yandex/callback" },
   { pattern: "/auth/vk/callback" },
   { pattern: "/auth/mfa" },
+  { pattern: "/auth/faster" },
   { pattern: "/home" },
   { pattern: "/home/catalogs/upload-review/:uploadId" },
   { pattern: "/home/catalogs/:catalogId" },

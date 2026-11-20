@@ -38,6 +38,9 @@ vi.mock("@/lib/auth-state", async (importOriginal) => ({
 
 vi.mock("@/hooks/use-toast", () => ({ toast: mocks.toast }));
 
+const { passkeysOnMock } = vi.hoisted(() => ({ passkeysOnMock: vi.fn() }));
+vi.mock("@/lib/passkey-availability", () => ({ passkeysEnabledOnServer: () => passkeysOnMock() ?? Promise.resolve(false) }));
+
 const USER = { id: "u1", email: "ivan@yandex.ru" };
 const SESSION = { access_token: "at", refresh_token: "rt" };
 const VERIFY = { token_hash: "th1", type: "magiclink" };
@@ -118,6 +121,16 @@ describe("YandexCallback", () => {
     mocks.invoke.mockResolvedValue({ data: { outcome: "verify", verify: VERIFY, created: false, next: null }, error: null });
     renderCallback();
     expect((await location()).textContent).toBe("/home");
+  });
+
+  it("a returning person on a device with a fingerprint is offered «Входите быстрее» first (slice 5)", async () => {
+    vi.stubGlobal("PublicKeyCredential", { isUserVerifyingPlatformAuthenticatorAvailable: vi.fn().mockResolvedValue(true) });
+    passkeysOnMock.mockResolvedValue(true);
+    startedAttempt();
+    mocks.invoke.mockResolvedValue({ data: { outcome: "verify", verify: VERIFY, created: false, next: null }, error: null });
+    renderCallback();
+    expect((await location()).textContent).toBe("/auth/faster?next=%2Fhome");
+    vi.unstubAllGlobals();
   });
 
   it("the function's next wins over the attempt's", async () => {

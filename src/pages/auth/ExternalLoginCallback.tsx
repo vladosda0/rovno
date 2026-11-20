@@ -23,6 +23,7 @@ import {
   type LoginProvider,
 } from "@/lib/external-login";
 import { isSecondStepRequired, mfaPathFor } from "@/lib/mfa";
+import { withPasskeyOffer } from "@/lib/passkey-offer";
 
 type SignedInResult = Extract<ExternalResult, { outcome: "verify" | "session" }>;
 type SettingsNotice = "linked" | "taken" | "has_yandex" | "has_vk" | "failed";
@@ -88,7 +89,9 @@ export default function ExternalLoginCallback({ provider }: { provider: LoginPro
       trackEventOncePerUser("first_login", { user_id: user.id, via: "login", method: provider });
     }
     toast({ title: t("auth.login.successTitle"), description: t("auth.login.successDescription") });
-    navigate(safeNext ?? (completedOnboarding ? "/home" : "/onboarding"), { replace: true });
+    const destination = safeNext ?? (completedOnboarding ? "/home" : "/onboarding");
+    // «Входите быстрее» (slice 5, step 5.8) after Yandex ID and VK ID too.
+    navigate(await withPasskeyOffer(destination, { userId: user.id, completedOnboarding }), { replace: true });
   };
 
   useEffect(() => {

@@ -30,6 +30,7 @@ const AuthCallback = lazy(() => import("@/pages/auth/AuthCallback"));
 const YandexCallback = lazy(() => import("@/pages/auth/YandexCallback"));
 const VkCallback = lazy(() => import("@/pages/auth/VkCallback"));
 const MfaChallenge = lazy(() => import("@/pages/auth/MfaChallenge"));
+const FasterSignIn = lazy(() => import("@/pages/auth/FasterSignIn"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Home = lazy(() => import("@/pages/Home"));
 const CatalogUploadReview = lazy(() => import("@/pages/catalogs/CatalogUploadReview"));
@@ -150,6 +151,7 @@ const App = () => (
             <Route path="/auth/yandex/callback" element={routeElement(<YandexCallback />)} />
             <Route path="/auth/vk/callback" element={routeElement(<VkCallback />)} />
             <Route path="/auth/mfa" element={routeElement(<MfaChallenge />)} />
+            <Route path="/auth/faster" element={routeElement(<FasterSignIn />)} />
           </Route>
 
           {/* App layout (sidebar + topbar) */}

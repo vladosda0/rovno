@@ -50,10 +50,38 @@ export function mfaPathFor(next: string): string {
   return `${MFA_PATH}?next=${encodeURIComponent(next)}`;
 }
 
+/**
+ * True when the session signed in by face or fingerprint (a passkey; epic external-login,
+ * slice 5, step 5.10, Vlad 2026-11-16 «Лицо заменяет код»). Auth gives such a session aal1 and
+ * this cannot be configured, so the second step counts it as passed by our own rule; the
+ * server (`mfa_pre_request`, `mfaBlocked`) applies the same rule to the `amr` of the token.
+ */
+export function signedInByPasskey(methods: ReadonlyArray<{ method?: string } | string> | null | undefined): boolean {
+  // Only the object shape GoTrue emits counts, as on the server (mfaGateForToken).
+  return (methods ?? []).some((m) => typeof m === "object" && m !== null && m.method === "passkey");
+}
+
 /** True when this session still has to pass the code from the app. */
 export async function isSecondStepRequired(): Promise<boolean> {
   // A failed check answers «not required»: the server still refuses such a session, so the
   // worst case is a refusal on screen, never an open door.
+  try {
+    const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (error || !data) return false;
+    if (signedInByPasskey(data.currentAuthenticationMethods)) return false;
+    return data.nextLevel === "aal2" && data.currentLevel !== "aal2";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when Auth will want the code from the app before a sensitive change: the protection is
+ * on and the session is aal1. That is the case after a sign-in by face or fingerprint, which
+ * opens the app (above) but not adding or removing such a device, where Auth asks for aal2
+ * (agent decision 2026-11-16/17, item 3; mockup frame 6 on the left).
+ */
+export async function isAppCodeOwedForChange(): Promise<boolean> {
   try {
     const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (error || !data) return false;

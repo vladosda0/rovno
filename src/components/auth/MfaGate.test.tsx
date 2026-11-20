@@ -136,6 +136,24 @@ describe("MfaGate", () => {
     expect(screen.getByLabelText("draft")).toHaveValue("kept");
   });
 
+  it("signed in by face or fingerprint with the protection on: straight in, no code screen (5.10)", async () => {
+    auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: "aal1", nextLevel: "aal2", currentAuthenticationMethods: [{ method: "passkey", timestamp: 1 }] },
+      error: null,
+    });
+    renderAt("/project/7");
+    expect(await screen.findByTestId("where")).toHaveTextContent("page /project/7");
+  });
+
+  it("signed in by password with the protection on: still the code screen (5.10)", async () => {
+    auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: "aal1", nextLevel: "aal2", currentAuthenticationMethods: [{ method: "password", timestamp: 1 }] },
+      error: null,
+    });
+    renderAt("/project/7");
+    expect(await screen.findByTestId("where")).toHaveTextContent("code /auth/mfa?next=%2Fproject%2F7");
+  });
+
   it("passed the second step, or never turned it on: the page opens", async () => {
     auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({ data: { currentLevel: "aal2", nextLevel: "aal2" }, error: null });
     const { unmount } = renderAt("/home");

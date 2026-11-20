@@ -1046,7 +1046,7 @@ export async function updateWorkspaceProjectMemberRole(
     return updated;
   }
 
-  const patch: Record<string, unknown> = {
+  const patch: WorkspaceDatabase["public"]["Tables"]["project_members"]["Update"] = {
     role: input.role,
     ai_access: input.aiAccess,
     viewer_regime: input.viewerRegime ?? null,
@@ -1346,7 +1346,7 @@ export async function updateWorkspaceProjectInvite(
   }
 
   const supabase = await loadSupabaseClient();
-  const patch: Record<string, unknown> = {
+  const patch: WorkspaceDatabase["public"]["Tables"]["project_invites"]["Update"] = {
     role: input.role,
     ai_access: input.aiAccess,
     viewer_regime: input.viewerRegime ?? null,

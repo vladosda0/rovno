@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { KeyRound, Loader2 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { User } from "@supabase/supabase-js";
@@ -18,6 +19,14 @@ import { setAnalyticsUserId, trackEventOncePerUser, type AuthMethod } from "@/li
 import { isSameScreenReply } from "@/lib/email-code";
 import { safeNextPath } from "@/lib/safe-next-path";
 import { isSecondStepRequired, mfaPathFor } from "@/lib/mfa";
+import { withPasskeyOffer } from "@/lib/passkey-offer";
+import { usePasskeySignIn } from "@/hooks/use-passkey-sign-in";
+
+const PASSKEY_ALERTS = {
+  cancel: "auth.passkey.cancelled",
+  gone: "auth.passkey.gone",
+  failed: "auth.passkey.failed",
+} as const;
 
 type LoginMode = "password" | "code" | "code-sent";
 
@@ -83,17 +92,40 @@ export default function Login() {
     }
 
     toast({ title: t("auth.login.successTitle"), description: t("auth.login.successDescription") });
-    navigate(resolveDestination(completedOnboarding));
+    const destination = resolveDestination(completedOnboarding);
+    // «Входите быстрее» (slice 5, step 5.8): not after a sign-in by face or fingerprint itself.
+    navigate(method === "passkey" ? destination : await withPasskeyOffer(destination, { userId: user.id, completedOnboarding }));
   };
+
+  const passkey = usePasskeySignIn((user) => finishSignIn(user, "passkey"));
 
   const changeMode = (next: LoginMode) => {
     setProviderFailed(null);
+    passkey.clearAlert();
     setMode(next);
   };
+
+  const passkeyButton = passkey.supported ? (
+    <Button
+      type="button"
+      variant="outline"
+      className="w-full"
+      disabled={passkey.busy}
+      aria-busy={passkey.busy || undefined}
+      onClick={() => {
+        setProviderFailed(null);
+        void passkey.start();
+      }}
+    >
+      {passkey.busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <KeyRound className="h-4 w-4" aria-hidden />}
+      {passkey.busy ? t("auth.passkey.waiting") : t("auth.passkey.button")}
+    </Button>
+  ) : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setProviderFailed(null);
+    passkey.clearAlert();
     if (!email || !password) {
       toast({ title: t("auth.login.validationTitle"), description: t("auth.login.validationDescription"), variant: "destructive" });
       return;
@@ -138,6 +170,7 @@ export default function Login() {
   const handleCodeRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setProviderFailed(null);
+    passkey.clearAlert();
     if (!email.trim()) return;
     setLoading(true);
     try {
@@ -193,12 +226,17 @@ export default function Login() {
           <AlertDescription className="text-caption">{t(providerFailed === "vk" ? "auth.vk.failed" : "auth.yandex.failed")}</AlertDescription>
         </Alert>
       )}
+      {passkey.alert && !providerFailed && (
+        <Alert variant="destructive" className="px-sp-2 py-1.5">
+          <AlertDescription className="text-caption">{t(PASSKEY_ALERTS[passkey.alert])}</AlertDescription>
+        </Alert>
+      )}
       {mode === "password" ? (
         <>
           <form onSubmit={handleSubmit} className="space-y-sp-2">
             <div className="space-y-1.5">
               <Label htmlFor="email">{t("common.email")}</Label>
-              <Input id="email" type="email" autoComplete="email" placeholder={t("common.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Input id="email" type="email" autoComplete="username webauthn" placeholder={t("common.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">{t("common.password")}</Label>
@@ -216,12 +254,13 @@ export default function Login() {
           <Button type="button" variant="outline" className="w-full" onClick={() => changeMode("code")}>
             {t("auth.login.useCode")}
           </Button>
+          {passkeyButton}
         </>
       ) : (
         <form onSubmit={handleCodeRequest} className="space-y-sp-2">
           <div className="space-y-1.5">
             <Label htmlFor="email">{t("common.email")}</Label>
-            <Input id="email" type="email" required autoComplete="email" placeholder={t("common.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input id="email" type="email" required autoComplete="username webauthn" placeholder={t("common.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <Button type="submit" disabled={loading} className={primaryButtonClass}>
             {loading ? t("auth.code.sending") : t("auth.code.send")}
@@ -238,7 +277,8 @@ export default function Login() {
           </div>
         </form>
       )}
-      <ExternalLoginButtons next={safeNext} onStart={() => setProviderFailed(null)} />
+      {mode === "code" && passkeyButton}
+      <ExternalLoginButtons next={safeNext} onStart={() => { setProviderFailed(null); passkey.clearAlert(); }} />
       <LegalConsent i18nKey="auth.external.loginConsent" />
     </AuthCard>
   );

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { Check, Copy, Download, ExternalLink } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { AppCodeField } from "@/components/auth/AppCodeField";
@@ -282,14 +281,6 @@ export function TwoFactorSection({ email }: { email: string | null }) {
     }
   };
 
-  const passkeyRow = (
-    <Row
-      title={t("security.passkey.label")}
-      badge={<Badge variant="secondary" className="text-[10px]">{t("security.twoFa.comingSoon")}</Badge>}
-      notes={[<p key="n" className="text-caption text-muted-foreground">{t("security.passkey.note")}</p>]}
-    />
-  );
-
   const codeButtons = (
     <div className={BUTTONS}>
       <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" disabled={busy} onClick={() => {
@@ -472,7 +463,6 @@ export function TwoFactorSection({ email }: { email: string | null }) {
     <SettingsSection title={t("security.twoFa.title")} description={t("security.twoFa.description")}>
       <div className="space-y-sp-2">
         {main}
-        {passkeyRow}
       </div>
     </SettingsSection>
   );

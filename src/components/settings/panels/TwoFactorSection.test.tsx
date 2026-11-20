@@ -59,14 +59,14 @@ describe("TwoFactorSection", () => {
     });
   });
 
-  it("off: «Turn on», the authenticator row and the passkey row with «Coming soon»", async () => {
+  it("off: «Turn on» and the authenticator row; the «Coming soon» passkey row is gone (slice 5)", async () => {
     factors([]);
     renderSection();
     const row = within(await screen.findByRole("group", { name: "Authenticator app" }));
     expect(row.getByText(/Yandex Key, Google Authenticator/)).toBeInTheDocument();
     expect(row.getByRole("button", { name: "Turn on" })).toBeInTheDocument();
-    const passkey = within(screen.getByRole("group", { name: "Passkey" }));
-    expect(passkey.getByText("Coming soon")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Passkey" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
     expect(screen.queryByText("2FA / Passkeys")).not.toBeInTheDocument();
   });
 

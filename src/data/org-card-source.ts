@@ -145,7 +145,7 @@ async function upsertOrgCard(
   const target = orgTarget(scope);
   const { error } = await client
     .from(target.table)
-    .upsert({ [target.column]: target.id, ...orgCardToRow(card) }, { onConflict: target.column });
+    .upsert({ [target.column]: target.id, ...orgCardToRow(card) } as Record<string, unknown>, { onConflict: target.column });
   if (error) throw error;
 }
 
@@ -158,7 +158,7 @@ async function moveOrgCardOnce(
   const target = orgTarget(scope);
   const { error } = await client
     .from(target.table)
-    .upsert({ [target.column]: target.id, ...orgCardToRow(card) }, { onConflict: target.column, ignoreDuplicates: true });
+    .upsert({ [target.column]: target.id, ...orgCardToRow(card) } as Record<string, unknown>, { onConflict: target.column, ignoreDuplicates: true });
   if (error) return card;
   const { data } = await client.from(target.table).select(ORG_COLUMNS).eq(target.column, target.id).maybeSingle();
   return data ? orgRowToCard(data as OrgRow) : card;

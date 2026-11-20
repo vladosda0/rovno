@@ -1,12 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import Login from "@/pages/auth/Login";
 import { getAuthRole, setAuthRole } from "@/lib/auth-state";
 import { toast } from "@/hooks/use-toast";
 
-const { signInWithPasswordMock, signInWithOtpMock, verifyOtpMock, trackEventOncePerUserMock, invokeMock, aalMock } = vi.hoisted(() => ({
+const { signInWithPasswordMock, signInWithOtpMock, verifyOtpMock, trackEventOncePerUserMock, invokeMock, aalMock, signInWithPasskeyMock } = vi.hoisted(() => ({
   aalMock: vi.fn(),
+  signInWithPasskeyMock: vi.fn(),
   signInWithPasswordMock: vi.fn(),
   signInWithOtpMock: vi.fn(),
   verifyOtpMock: vi.fn(),
@@ -20,11 +21,15 @@ vi.mock("@/integrations/supabase/client", () => ({
       signInWithPassword: signInWithPasswordMock,
       signInWithOtp: signInWithOtpMock,
       verifyOtp: verifyOtpMock,
+      signInWithPasskey: signInWithPasskeyMock,
       mfa: { getAuthenticatorAssuranceLevel: aalMock },
     },
     functions: { invoke: invokeMock },
   },
 }));
+
+const { passkeysOnMock } = vi.hoisted(() => ({ passkeysOnMock: vi.fn() }));
+vi.mock("@/lib/passkey-availability", () => ({ passkeysEnabledOnServer: () => passkeysOnMock() ?? Promise.resolve(false) }));
 
 vi.mock("@/lib/analytics", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/analytics")>()),
@@ -393,6 +398,165 @@ describe("Login", () => {
       renderAt("/auth/login?yandex=failed");
       fireEvent.click(screen.getByRole("button", { name: "Sign in with a code from email" }));
       expect(screen.queryByRole("alert")).toBeNull();
+    });
+  });
+
+  describe("face or fingerprint (slice 5, frames 2-4)", () => {
+    function stubWebAuthn({ conditional = false, platform = false } = {}) {
+      const signalUnknownCredential = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal("PublicKeyCredential", {
+        isConditionalMediationAvailable: vi.fn().mockResolvedValue(conditional),
+        isUserVerifyingPlatformAuthenticatorAvailable: vi.fn().mockResolvedValue(platform),
+        signalUnknownCredential,
+      });
+      return { signalUnknownCredential };
+    }
+
+    function renderLogin(url = "/auth/login?next=%2Fproject%2F7") {
+      return render(
+        <MemoryRouter initialEntries={[url]}>
+          <Routes>
+            <Route path="/auth/login" element={<Login />} />
+            <Route path="*" element={<LocationMarker />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+    }
+
+    beforeEach(() => {
+      passkeysOnMock.mockResolvedValue(true);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("Auth has it off (passkeys_enabled false): no button, no quiet request, no «Входите быстрее»", async () => {
+      passkeysOnMock.mockResolvedValue(false);
+      stubWebAuthn({ conditional: true, platform: true });
+      localStorage.setItem("onboarding-complete:profile-1", "true");
+      signInWithPasswordMock.mockResolvedValue({ data: { session: { user: { id: "profile-1" } } }, error: null });
+      renderLogin();
+      await waitFor(() => expect(passkeysOnMock).toHaveBeenCalled());
+      expect(screen.queryByRole("button", { name: "Sign in with face or fingerprint" })).toBeNull();
+      fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.com" } });
+      fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+      fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+      await waitFor(() => expect(screen.getByTestId("location-marker")).toHaveTextContent("/project/7"));
+      expect(signInWithPasskeyMock).not.toHaveBeenCalled();
+    });
+
+    it("no button in a browser without WebAuthn, and Auth is not even asked", () => {
+      renderLogin();
+      expect(screen.queryByRole("button", { name: "Sign in with face or fingerprint" })).toBeNull();
+      expect(passkeysOnMock).not.toHaveBeenCalled();
+    });
+
+    it("the button sits under «code from email» and above Yandex ID and VK ID, in both views", async () => {
+      stubWebAuthn();
+      renderLogin();
+      await screen.findByRole("button", { name: "Sign in with face or fingerprint" });
+      const order = () => screen.getAllByRole("button").map((b) => b.textContent);
+      const names = order();
+      const passkeyAt = names.indexOf("Sign in with face or fingerprint");
+      expect(passkeyAt).toBeGreaterThan(names.indexOf("Sign in with a code from email"));
+      expect(passkeyAt).toBeLessThan(names.findIndex((n) => n?.includes("Yandex ID")));
+      expect(screen.getByLabelText("Email")).toHaveAttribute("autocomplete", "username webauthn");
+      expect(screen.getByLabelText("Email")).toHaveAttribute("type", "email");
+
+      fireEvent.click(screen.getByRole("button", { name: "Sign in with a code from email" }));
+      expect(await screen.findByRole("button", { name: "Sign in with face or fingerprint" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Email")).toHaveAttribute("autocomplete", "username webauthn");
+    });
+
+    it("signs in, waits with a spinner, goes to next and reports method passkey", async () => {
+      stubWebAuthn();
+      let finish: (value: unknown) => void = () => {};
+      signInWithPasskeyMock.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      aalMock.mockResolvedValue({ data: { currentLevel: "aal1", nextLevel: "aal2", currentAuthenticationMethods: [{ method: "passkey", timestamp: 1 }] }, error: null });
+      renderLogin();
+
+      fireEvent.click(await screen.findByRole("button", { name: "Sign in with face or fingerprint" }));
+      expect(await screen.findByRole("button", { name: "Waiting for confirmation…" })).toBeDisabled();
+      const user = { id: "profile-1" };
+      finish({ data: { session: { user }, user }, error: null });
+
+      await waitFor(() => expect(screen.getByTestId("location-marker")).toHaveTextContent("/project/7"));
+      expect(trackEventOncePerUserMock).toHaveBeenCalledWith("first_login", expect.objectContaining({ method: "passkey" }));
+    });
+
+    it.each([
+      [{ code: "ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY" }, "Sign-in with face or fingerprint was not completed. Try again or sign in with a code from email."],
+      [{ code: "webauthn_credential_not_found", status: 404 }, "This device has been turned off in your account. Sign in with your password or a code from email and set up face or fingerprint sign-in again in Security."],
+      [{ code: "webauthn_verification_failed", status: 400 }, "Couldn't verify the face or fingerprint sign-in. Sign in with your password or a code from email, then turn this device off in Security and set it up again."],
+    ])("a refusal %o is a plaque in the card", async (error, text) => {
+      stubWebAuthn();
+      signInWithPasskeyMock.mockResolvedValue({ data: null, error });
+      renderLogin();
+      fireEvent.click(await screen.findByRole("button", { name: "Sign in with face or fingerprint" }));
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Sign in with face or fingerprint" })).toBeEnabled();
+      expect(toast).not.toHaveBeenCalled();
+    });
+
+    it("asks quietly for the Email suggestion where the browser can, and drops it for the button and on leaving", async () => {
+      stubWebAuthn({ conditional: true });
+      const signals: AbortSignal[] = [];
+      signInWithPasskeyMock.mockImplementation(({ options }: { options: { signal: AbortSignal; mediation?: string } }) => {
+        signals.push(options.signal);
+        return new Promise((resolve) => {
+          options.signal.addEventListener("abort", () => resolve({ data: null, error: { code: "ERROR_CEREMONY_ABORTED" } }));
+        });
+      });
+      const { unmount } = renderLogin();
+
+      await waitFor(() => expect(signInWithPasskeyMock).toHaveBeenCalledTimes(1));
+      expect(signInWithPasskeyMock.mock.calls[0][0].options.mediation).toBe("conditional");
+
+      fireEvent.click(await screen.findByRole("button", { name: "Sign in with face or fingerprint" }));
+      await waitFor(() => expect(signInWithPasskeyMock).toHaveBeenCalledTimes(2));
+      expect(signals[0].aborted).toBe(true);
+      expect(signInWithPasskeyMock.mock.calls[1][0].options.mediation).toBeUndefined();
+
+      unmount();
+      expect(signals[1].aborted).toBe(true);
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("after a password sign-in on a device with a fingerprint: «Входите быстрее» before next", async () => {
+      stubWebAuthn({ platform: true });
+      localStorage.setItem("onboarding-complete:profile-1", "true");
+      signInWithPasswordMock.mockResolvedValue({ data: { session: { user: { id: "profile-1" } } }, error: null });
+      renderLogin();
+      fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.com" } });
+      fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+      fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+      await waitFor(() => expect(screen.getByTestId("location-marker")).toHaveTextContent("/auth/faster?next=%2Fproject%2F7"));
+    });
+
+    it("no «Входите быстрее» after a sign-in by face, for an invitation, or before onboarding", async () => {
+      stubWebAuthn({ platform: true });
+      signInWithPasswordMock.mockResolvedValue({ data: { session: { user: { id: "profile-1" } } }, error: null });
+      const { unmount } = renderLogin("/auth/login");
+      fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.com" } });
+      fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+      fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+      await waitFor(() => expect(screen.getByTestId("location-marker")).toHaveTextContent("/onboarding"));
+      unmount();
+
+      localStorage.setItem("onboarding-complete:profile-1", "true");
+      const second = renderLogin("/auth/login?next=%2Finvite%2Faccept%2Ft1");
+      fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.com" } });
+      fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+      fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+      await waitFor(() => expect(screen.getByTestId("location-marker")).toHaveTextContent("/invite/accept/t1"));
+      second.unmount();
+
+      const user = { id: "profile-1" };
+      signInWithPasskeyMock.mockResolvedValue({ data: { session: { user }, user }, error: null });
+      renderLogin();
+      fireEvent.click(await screen.findByRole("button", { name: "Sign in with face or fingerprint" }));
+      await waitFor(() => expect(screen.getByTestId("location-marker")).toHaveTextContent("/project/7"));
     });
   });
 });

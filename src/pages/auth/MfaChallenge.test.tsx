@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import MfaChallenge from "@/pages/auth/MfaChallenge";
@@ -19,6 +19,9 @@ vi.mock("@/hooks/use-toast", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/hooks/use-toast")>()),
   toast: toastMock,
 }));
+
+const { passkeysOnMock } = vi.hoisted(() => ({ passkeysOnMock: vi.fn() }));
+vi.mock("@/lib/passkey-availability", () => ({ passkeysEnabledOnServer: () => passkeysOnMock() ?? Promise.resolve(false) }));
 
 function Where() {
   const location = useLocation();
@@ -55,6 +58,33 @@ describe("MfaChallenge", () => {
     await waitFor(() => expect(auth.mfa.challengeAndVerify).toHaveBeenCalledWith({ factorId: "f1", code: "482913" }));
     expect(await screen.findByTestId("where")).toHaveTextContent("/project/7");
     expect(toastMock).toHaveBeenCalledWith({ title: "Welcome back!", description: expect.any(String) });
+  });
+
+  describe("«Входите быстрее» (slice 5, step 5.8)", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("after the six digits, on a device with a fingerprint and no setup here, the offer comes first", async () => {
+      vi.stubGlobal("PublicKeyCredential", { isUserVerifyingPlatformAuthenticatorAvailable: vi.fn().mockResolvedValue(true) });
+      passkeysOnMock.mockResolvedValue(true);
+      localStorage.setItem("onboarding-complete:u1", "true");
+      auth.mfa.challengeAndVerify.mockResolvedValue({ data: {}, error: null });
+      renderAt("/auth/mfa?next=%2Fproject%2F7");
+      fireEvent.change(await screen.findByLabelText("Code from the app"), { target: { value: "482913" } });
+      expect(await screen.findByTestId("where")).toHaveTextContent("/auth/faster?next=%2Fproject%2F7");
+      localStorage.clear();
+    });
+
+    it("not while Auth has it off", async () => {
+      vi.stubGlobal("PublicKeyCredential", { isUserVerifyingPlatformAuthenticatorAvailable: vi.fn().mockResolvedValue(true) });
+      passkeysOnMock.mockResolvedValue(false);
+      localStorage.setItem("onboarding-complete:u1", "true");
+      auth.mfa.challengeAndVerify.mockResolvedValue({ data: {}, error: null });
+      renderAt("/auth/mfa?next=%2Fproject%2F7");
+      fireEvent.change(await screen.findByLabelText("Code from the app"), { target: { value: "482913" } });
+      expect(await screen.findByTestId("where")).toHaveTextContent("/project/7");
+      expect(screen.getByTestId("where")).not.toHaveTextContent("faster");
+      localStorage.clear();
+    });
   });
 
   it("after the six digits a VK ID waiting from the sign-in is linked and said so", async () => {

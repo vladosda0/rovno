@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { callMfaRecovery, isSecondStepRequired, listTotpFactors, mfaNext, type TotpFactor, verifyAppCode } from "@/lib/mfa";
+import { withPasskeyOffer } from "@/lib/passkey-offer";
 import { confirmExternalProof, dropPendingLink, type ExternalResult, type LoginProvider, takePendingLink } from "@/lib/external-login";
 import { cn } from "@/lib/utils";
 
@@ -88,9 +89,13 @@ export default function MfaChallenge() {
     else toast({ title: t(LINK_FAILED[pending.provider]), variant: "destructive" });
   };
 
-  const signInDone = () => {
+  // After the code from the app, «Входите быстрее» may come first (slice 5, step 5.8); after a
+  // recovery code it does not (that path ends on its own screen, step «off»).
+  const signInDone = async () => {
     toast({ title: t("auth.login.successTitle"), description: t("auth.login.successDescription") });
-    navigate(next, { replace: true });
+    const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    const userId = data.session?.user?.id;
+    navigate(userId ? await withPasskeyOffer(next, { userId }) : next, { replace: true });
   };
 
   const checkApp = async (value: string) => {
@@ -110,7 +115,7 @@ export default function MfaChallenge() {
       const verdict = await verifyAppCode(factorId, value);
       if (verdict === "ok") {
         await finishPendingLink();
-        signInDone();
+        await signInDone();
         return;
       }
       setCode("");
