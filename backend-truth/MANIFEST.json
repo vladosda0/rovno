@@ -759,6 +759,10 @@
     {
       "path": "supabase/migrations/20261120180100_passkey_credential_known.sql",
       "sha256": "266117f73b5bab1c9db0ce3afb36ade1e4ce154bee888cc1238f8e0fbc91de40"
+    },
+    {
+      "path": "supabase/migrations/20261121010000_contractor_profile_cover_preset.sql",
+      "sha256": "ec29237059dbf1261e777ecb60d2872119eb628f5b69724440e6a1ba5d06545e"
     }
   ],
   "generated_artifacts": [
