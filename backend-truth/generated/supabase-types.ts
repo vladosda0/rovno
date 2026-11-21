@@ -3330,6 +3330,60 @@ export type Database = {
           }
           Relationships: []
         }
+        "ai_document_checks": {
+          Row: {
+          "id": string
+          "project_id": string
+          "subject_kind": "estimate" | "document"
+          "subject_id": string
+          "subject_version_id": string | null
+          "estimate_draft_seq": number | null
+          "run_by": string | null
+          "status": "running" | "done" | "failed"
+          "stage": string | null
+          "findings": Json
+          "hidden_finding_ids": unknown
+          "model": string | null
+          "error": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "project_id": string
+          "subject_kind": "estimate" | "document"
+          "subject_id": string
+          "subject_version_id"?: string | null
+          "estimate_draft_seq"?: number | null
+          "run_by"?: string | null
+          "status"?: "running" | "done" | "failed"
+          "stage"?: string | null
+          "findings"?: Json
+          "hidden_finding_ids"?: unknown
+          "model"?: string | null
+          "error"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "project_id"?: string
+          "subject_kind"?: "estimate" | "document"
+          "subject_id"?: string
+          "subject_version_id"?: string | null
+          "estimate_draft_seq"?: number | null
+          "run_by"?: string | null
+          "status"?: "running" | "done" | "failed"
+          "stage"?: string | null
+          "findings"?: Json
+          "hidden_finding_ids"?: unknown
+          "model"?: string | null
+          "error"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -3429,6 +3483,12 @@ export type Database = {
         "can_access_storage_object": {
           Args: {
           "p_storage_object_id": string
+          }
+          Returns: boolean
+        }
+        "can_check_project_estimate": {
+          Args: {
+          "p_project_id": string
           }
           Returns: boolean
         }
