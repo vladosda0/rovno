@@ -83,6 +83,8 @@ export interface ChangeTaskStatusInput {
   expectedStatus?: TaskStatus;
   /** Reason/blocker comment; the RPC inserts it exactly once server-side. */
   commentBody?: string;
+  /** Owner/co-owner may mark done without a final photo; the RPC records it. */
+  overrideFinalProof?: boolean;
 }
 
 function isMissingRpcError(error: { code?: string; message?: string } | null): boolean {
@@ -1507,6 +1509,7 @@ function createSupabasePlanningSource(
         p_new_status: newStatus,
         p_comment_body: comment,
         p_expected_status: input?.expectedStatus ?? null,
+        ...(input?.overrideFinalProof ? { p_override_final_proof: true } : {}),
       });
       if (!error) return;
 

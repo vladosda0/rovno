@@ -42,6 +42,7 @@ const CSS_PRELOAD_FAILURE = "Unable to preload CSS for";
 const CRAWLER_ASSET_FAILURES: ReadonlyArray<{ ua: RegExp; messages: readonly string[] }> = [
   { ua: /\bYandexBot\b/i, messages: [LAZY_IMPORT_FAILURE] },
   { ua: /\bmeta-webindexer\b/i, messages: [LAZY_IMPORT_FAILURE, CSS_PRELOAD_FAILURE] },
+  { ua: /\bbingbot\b/i, messages: [LAZY_IMPORT_FAILURE] },
 ];
 
 export function isCrawlerAssetFetchFailure(value: unknown, userAgent: string): boolean {

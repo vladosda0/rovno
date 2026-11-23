@@ -78,13 +78,18 @@ describe("isCrawlerAssetFetchFailure", () => {
     ).toBe(false);
   });
 
+  it("drops the lazy-import abort bingbot causes, and only that shape", () => {
+    const bing = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm) Chrome/116.0.1938.76 Safari/537.36";
+    expect(isCrawlerAssetFetchFailure(IMPORT_FAILURE, bing)).toBe(true);
+    expect(isCrawlerAssetFetchFailure(CSS_PRELOAD_FAILURE, bing)).toBe(false);
+  });
+
   it("leaves every crawler the measurement did not cover reporting", () => {
     // Scoped to what was observed. Suppressing a crawler that has never produced this
     // would hide, say, a Googlebot-only render failure, which is signal on a product
     // whose SEO pipeline is load-bearing.
     for (const ua of [
       "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-      "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
       "Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)",
       "Mozilla/5.0 (compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)",
     ]) {

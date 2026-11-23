@@ -22,6 +22,7 @@ import { __unsafeResetInventoryForTests } from "@/data/inventory-store";
 import { getProcurementItems } from "@/data/procurement-store";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import * as workspaceSource from "@/data/workspace-source";
+import * as planningSource from "@/data/planning-source";
 import {
   clearDemoSession,
   clearStoredAuthProfile,
@@ -1482,6 +1483,73 @@ describe("ProjectEstimate", () => {
     await waitFor(() => {
       expect(getEstimateV2ProjectState(projectId).project.estimateStatus).toBe("finished");
     });
+  });
+
+  it("marks all tasks done through the status RPC with the final-proof override, never a direct status write (rovno#138)", async () => {
+    const projectId = "project-estimate-finish-bulk-rpc";
+    setupLocalProject(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded) return;
+
+    const statusResult = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(statusResult.ok).toBe(true);
+
+    addTask({
+      id: "manual-finish-task-rpc",
+      project_id: projectId,
+      stage_id: seeded.stage.id,
+      title: "Manual inspection",
+      description: "",
+      status: "in_progress",
+      assignee_id: "",
+      checklist: [],
+      comments: [],
+      attachments: [],
+      photos: [],
+      linked_estimate_item_ids: [],
+      created_at: "2026-03-01T00:00:00.000Z",
+    });
+
+    const realGetPlanningSource = planningSource.getPlanningSource;
+    const changeTaskStatusSpy = vi.fn();
+    const updateProjectTaskSpy = vi.fn();
+    vi.spyOn(planningSource, "getPlanningSource").mockImplementation(async (mode) => {
+      const source = await realGetPlanningSource(mode);
+      return {
+        ...source,
+        changeTaskStatus: (...args: Parameters<typeof source.changeTaskStatus>) => {
+          changeTaskStatusSpy(...args);
+          return source.changeTaskStatus.call(source, ...args);
+        },
+        updateProjectTask: (...args: Parameters<typeof source.updateProjectTask>) => {
+          updateProjectTaskSpy(...args);
+          return source.updateProjectTask.call(source, ...args);
+        },
+      };
+    });
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      await changeEstimateStatus("Finished");
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Mark all tasks done" }));
+      await flushUi();
+    });
+
+    expect(screen.getByText("All tasks are Done")).toBeInTheDocument();
+    expect(changeTaskStatusSpy).toHaveBeenCalledWith(
+      "manual-finish-task-rpc",
+      "done",
+      expect.objectContaining({ overrideFinalProof: true }),
+    );
+    expect(updateProjectTaskSpy.mock.calls.filter(([, patch]) => patch?.status !== undefined)).toEqual([]);
   });
 
   it("keeps the estimate in work when the follow-up finish confirmation is cancelled", async () => {

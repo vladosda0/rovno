@@ -2012,11 +2012,11 @@ export default function ProjectEstimate() {
       const source = await getPlanningSource(
         workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
       );
-      const updatedTasks = await Promise.all(
-        incompleteTasks.map((task) => source.updateProjectTask(task.id, { status: "done" })),
+      await Promise.all(
+        incompleteTasks.map((task) => source.changeTaskStatus(task.id, "done", { overrideFinalProof: true })),
       );
-      const updatedTaskById = new Map(updatedTasks.map((task) => [task.id, task]));
-      const nextTasks = tasks.map((task) => updatedTaskById.get(task.id) ?? task);
+      const doneTaskIds = new Set(incompleteTasks.map((task) => task.id));
+      const nextTasks = tasks.map((task) => (doneTaskIds.has(task.id) ? { ...task, status: "done" as const } : task));
 
       if (workspaceMode.kind === "supabase") {
         await queryClient.invalidateQueries({
