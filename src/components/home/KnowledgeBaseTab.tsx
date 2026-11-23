@@ -17,7 +17,7 @@
 // page (?kbChanges=1); a document or a card opened from there comes back to it.
 
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookOpen, ChevronLeft, FileText, History, Lightbulb, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,13 @@ export function KnowledgeBaseTab() {
     });
   }
   const setReading = (slug: string | null) => setParam(KB_READ_PARAM, slug);
+  const navigate = useNavigate();
+  // docs-library 9.9: a record about an article opens its code at the article's anchor.
+  const readAt = (slug: string, anchor?: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set(KB_READ_PARAM, slug);
+    navigate({ search: `?${next.toString()}`, hash: anchor ? `#${anchor}` : "" });
+  };
   const setSolution = (slug: string | null) => setParam(KB_SOLUTION_PARAM, slug);
   // A line of «Что изменилось» keeps the page in the address, so «Назад» returns to it.
   const withParam = (param: string, slug: string) => {
@@ -343,9 +350,9 @@ export function KnowledgeBaseTab() {
           if (!open) setOpenDoc(null);
         }}
         doc={openDoc}
-        onRead={(doc) => {
+        onRead={({ slug, anchor }) => {
           setOpenDoc(null);
-          setReading(doc.slug);
+          readAt(slug, anchor);
         }}
       />
     </>

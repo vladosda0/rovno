@@ -6,11 +6,12 @@
 // the same as in the in-app document window (kbConfig.buildKbDocumentView).
 
 import { useMemo } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BlogShell } from "@/components/blog/BlogShell";
 import { useDocumentHead } from "@/lib/blog/seo";
-import { useKbClauses, useKbDocument, useKbSpFullText } from "@/hooks/use-knowledge-base";
+import { useKbArticleTarget, useKbClauses, useKbDocument, useKbSpFullText } from "@/hooks/use-knowledge-base";
+import { kbArticleReason } from "@/lib/knowledge-base/kbArticleRecord.mjs";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useKbDocumentView } from "@/components/knowledge-base/kb-view";
 import { readPrerenderedKbDocument } from "@/lib/knowledge-base/prerendered-data";
@@ -39,7 +40,15 @@ export default function KbDocumentPage() {
   const initialDoc = useMemo(() => (slug ? readPrerenderedKbDocument(slug) : undefined), [slug]);
   const { data: doc, isLoading, isError, refetch, isFetching } = useKbDocument(slug, initialDoc);
   const sp = useKbSpFullText();
-  const view = useKbDocumentView(doc ?? null, { spFullText: sp.data });
+  const ownView = useKbDocumentView(doc ?? null, { spFullText: sp.data });
+  // 9.9: a record about one article or chapter of a code opens the code at that
+  // place; when it cannot, the reason line (frame 5 A) replaces «появится позже».
+  const articleQuery = useKbArticleTarget(doc ?? null, !!ownView && !ownView.readable);
+  const article = articleQuery.data ?? null;
+  const articleReason = kbArticleReason(article, (key, vars) => t(key, vars) as string);
+  const view = useKbDocumentView(doc && articleReason ? { ...doc, textUnavailableReason: articleReason } : doc ?? null, {
+    spFullText: sp.data,
+  });
   // Slice 2: the full text under the card (frame 6). The SP switch off reads as
   // slice 1: no text, the «full text later» line, a #p-… link stays on the card.
   const clauses = useKbClauses(doc?.docId, !!view?.readable);
@@ -108,6 +117,8 @@ export default function KbDocumentPage() {
     );
   }
 
+  if (article?.kind === "open") return <Navigate replace to={`${kbDocPath(article.slug)}#${article.anchor}`} />;
+
   // A readable document: the reader carries the title, the site icon and the
   // label (slice 7); the facts and buttons above it are for records without a text.
   const readingHere = view.readable && !!clauses.data && clauses.data.length > 0;
@@ -154,7 +165,7 @@ export default function KbDocumentPage() {
               ))}
             </dl>
           )}
-          {view.fullTextNote && <p style={{ ...textStyle, fontSize: 16, opacity: 0.72 }}>{view.fullTextNote}</p>}
+          {view.fullTextNote && !articleQuery.isLoading && <p style={{ ...textStyle, fontSize: 16, opacity: 0.72 }}>{view.fullTextNote}</p>}
 
           <div className="rv-kb-actions">
             {view.buttons.map((button, index) => (

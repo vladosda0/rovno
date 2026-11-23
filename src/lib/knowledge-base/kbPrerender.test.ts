@@ -396,3 +396,33 @@ describe("«Что изменилось» for guests (slice 8, step 8.4, frame 5
     ]);
   });
 });
+
+describe("kbPageHtml for a record about an article (docs-library 9.9)", () => {
+  const ARTICLE_ROW = {
+    ...ROW,
+    doc_id: "LAW-X",
+    slug: "st-220-nk-rf",
+    designation: "ст. 220 НК РФ",
+    title: "НК РФ, ст. 220: имущественные налоговые вычеты",
+    folder: "laws",
+    full_text_available: false,
+    text_unavailable_reason: null,
+  };
+  const target = { slug: "nk-rf-146-fz-ch-i-117-fz-ch-ii", anchor: "st-220", codeLabel: "НК РФ" };
+
+  it("sends the page to the code at the article: refresh, canonical on the code, a link instead of «появится позже»", () => {
+    const html = kbPageHtml(TEMPLATE, ARTICLE_ROW, t, [], { articleTarget: target });
+    expect(html).toContain('<meta http-equiv="refresh" content="0; url=/baza/nk-rf-146-fz-ch-i-117-fz-ch-ii/#st-220" />');
+    expect(html.match(/rel="canonical"/g)).toHaveLength(1);
+    expect(html).toContain('<link rel="canonical" href="https://rovno.ai/baza/nk-rf-146-fz-ch-i-117-fz-ch-ii/" />');
+    expect(html).toContain('href="/baza/nk-rf-146-fz-ch-i-117-fz-ch-ii/#st-220">Читать в НК РФ</a>');
+    expect(html).not.toContain("Полный текст появится в базе позже.");
+    expect(html).not.toContain("application/ld+json");
+  });
+
+  it("without a target stays the record page", () => {
+    const html = kbPageHtml(TEMPLATE, ARTICLE_ROW, t, []);
+    expect(html).not.toContain('http-equiv="refresh"');
+    expect(html).toContain('<link rel="canonical" href="https://rovno.ai/baza/st-220-nk-rf/" />');
+  });
+});

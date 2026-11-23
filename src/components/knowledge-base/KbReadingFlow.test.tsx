@@ -14,6 +14,7 @@ const fetchKbDocumentBySlug = vi.fn();
 const fetchKbClauses = vi.fn();
 const fetchKbSpFullTextEnabled = vi.fn();
 const fetchKbDocumentHistory = vi.fn();
+const fetchKbArticleTarget = vi.fn().mockResolvedValue(null);
 
 const fetchKbSolutions = vi.fn().mockResolvedValue([]);
 const fetchKbSolutionBySlug = vi.fn().mockResolvedValue(null);
@@ -28,6 +29,7 @@ vi.mock("@/lib/knowledge-base/api", () => ({
   fetchKbSpFullTextEnabled: () => fetchKbSpFullTextEnabled(),
   fetchKbDocumentById: vi.fn().mockResolvedValue(null),
   fetchKbDocumentHistory: (slug: string) => fetchKbDocumentHistory(slug),
+  fetchKbArticleTarget: (doc: unknown) => fetchKbArticleTarget(doc),
   fetchKbChangesMonthCount: () => Promise.resolve(0),
   fetchKbChangesFeed: () => Promise.resolve([]),
   fetchKbWatching: () => Promise.resolve(false),
@@ -429,5 +431,50 @@ describe("a document without an official text (slice 9, frame 5)", () => {
     renderKB("/home?docTab=knowledge-base&kbDoc=vsn-57-88-r");
     expect(await screen.findByText(/The text is taken from a copy on meganorm\.ru/)).toBeInTheDocument();
     expect(screen.queryByText(/official PDF/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("a record about one article of a code (docs-library 9.9)", () => {
+  const ARTICLE = normalizeKbRow({
+    doc_id: "LAW-220",
+    slug: "st-220-nk-rf",
+    designation: "ст. 220 НК РФ",
+    title: "НК РФ, ст. 220: имущественные налоговые вычеты",
+    category: "Федеральный закон",
+    folder: "laws",
+    display_mode: "full_text",
+    source_links: [],
+    full_text_available: false,
+  });
+  const ref = { unit: "st", code: "НК РФ", codeLabel: "НК РФ", candidates: ["st-220"] };
+
+  it("a reading link to the record opens the code at the article", async () => {
+    fetchKbDocumentBySlug.mockImplementation((slug: string) => Promise.resolve(slug === "st-220-nk-rf" ? ARTICLE : SP71));
+    fetchKbArticleTarget.mockResolvedValueOnce({ kind: "open", slug: "sp-71-13330", anchor: "p-7-1-1", ref });
+    renderKB("/home?docTab=knowledge-base&kbDoc=st-220-nk-rf");
+    await waitFor(() => expect(fetchKbDocumentBySlug).toHaveBeenCalledWith("sp-71-13330"));
+    expect(await screen.findByText("Записи в журнале и в общем журнале.")).toBeInTheDocument();
+    expect(screen.queryByText("The full text will appear in the base later.")).not.toBeInTheDocument();
+  });
+
+  it("the window offers «Read in НК РФ» and opens the code there", async () => {
+    fetchKbFolderCounts.mockResolvedValue({ laws: 1 });
+    fetchKbDocumentPage.mockResolvedValue({ rows: [ARTICLE], total: 1 });
+    fetchKbDocumentBySlug.mockResolvedValue(SP71);
+    fetchKbArticleTarget.mockResolvedValue({ kind: "open", slug: "sp-71-13330", anchor: "p-7-1-1", ref });
+    renderKB();
+    fireEvent.click(await screen.findByText("Laws and acts"));
+    fireEvent.click(await screen.findByText(/ст\. 220 НК РФ/));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Read in НК РФ" }));
+    await waitFor(() => expect(fetchKbDocumentBySlug).toHaveBeenCalledWith("sp-71-13330"));
+  });
+
+  it("a record whose code has no text shows the reason line", async () => {
+    fetchKbDocumentBySlug.mockResolvedValue({ ...ARTICLE, designation: "ст. 26 ЖК РФ" });
+    fetchKbArticleTarget.mockResolvedValueOnce({ kind: "reason", why: "codeMissing", codeLabel: "ЖК РФ", ref });
+    renderKB("/home?docTab=knowledge-base&kbDoc=st-220-nk-rf");
+    expect(await screen.findByText(/This record is about a part of ЖК РФ/)).toBeInTheDocument();
+    expect(screen.queryByText("The full text will appear in the base later.")).not.toBeInTheDocument();
   });
 });

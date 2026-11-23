@@ -4,9 +4,11 @@
 // (?docTab=knowledge-base&kbDoc=<slug>#p-…) to send to a colleague.
 
 import { useTranslation } from "react-i18next";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useKbClauses, useKbDocument, useKbSpFullText } from "@/hooks/use-knowledge-base";
+import { useKbArticleTarget, useKbClauses, useKbDocument, useKbSpFullText } from "@/hooks/use-knowledge-base";
+import { kbArticleReason } from "@/lib/knowledge-base/kbArticleRecord.mjs";
 import { kbFullTextReadable } from "@/lib/knowledge-base/kbFullText.mjs";
 import { kbSourceButtons } from "./kb-view";
 import { KbAskShurikButton, KbSelectionAsk } from "./KbAskShurik";
@@ -25,6 +27,9 @@ export function KbReadingPage({ slug, onBack }: KbReadingPageProps) {
   const doc = docQuery.data ?? null;
   const readable = !!doc && kbFullTextReadable(doc, sp.data);
   const clauses = useKbClauses(doc?.docId, readable);
+  // 9.9: a record about an article of a code opens the code at that article.
+  const article = useKbArticleTarget(doc, !!doc && !readable && !sp.isLoading);
+  const [searchParams] = useSearchParams();
 
   const back = (
     <Button variant="ghost" size="sm" onClick={onBack}>
@@ -44,7 +49,16 @@ export function KbReadingPage({ slug, onBack }: KbReadingPageProps) {
   if (docQuery.isError) return status(t("home.knowledgeBase.loadError"));
   if (!doc) return status(t("home.knowledgeBase.public.notFoundBody"));
   // The switch is off or the text is gone: the page says so instead of an empty reader.
-  if (!readable) return status(doc.textUnavailableReason ?? t("home.knowledgeBase.fullTextLater"));
+  if (!readable) {
+    if (article.isLoading) return status(t("home.knowledgeBase.reader.loading"));
+    const target = article.data;
+    if (target?.kind === "open") {
+      const next = new URLSearchParams(searchParams);
+      next.set("kbDoc", target.slug);
+      return <Navigate replace to={{ search: `?${next.toString()}`, hash: `#${target.anchor}` }} />;
+    }
+    return status(kbArticleReason(target, t) ?? doc.textUnavailableReason ?? t("home.knowledgeBase.fullTextLater"));
+  }
   if (clauses.isLoading) return status(t("home.knowledgeBase.reader.loading"));
   if (clauses.isError || !clauses.data?.length) return status(t("home.knowledgeBase.reader.loadError"));
 

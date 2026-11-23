@@ -57,6 +57,7 @@ import {
   kbLlmsSection,
 } from "../src/lib/knowledge-base/kbSeo.mjs";
 import { KB_FOLDERS, normalizeKbRow } from "../src/lib/knowledge-base/kbConfig.mjs";
+import { kbArticleReason, parseKbArticleRef, pickKbCode, resolveKbArticleRecord } from "../src/lib/knowledge-base/kbArticleRecord.mjs";
 import { KB_SOLUTION_SELECT, normalizeKbSolution, sortKbSolutions } from "../src/lib/knowledge-base/kbSolutions.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -279,18 +280,53 @@ async function writePages(outcome) {
   const spFullText = await fetchSpFullText(env);
   let withText = 0;
   let degraded = 0;
+  // docs-library 9.9: records about one article or chapter of a code without text
+  // point into the code (its anchors are read once and reused for its own page).
+  const lawsWithText = rows_.filter((r) => r.folder === "laws" && r.full_text_available === true);
+  const lawIds = new Set(lawsWithText.map((r) => r.doc_id));
+  const clauseCache = new Map(); // laws only: an SP's clauses are dropped after its page
+  const clausesOf = async (docId) => {
+    if (!lawIds.has(docId)) return fetchClausesOrNone(env, docId);
+    if (!clauseCache.has(docId)) clauseCache.set(docId, await fetchClausesOrNone(env, docId));
+    return clauseCache.get(docId);
+  };
+  const redirected = new Set();
+  let articleReasons = 0;
   for (const row of rows_) {
     const dir = path.join(DIST, "baza", row.slug);
     await mkdir(dir, { recursive: true });
     let clauses = [];
     if (row.full_text_available === true && (row.folder !== "sp" || spFullText)) {
-      clauses = await fetchClausesOrNone(env, row.doc_id);
+      clauses = await clausesOf(row.doc_id);
       if (clauses === null) { degraded += 1; clauses = []; }
     }
     if (clauses.length) withText += 1;
-    await writeFile(path.join(dir, "index.html"), kbPageHtml(template, row, t, cssAssets, { clauses, spFullText }), "utf8");
+    let pageRow = row;
+    let articleTarget = null;
+    if (row.full_text_available !== true && !row.text_unavailable_reason && parseKbArticleRef(row.designation)) {
+      const ref = parseKbArticleRef(row.designation);
+      const code = pickKbCode(ref.code, lawsWithText);
+      const codeClauses = code ? await clausesOf(code.doc_id) : [];
+      if (codeClauses !== null) {
+        const record = { designation: row.designation, textUnavailableReason: null, folder: row.folder };
+        const resolution = resolveKbArticleRecord(record, lawsWithText, codeClauses.map((c) => c.anchor));
+        if (resolution?.kind === "open") {
+          articleTarget = { slug: resolution.slug, anchor: resolution.anchor, codeLabel: resolution.ref.codeLabel };
+          redirected.add(row.slug);
+        } else if (resolution?.kind === "reason") {
+          // «ambiguous» has no reason line: the page keeps «Полный текст появится в базе позже.».
+          const reason = kbArticleReason(resolution, t);
+          if (reason) {
+            pageRow = { ...row, text_unavailable_reason: reason };
+            articleReasons += 1;
+          }
+        }
+      }
+    }
+    await writeFile(path.join(dir, "index.html"), kbPageHtml(template, pageRow, t, cssAssets, { clauses, spFullText, articleTarget }), "utf8");
   }
   log(`full text in ${withText} page(s)${spFullText ? "" : " (SP switch off)"}${degraded ? `, ${degraded} without text after fetch errors` : ""}`);
+  log(`article records: ${redirected.size} open their code, ${articleReasons} with a reason line`);
 
   // Public hubs: /baza/ and one page per folder (split by KB_FOLDER_PAGE_SIZE),
   // so every document is two links from the index, not only in the sitemap.
@@ -359,7 +395,8 @@ async function writePages(outcome) {
       ...kbHubSitemapUrls(hubPaths, today),
       ...kbSolutionSitemapUrls(solutionRows, today),
       ...(changeRows ? kbChangesSitemapUrls(today) : []),
-      ...kbSitemapUrls(rows_, today),
+      // A record that opens its code is a pointer, not a page of its own (9.9).
+      ...kbSitemapUrls(rows_.filter((row) => !redirected.has(row.slug)), today),
     ]),
     "utf8",
   );

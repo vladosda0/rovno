@@ -12,6 +12,8 @@ export interface KbPrerenderFullText {
   clauses?: Array<Record<string, unknown>>;
   /** The SP switch (R-10). */
   spFullText?: boolean;
+  /** docs-library 9.9: a record about one article of a code points into the code's page. */
+  articleTarget?: { slug: string; anchor: string; codeLabel: string } | null;
 }
 export declare function kbFullTextHtml(
   doc: import("./kbConfig.mjs").KbDocumentShape,

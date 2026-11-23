@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { KbDocument } from "@/lib/knowledge-base/api";
-import { useKbSpFullText } from "@/hooks/use-knowledge-base";
+import { useKbArticleTarget, useKbSpFullText } from "@/hooks/use-knowledge-base";
+import { kbArticleReason } from "@/lib/knowledge-base/kbArticleRecord.mjs";
 import { useKbDocumentView } from "./kb-view";
 import { KbTextLabel } from "./KbTextLabel";
 import { KbCopyNotice } from "./KbCopyNotice";
@@ -26,15 +27,26 @@ interface KbDocumentDialogProps {
   doc: KbDocument | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Opens the reading page (slice 2). Without it the window has no «Читать полный текст». */
-  onRead?: (doc: KbDocument) => void;
+  /**
+   * Opens the reading page (slice 2) of this document, or of the code a record
+   * about one of its articles points into (9.9, with the article's anchor).
+   * Without it the window has no «Читать полный текст».
+   */
+  onRead?: (target: { slug: string; anchor?: string }) => void;
 }
 
 export function KbDocumentDialog({ doc, open, onOpenChange, onRead }: KbDocumentDialogProps) {
   const { t } = useTranslation();
   const sp = useKbSpFullText();
-  const view = useKbDocumentView(doc, { spFullText: sp.data });
+  const ownView = useKbDocumentView(doc, { spFullText: sp.data });
+  // 9.9: a record about an article of a code opens the code there, or says why not.
+  const articleQuery = useKbArticleTarget(doc, !!doc && !!ownView && !ownView.readable);
+  const article = articleQuery.data ?? null;
+  const reason = kbArticleReason(article, t);
+  const shown = doc && reason ? { ...doc, textUnavailableReason: reason } : doc;
+  const view = useKbDocumentView(shown, { spFullText: sp.data });
   const canRead = !!doc && !!view?.readable && !!onRead;
+  const articleOpen = article?.kind === "open" && !!onRead ? article : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -58,9 +70,9 @@ export function KbDocumentDialog({ doc, open, onOpenChange, onRead }: KbDocument
               ))}
             </dl>
           )}
-          {view?.fullTextNote && (
+          {view?.fullTextNote && !articleOpen && !articleQuery.isLoading && (
             <p className="flex items-start gap-2 text-body-sm text-muted-foreground">
-              {doc?.textUnavailableReason && <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />}
+              {shown?.textUnavailableReason && <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />}
               <span>{view.fullTextNote}</span>
             </p>
           )}
@@ -68,13 +80,19 @@ export function KbDocumentDialog({ doc, open, onOpenChange, onRead }: KbDocument
 
         <DialogFooter className="border-t border-border px-5 py-4 gap-2 sm:gap-2 flex-col sm:flex-row">
           {canRead && (
-            <Button onClick={() => onRead!(doc!)}>
+            <Button onClick={() => onRead!({ slug: doc!.slug })}>
               <BookOpen className="h-4 w-4 mr-1.5" />
               {t("home.knowledgeBase.reader.read")}
             </Button>
           )}
+          {articleOpen && (
+            <Button onClick={() => onRead!({ slug: articleOpen.slug, anchor: articleOpen.anchor })}>
+              <BookOpen className="h-4 w-4 mr-1.5" />
+              {t("home.knowledgeBase.article.readInCode", { code: articleOpen.ref.codeLabel })}
+            </Button>
+          )}
           {view?.buttons.map((button, index) => (
-            <Button key={button.href} asChild variant={index === 0 && !canRead ? "default" : "outline"}>
+            <Button key={button.href} asChild variant={index === 0 && !canRead && !articleOpen ? "default" : "outline"}>
               <a href={button.href} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4 mr-1.5" />
                 {button.label}

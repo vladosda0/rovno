@@ -15,6 +15,7 @@ import {
   type KbDocumentShape,
   type KbFolder,
 } from "./kbConfig.mjs";
+import { parseKbArticleRef, pickKbCode, resolveKbArticleRecord, type KbArticleResolution } from "./kbArticleRecord.mjs";
 import { KB_SOLUTION_SELECT, normalizeKbSolution, sortKbSolutions, type KbSolution } from "./kbSolutions.mjs";
 
 const rawSupabase = supabase as unknown as SupabaseClient;
@@ -129,6 +130,39 @@ export async function fetchKbClauses(docId: string): Promise<KbClause[]> {
     out.push(...rows.map(normalizeKbClause));
     if (rows.length < CLAUSE_PAGE) return out;
   }
+}
+
+/**
+ * docs-library 9.9: where a record about one article or chapter of a code opens
+ * («ст. 220 НК РФ» → the Tax Code at st-220), or why it cannot. Null for any other
+ * record. Two small reads: the laws with text (to pick the code), then which of
+ * the candidate anchors exist in it.
+ */
+export async function fetchKbArticleTarget(
+  doc: Pick<KbDocument, "designation" | "textUnavailableReason" | "folder">,
+): Promise<KbArticleResolution | null> {
+  const ref = parseKbArticleRef(doc.designation);
+  if (!ref || doc.textUnavailableReason || doc.folder !== "laws") return null;
+  const { data, error } = await rawSupabase
+    .from("kb_documents")
+    .select("doc_id, slug, designation")
+    .eq("is_published", true)
+    .eq("folder", "laws")
+    .eq("full_text_available", true);
+  if (error) throw error;
+  const codes = (data ?? []) as { doc_id: string; slug: string; designation: string | null }[];
+  const code = pickKbCode(ref.code, codes);
+  let anchors: string[] = [];
+  if (code) {
+    const found = await rawSupabase
+      .from("kb_clauses")
+      .select("anchor")
+      .eq("doc_id", code.doc_id)
+      .in("anchor", ref.candidates);
+    if (found.error) throw found.error;
+    anchors = ((found.data ?? []) as { anchor: string }[]).map((r) => r.anchor);
+  }
+  return resolveKbArticleRecord(doc, codes, anchors);
 }
 
 /** The SP full-text switch (R-10). Only JSON true is on, like kb_sp_full_text_enabled(). */

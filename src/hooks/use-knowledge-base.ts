@@ -3,6 +3,7 @@
 
 import { useQuery, type QueryKey } from "@tanstack/react-query";
 import {
+  fetchKbArticleTarget,
   fetchKbChangesFeed,
   fetchKbChangesMonthCount,
   fetchKbClauses,
@@ -20,6 +21,7 @@ import {
   type KbDocumentPageParams,
   type KbSolution,
 } from "@/lib/knowledge-base/api";
+import { parseKbArticleRef } from "@/lib/knowledge-base/kbArticleRecord.mjs";
 import { kbWatchingKey } from "@/lib/knowledge-base/kbPendingWatch";
 
 const STALE = 10 * 60 * 1000;
@@ -32,6 +34,7 @@ export const kbKeys = {
   doc: (slug: string) => [...kbKeys.all, "doc", slug] as const,
   docById: (docId: string) => [...kbKeys.all, "doc-id", docId] as const,
   clauses: (docId: string) => [...kbKeys.all, "clauses", docId] as const,
+  articleTarget: (slug: string) => [...kbKeys.all, "article-target", slug] as const,
   spFullText: () => [...kbKeys.all, "sp-full-text"] as const,
   solutions: () => [...kbKeys.all, "solutions"] as const,
   solution: (slug: string) => [...kbKeys.all, "solution", slug] as const,
@@ -79,6 +82,22 @@ export function useKbDocument(slug: string | undefined, initialData?: KbDocument
     staleTime: STALE,
     // Prerendered /baza/<slug>/ inlines the row (lib/knowledge-base/prerendered-data).
     initialData,
+  });
+}
+
+/**
+ * docs-library 9.9: a record about one article or chapter of a code without text
+ * of its own opens that place in the code, or carries a reason line. Runs only
+ * when `enabled` (the record is not readable) and the designation names a place.
+ */
+export function useKbArticleTarget(doc: KbDocument | null | undefined, enabled = true) {
+  const applies =
+    !!doc && enabled && doc.folder === "laws" && !doc.textUnavailableReason && parseKbArticleRef(doc.designation) !== null;
+  return useQuery({
+    queryKey: kbKeys.articleTarget(doc?.slug ?? ""),
+    queryFn: () => fetchKbArticleTarget(doc!),
+    enabled: applies,
+    staleTime: STALE,
   });
 }
 

@@ -175,7 +175,7 @@ export function kbBreadcrumbsHtml(trail) {
 }
 
 /** Markup for #root, mirroring KbDocumentPage's classes so the blog CSS styles it. */
-export function kbDocumentRootHtml(row, t, { clauses = [], spFullText = true } = {}) {
+export function kbDocumentRootHtml(row, t, { clauses = [], spFullText = true, articleTarget = null } = {}) {
   const doc = normalizeKbRow(row);
   const view = buildKbDocumentView(doc, t, { spFullText });
   const fullText = view.readable ? kbFullTextHtml(doc, clauses.map(normalizeKbClause), t) : "";
@@ -184,7 +184,9 @@ export function kbDocumentRootHtml(row, t, { clauses = [], spFullText = true } =
         .map((r) => `<div class="rv-kb-facts__row"><dt>${escapeHtml(r.label)}</dt><dd>${escapeHtml(r.value)}</dd></div>`)
         .join("")}</dl>`
     : "";
-  const fullTextNote = view.fullTextNote
+  const fullTextNote = articleTarget
+    ? `<p><a class="rv-btn rv-btn--primary" href="${escapeHtml(`${kbDocPath(articleTarget.slug)}#${articleTarget.anchor}`)}">${escapeHtml(t("home.knowledgeBase.article.readInCode", { code: articleTarget.codeLabel }))}</a></p>`
+    : view.fullTextNote
     ? `<p style="font-family:var(--font-body);color:var(--rv-blue);font-size:16px;opacity:.72">${escapeHtml(view.fullTextNote)}</p>`
     : "";
   const buttons = view.buttons
@@ -254,16 +256,24 @@ export function withKbHead(template, { title, description, canonicalPath, ogType
 /** The full static document page from the app-shell template. */
 export function kbPageHtml(template, row, t, cssAssets = [], fullText = {}) {
   const doc = normalizeKbRow(row);
+  // docs-library 9.9: a record about one article of a code is a pointer into the
+  // code's page: the snapshot sends the visitor there and names the code canonical.
+  const target = fullText.articleTarget ?? null;
+  const targetPath = target ? `${kbDocPath(target.slug)}#${target.anchor}` : null;
   const spFullText = fullText.spFullText ?? true;
   const clauses = (fullText.clauses ?? []).map(normalizeKbClause);
   const description = kbDocumentDescription(doc, t, { spFullText, firstText: kbFirstText(clauses) });
   let html = withKbHead(template, {
     title: kbDocumentTitle(doc, { spFullText }),
     description,
-    canonicalPath: kbDocPath(doc.slug),
-    jsonLd: kbDocumentJsonLd(doc, t, { clauses, spFullText, description }),
+    canonicalPath: kbDocPath(target ? target.slug : doc.slug),
+    // A pointer snapshot claims no document of its own: no JSON-LD with the record's url.
+    jsonLd: target ? null : kbDocumentJsonLd(doc, t, { clauses, spFullText, description }),
     cssAssets,
   });
+  if (targetPath) {
+    html = html.replace("</head>", () => `    <meta http-equiv="refresh" content="0; url=${escapeHtml(targetPath)}" />\n  </head>`);
+  }
   const data = `<script type="application/json" id="${KB_DOC_DATA_ID}">${jsonForScriptTag(row)}</script>`;
   html = html.replace(/<div id="root"><\/div>/, () => `<div id="root">${kbDocumentRootHtml(row, t, fullText)}</div>\n    ${data}`);
   return html;
