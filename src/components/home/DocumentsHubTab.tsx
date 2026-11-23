@@ -1,8 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Lock, Plus } from "lucide-react";
 import {
   DocumentsLeftNav,
   LEAVES,
@@ -17,6 +17,8 @@ import { useActiveOrg } from "@/hooks/use-orgs";
 import type { UploadType } from "@/components/upload/types";
 import { leafForUploadResult } from "@/components/upload/upload-destination";
 import { markFeatureOpened } from "@/lib/new-features";
+import { trackEvent } from "@/lib/analytics";
+import { EmptyState } from "@/components/home/documents-hub/EmptyState";
 
 const MyAllDocsLeaf = lazy(() =>
   import("@/components/home/documents-hub/leaves/MyAllDocsLeaf").then((m) => ({ default: m.MyAllDocsLeaf })),
@@ -100,7 +102,9 @@ export function DocumentsHubTab() {
     return param && VALID_LEAVES.has(param) ? (param as LeafSlug) : DEFAULT_LEAF;
   });
   const [uploadOpen, setUploadOpen] = useState(false);
-  const activeOrgRole = useActiveOrg()?.role;
+  const navigate = useNavigate();
+  const activeOrg = useActiveOrg();
+  const activeOrgRole = activeOrg?.role;
 
   useEffect(() => {
     const param = searchParams.get(SUB_TAB_PARAM);
@@ -148,8 +152,10 @@ export function DocumentsHubTab() {
   const presetType = presetForLeaf(activeLeaf);
 
   const handleCtaClick = () => setUploadOpen(true);
+  // An organization without Brigade holds only the business card (rovno#327, frame 5).
+  const orgLocked = Boolean(activeOrg?.limited) && activeLeaf.startsWith("org-") && activeLeaf !== "org-contractor-card";
   // A member only looks at the organization's card (rovno#282, frame 5).
-  const hideCta = activeLeaf === "org-contractor-card" && activeOrgRole === "member";
+  const hideCta = (activeLeaf === "org-contractor-card" && activeOrgRole === "member") || orgLocked;
 
   const ctaButtonDesktop = (
     <Button className="w-full justify-start gap-2" size="default" onClick={handleCtaClick}>
@@ -210,9 +216,31 @@ export function DocumentsHubTab() {
       </aside>
       <main className="min-w-0 flex-1 px-4 pt-3 pb-20 sm:px-6 md:pb-6 space-y-3">
         <MobileSectionNav activeLeaf={activeLeaf} onSelect={handleSelect} />
-        <Suspense fallback={fallback}>
-          <ActiveSection />
-        </Suspense>
+        {orgLocked ? (
+          <EmptyState
+            icon={Lock}
+            title={t("home.documentsHub.empty.orgLimited.title")}
+            body={t("home.documentsHub.empty.orgLimited.description")}
+            cta={
+              <Button
+                onClick={() => {
+                  trackEvent("tier_lock_cta_clicked", {
+                    required_plan: "brigade",
+                    plan: null,
+                    feature: "organization_documents",
+                  });
+                  navigate("/#pricing");
+                }}
+              >
+                {t("home.documentsHub.empty.orgLimited.cta")}
+              </Button>
+            }
+          />
+        ) : (
+          <Suspense fallback={fallback}>
+            <ActiveSection />
+          </Suspense>
+        )}
       </main>
 
       <MultiStepUploadModal

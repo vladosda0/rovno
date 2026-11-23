@@ -54,6 +54,13 @@ describe("Step2ScopeSelection", () => {
     expect(orgRadio).toBeDisabled();
   });
 
+  it("disables the org option for a visitka-only organization without Brigade (rovno#327)", () => {
+    activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner", limited: true });
+    renderStep2({ type: "document" });
+    expect(screen.getByRole("radio", { name: /Organization/i })).toBeDisabled();
+    expect(screen.getByText("Organization documents are on the Brigade plan")).toBeInTheDocument();
+  });
+
   it("requires a scope before Next is enabled", () => {
     renderStep2({ scope: null });
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();

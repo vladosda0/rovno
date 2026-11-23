@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 
 const orgsMock = vi.fn();
 const activeOrgMock = vi.fn();
@@ -28,6 +28,16 @@ vi.mock("@/data/requisites-lookup-source", async (importOriginal) => ({
 }));
 const toastMock = vi.fn();
 vi.mock("@/hooks/use-toast", () => ({ toast: (...args: unknown[]) => toastMock(...args) }));
+const quotaMock = vi.fn();
+vi.mock("@/hooks/useTierQuota", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/useTierQuota")>()),
+  useTierQuota: () => quotaMock(),
+}));
+const trackEventMock = vi.fn();
+vi.mock("@/lib/analytics", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/analytics")>()),
+  trackEvent: (...args: unknown[]) => trackEventMock(...args),
+}));
 const uploadAvatarMock = vi.fn();
 vi.mock("@/hooks/use-avatar-upload", () => ({
   useAvatarUpload: () => ({ uploadAvatar: uploadAvatarMock }),
@@ -53,12 +63,15 @@ vi.mock("react-easy-crop", async () => {
 import { VisitkaForm } from "@/components/upload/forms/VisitkaForm";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
+const closeMock = vi.fn();
+const completeMock = vi.fn();
+
 function renderForm() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <VisitkaForm onBack={() => {}} onClose={() => {}} />
+        <VisitkaForm onBack={() => {}} onClose={closeMock} onComplete={completeMock} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -73,6 +86,11 @@ describe("VisitkaForm", () => {
     upsertMock.mockReset().mockResolvedValue({ org_id: "o1", profile_id: "p1" });
     submitMock.mockReset().mockResolvedValue({ org_id: "o1", profile_id: "p1", status: "pending_moderation" });
     uploadAvatarMock.mockReset().mockResolvedValue({ url: "https://cdn/avatars/a.jpg", path: "u/a.jpg" });
+    quotaMock.mockReset().mockReturnValue({ data: undefined });
+    trackEventMock.mockReset();
+    closeMock.mockReset();
+    completeMock.mockReset();
+    toastMock.mockReset();
   });
 
   it("uploads a selected avatar and passes its URL through to the RPC", async () => {
@@ -162,21 +180,295 @@ describe("VisitkaForm", () => {
     expect(upsertMock).not.toHaveBeenCalled();
   });
 
-  it("submits a saved draft for moderation", async () => {
-    orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner" }], isLoading: false });
-    activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner" });
-    renderForm();
-    await screen.findByPlaceholderText(/How clients will see you/i);
+  describe("two final buttons (rovno#327)", () => {
+    function fillExistingOrg() {
+      orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner" }], isLoading: false });
+      activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner" });
+    }
+    async function fillCard() {
+      fireEvent.change(await screen.findByPlaceholderText(/How clients will see you/i), {
+        target: { value: "Builder" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "@builder" } });
+    }
 
-    fireEvent.change(screen.getByPlaceholderText(/How clients will see you/i), {
-      target: { value: "Builder" },
+    it("sends the card for moderation in one click and closes", async () => {
+      fillExistingOrg();
+      renderForm();
+      await fillCard();
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+
+      await waitFor(() => expect(closeMock).toHaveBeenCalledTimes(1));
+      expect(upsertMock).toHaveBeenCalledWith("o1", expect.objectContaining({ status: "pending_moderation" }));
+      expect(submitMock).not.toHaveBeenCalled();
+      expect(toastMock).toHaveBeenCalledWith({ title: "Business card submitted for moderation." });
+      expect(completeMock).toHaveBeenCalledWith(expect.objectContaining({ type: "visitka", orgId: "o1" }));
+      expect(screen.queryByText("Business card saved")).not.toBeInTheDocument();
     });
-    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "@builder" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
 
-    await waitFor(() => expect(screen.getByText("Business card saved")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
-    await waitFor(() => expect(submitMock).toHaveBeenCalledWith("o1"));
+    it("saves a draft in one click and closes", async () => {
+      fillExistingOrg();
+      renderForm();
+      await fillCard();
+      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+
+      await waitFor(() => expect(closeMock).toHaveBeenCalledTimes(1));
+      expect(upsertMock).toHaveBeenCalledWith("o1", expect.objectContaining({ status: "draft" }));
+      expect(toastMock).toHaveBeenCalledWith({ title: "Business card saved as a draft." });
+    });
+
+    it("Enter in a field sends for moderation", async () => {
+      fillExistingOrg();
+      renderForm();
+      await fillCard();
+      fireEvent.submit(screen.getByPlaceholderText("username").closest("form")!);
+
+      await waitFor(() => expect(upsertMock).toHaveBeenCalledTimes(1));
+      expect(upsertMock.mock.calls[0][1]).toEqual(expect.objectContaining({ status: "pending_moderation" }));
+    });
+
+    it("a new organization on Brigade is created and sent in one call", async () => {
+      orgsMock.mockReturnValue({ data: [], isLoading: false });
+      activeOrgMock.mockReturnValue(null);
+      quotaMock.mockReturnValue({ data: { plan_code: "brigade" } });
+      renderForm();
+      fireEvent.change(await screen.findByPlaceholderText(/How clients will see you/i), {
+        target: { value: "Моя Бригада" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("mail@example.com"), { target: { value: "team@example.com" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+
+      await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+      expect(createMock.mock.calls[0][2]).toEqual(expect.objectContaining({ status: "pending_moderation" }));
+      expect(submitMock).not.toHaveBeenCalled();
+      await waitFor(() => expect(closeMock).toHaveBeenCalledTimes(1));
+    });
+
+    it("a card on moderation asks before going back to draft", async () => {
+      fillExistingOrg();
+      fetchMock.mockResolvedValue({
+        id: "p1", org_id: "o1", display_name: "Builder", contacts: { telegram: "@builder" }, region: null,
+        specializations: [], experience_years: null, avatar_url: null, description: null, inn: null,
+        appearance: {}, status: "pending_moderation",
+      });
+      renderForm();
+      await screen.findByDisplayValue("Builder");
+      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+
+      const dialog = await screen.findByRole("alertdialog");
+      expect(within(dialog).getByText("The card already sent for moderation will be recalled. Continue?")).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      expect(upsertMock).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+      fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Recall and save" }));
+      await waitFor(() => expect(upsertMock).toHaveBeenCalledWith("o1", expect.objectContaining({ status: "draft" })));
+      await waitFor(() => expect(closeMock).toHaveBeenCalledTimes(1));
+    });
+
+    it("a card on moderation is sent again without a question or an error", async () => {
+      fillExistingOrg();
+      fetchMock.mockResolvedValue({
+        id: "p1", org_id: "o1", display_name: "Builder", contacts: { telegram: "@builder" }, region: null,
+        specializations: [], experience_years: null, avatar_url: null, description: null, inn: null,
+        appearance: {}, status: "pending_moderation",
+      });
+      renderForm();
+      await screen.findByDisplayValue("Builder");
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+
+      await waitFor(() => expect(closeMock).toHaveBeenCalledTimes(1));
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(upsertMock).toHaveBeenCalledWith("o1", expect.objectContaining({ status: "pending_moderation" }));
+    });
+
+    it("free plan: draft saves, the locked send saves a draft and offers Brigade", async () => {
+      orgsMock.mockReturnValue({ data: [], isLoading: false });
+      activeOrgMock.mockReturnValue(null);
+      quotaMock.mockReturnValue({ data: { plan_code: "free" } });
+      renderForm();
+      fireEvent.change(await screen.findByPlaceholderText(/How clients will see you/i), {
+        target: { value: "Моя Бригада" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("mail@example.com"), { target: { value: "team@example.com" } });
+      expect(screen.queryByText(/Available on/i)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+
+      await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+      expect(createMock.mock.calls[0][2]).toEqual(expect.objectContaining({ status: "draft" }));
+      const dialog = await screen.findByRole("alertdialog");
+      expect(within(dialog).getByText("Business card saved as a draft")).toBeInTheDocument();
+      expect(within(dialog).getByText("Clients won't see it until you move to the Brigade plan.")).toBeInTheDocument();
+      expect(closeMock).not.toHaveBeenCalled();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Go to Brigade" }));
+      expect(trackEventMock).toHaveBeenCalledWith(
+        "tier_lock_cta_clicked",
+        expect.objectContaining({ feature: "submit_business_card", required_plan: "brigade" }),
+      );
+      await waitFor(() => expect(closeMock).toHaveBeenCalledTimes(1));
+    });
+
+    it("the server refusal to send saves a draft and offers Brigade", async () => {
+      fillExistingOrg();
+      upsertMock
+        .mockRejectedValueOnce({ message: "business_card_requires_brigade", code: "P0001" })
+        .mockResolvedValueOnce({ org_id: "o1", profile_id: "p1" });
+      renderForm();
+      await fillCard();
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+
+      const dialog = await screen.findByRole("alertdialog");
+      expect(upsertMock).toHaveBeenCalledTimes(2);
+      expect(upsertMock.mock.calls[1][1]).toEqual(expect.objectContaining({ status: "draft" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+      await waitFor(() => expect(closeMock).toHaveBeenCalledTimes(1));
+    });
+
+    it("Go to Brigade lands on pricing and does not report the upload to the host", async () => {
+      fillExistingOrg();
+      upsertMock
+        .mockRejectedValueOnce({ message: "business_card_requires_brigade", code: "P0001" })
+        .mockResolvedValueOnce({ org_id: "o1", profile_id: "p1" });
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      function Probe() {
+        const location = useLocation();
+        return <div data-testid="where">{location.pathname + location.hash}</div>;
+      }
+      function Host() {
+        const navigate = useNavigate();
+        return (
+          <VisitkaForm
+            onBack={() => {}}
+            onClose={closeMock}
+            onComplete={(result) => {
+              completeMock(result);
+              navigate("/home?docTab=org-contractor-card");
+            }}
+          />
+        );
+      }
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/home"]}>
+            <Host />
+            <Probe />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      await fillCard();
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+      fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Go to Brigade" }));
+
+      await waitFor(() => expect(closeMock).toHaveBeenCalledTimes(1));
+      expect(completeMock).not.toHaveBeenCalled();
+      expect(screen.getByTestId("where").textContent).toBe("/#pricing");
+    });
+
+    it("the Brigade window survives the new organization arriving after a solo save", async () => {
+      let orgs: Array<{ id: string; name: string; role: string; limited: boolean }> = [];
+      orgsMock.mockImplementation(() => ({ data: orgs, isLoading: false }));
+      activeOrgMock.mockImplementation(() => orgs[0] ?? null);
+      quotaMock.mockReturnValue({ data: { plan_code: "free" } });
+      fetchMock.mockImplementation(() => new Promise(() => {}));
+      createMock.mockImplementation(async () => {
+        orgs = [{ id: "new-org", name: "Моя Бригада", role: "owner", limited: true }];
+        return { org_id: "new-org", profile_id: "new-profile" };
+      });
+      renderForm();
+      fireEvent.change(await screen.findByPlaceholderText(/How clients will see you/i), {
+        target: { value: "Моя Бригада" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("mail@example.com"), { target: { value: "team@example.com" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+
+      const dialog = await screen.findByRole("alertdialog");
+      expect(within(dialog).getByText("Business card saved as a draft")).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+      await waitFor(() => expect(closeMock).toHaveBeenCalledTimes(1));
+    });
+
+    it("a card on moderation in a visitka-only organization stays on moderation on send", async () => {
+      orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner", limited: true }], isLoading: false });
+      activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner", limited: true });
+      fetchMock.mockResolvedValue({
+        id: "p1", org_id: "o1", display_name: "Builder", contacts: { telegram: "@builder" }, region: null,
+        specializations: [], experience_years: null, avatar_url: null, description: null, inn: null,
+        appearance: {}, status: "pending_moderation",
+      });
+      renderForm();
+      await screen.findByDisplayValue("Builder");
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+
+      await waitFor(() => expect(closeMock).toHaveBeenCalledTimes(1));
+      expect(upsertMock).toHaveBeenCalledWith("o1", expect.objectContaining({ status: "pending_moderation" }));
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+
+    it("a published card asks before going back to draft", async () => {
+      fillExistingOrg();
+      fetchMock.mockResolvedValue({
+        id: "p1", org_id: "o1", display_name: "Builder", contacts: { telegram: "@builder" }, region: null,
+        specializations: [], experience_years: null, avatar_url: null, description: null, inn: null,
+        appearance: {}, status: "published",
+      });
+      renderForm();
+      await screen.findByDisplayValue("Builder");
+      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
+      expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+      expect(upsertMock).not.toHaveBeenCalled();
+    });
+
+    it("a locked send on a published card asks before it becomes a draft", async () => {
+      orgsMock.mockReturnValue({ data: [{ id: "o1", name: "Org", role: "owner", limited: true }], isLoading: false });
+      activeOrgMock.mockReturnValue({ id: "o1", name: "Org", role: "owner", limited: true });
+      fetchMock.mockResolvedValue({
+        id: "p1", org_id: "o1", display_name: "Builder", contacts: { telegram: "@builder" }, region: null,
+        specializations: [], experience_years: null, avatar_url: null, description: null, inn: null,
+        appearance: {}, status: "published",
+      });
+      renderForm();
+      await screen.findByDisplayValue("Builder");
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+      fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Recall and save" }));
+
+      await waitFor(() => expect(upsertMock).toHaveBeenCalledWith("o1", expect.objectContaining({ status: "draft" })));
+      expect(await screen.findByText("Business card saved as a draft")).toBeInTheDocument();
+    });
+
+    it("a refused send on a published card asks before falling back to draft", async () => {
+      fillExistingOrg();
+      fetchMock.mockResolvedValue({
+        id: "p1", org_id: "o1", display_name: "Builder", contacts: { telegram: "@builder" }, region: null,
+        specializations: [], experience_years: null, avatar_url: null, description: null, inn: null,
+        appearance: {}, status: "published",
+      });
+      upsertMock.mockImplementation(async (_org: string, data: { status: string }) => {
+        if (data.status === "pending_moderation") throw { message: "business_card_requires_brigade", code: "P0001" };
+        return { org_id: "o1", profile_id: "p1" };
+      });
+      renderForm();
+      await screen.findByDisplayValue("Builder");
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+
+      const confirm = await screen.findByRole("alertdialog");
+      expect(upsertMock).toHaveBeenCalledTimes(1);
+      fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      expect(upsertMock).not.toHaveBeenCalledWith("o1", expect.objectContaining({ status: "draft" }));
+    });
+
+    it("an error keeps the window open", async () => {
+      fillExistingOrg();
+      upsertMock.mockRejectedValue({ message: "boom" });
+      renderForm();
+      await fillCard();
+      fireEvent.click(screen.getByRole("button", { name: "Submit for moderation" }));
+
+      await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" })));
+      expect(closeMock).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Submit for moderation" })).toBeEnabled();
+    });
   });
 
   describe("the saved card (rovno#282)", () => {
@@ -262,16 +554,6 @@ describe("VisitkaForm", () => {
       Object.defineProperty(big, "size", { value: 6 * 1024 * 1024 });
       fireEvent.change(coverInput, { target: { files: [big] } });
       expect(uploadAvatarMock).not.toHaveBeenCalled();
-    });
-
-    it("says a first card needs the Brigade plan when the server refuses it", async () => {
-      upsertMock.mockRejectedValue({ message: "business_card_requires_brigade", code: "P0001" });
-      renderForm();
-      fireEvent.change(await screen.findByPlaceholderText(/How clients will see you/i), { target: { value: "Builder" } });
-      fireEvent.change(screen.getByPlaceholderText("mail@example.com"), { target: { value: "a@b.ru" } });
-      fireEvent.click(screen.getByRole("button", { name: "Save as draft" }));
-      await waitFor(() => expect(upsertMock).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("Brigade") })));
     });
 
     it("blocks Save when the organizations arrive late and the card cannot be read", async () => {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -52,9 +52,10 @@ vi.mock("@/components/home/documents-hub/KbNavContents", async (importOriginal) 
     </button>
   ),
 }));
-const activeOrgRole = vi.hoisted(() => ({ value: null as string | null }));
+const activeOrgRole = vi.hoisted(() => ({ value: null as string | null, limited: false }));
 vi.mock("@/hooks/use-orgs", () => ({
-  useActiveOrg: () => (activeOrgRole.value ? { id: "o1", role: activeOrgRole.value } : null),
+  useActiveOrg: () =>
+    activeOrgRole.value ? { id: "o1", role: activeOrgRole.value, limited: activeOrgRole.limited } : null,
   useUserOrganizations: () => ({ data: [] }),
 }));
 vi.mock("@/components/upload/MultiStepUploadModal", () => ({
@@ -208,4 +209,39 @@ describe("DocumentsHubTab", () => {
     activeOrgRole.value = null;
   });
 
+  describe("an organization without Brigade holds only the card (rovno#327)", () => {
+    afterEach(() => {
+      activeOrgRole.value = null;
+      activeOrgRole.limited = false;
+    });
+
+    it.each(["org-all", "org-projects", "org-media", "org-estimates", "org-catalogs"])(
+      "%s shows the Brigade lock and no add button",
+      async (leaf) => {
+        activeOrgRole.value = "owner";
+        activeOrgRole.limited = true;
+        renderHub(`/home?docTab=${leaf}`);
+        expect(await screen.findByText("Organization documents are on the Brigade plan")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Go to Brigade" })).toBeInTheDocument();
+        expect(screen.queryByTestId(`stub-${leaf}`)).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /Add document|Create template|Add catalog/ })).not.toBeInTheDocument();
+      },
+    );
+
+    it("the business card stays open", async () => {
+      activeOrgRole.value = "owner";
+      activeOrgRole.limited = true;
+      renderHub("/home?docTab=org-contractor-card");
+      await screen.findByTestId("stub-org-contractor-card");
+      expect(screen.queryByText("Organization documents are on the Brigade plan")).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Create business card" }).length).toBeGreaterThan(0);
+    });
+
+    it("a full organization is not locked", async () => {
+      activeOrgRole.value = "owner";
+      renderHub("/home?docTab=org-all");
+      await screen.findByTestId("stub-org-all");
+      expect(screen.queryByText("Organization documents are on the Brigade plan")).not.toBeInTheDocument();
+    });
+  });
 });

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useCurrentUser, useProject, useProjectInvites, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useActiveOrg, useOrgMemberProfileIds } from "@/hooks/use-orgs";
+import { orgNameForInvites } from "@/data/org-source";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { usePermission } from "@/lib/permissions";
@@ -885,7 +886,7 @@ export default function ParticipantsScreen() {
         projectMode={projectMode}
         seat={seat}
         resendAvailable={resendAvailable}
-        activeOrgName={activeOrg?.name ?? null}
+        activeOrgName={orgNameForInvites(activeOrg)}
         saving={createInviteMutation.isPending || savePermissionsMutation.isPending}
         removing={removeMemberMutation.isPending}
         revoking={revokeInviteMutation.isPending}

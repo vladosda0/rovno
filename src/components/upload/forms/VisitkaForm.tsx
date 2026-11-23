@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCircle2, Loader2, Search, Sparkles, Upload, X } from "lucide-react";
+import { Check, Loader2, Lock, Search, Sparkles, Upload, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,11 +15,21 @@ import { useUserOrganizations, useActiveOrg, orgQueryKeys } from "@/hooks/use-or
 import {
   createOrgWithContractorProfile,
   upsertContractorProfileForOrg,
-  submitContractorProfileForModeration,
   type ContractorProfileData,
 } from "@/data/contractor-profile-source";
 import { slugifyOrgName, isValidOrgSlug } from "@/lib/transliterate";
-import { TierLockTooltip } from "@/components/billing/TierLockTooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { planMeets, useTierQuota } from "@/hooks/useTierQuota";
+import { trackEvent } from "@/lib/analytics";
 import { PHONE_PREFILL, phoneIsFilled } from "@/lib/phone";
 import type { UploadResult } from "@/components/upload/types";
 import { PartyStatusTag, partyTagKind } from "@/components/requisites/PartyStatusTag";
@@ -56,6 +67,13 @@ export interface VisitkaFormProps {
 interface SavedState {
   orgId: string;
   profileId: string;
+}
+
+type SaveIntent = "draft" | "submit";
+
+function isBrigadeRefusal(error: unknown): boolean {
+  const message = (error as { message?: string } | null)?.message ?? "";
+  return message.includes("business_card_requires_brigade");
 }
 
 /** Prepend https:// when the user typed a bare domain like "rovno.ai". */
@@ -302,7 +320,7 @@ export function VisitkaForm(props: VisitkaFormProps) {
   const activeOrg = useActiveOrg();
   const orgs = orgsQuery.data ?? [];
   const targetId = (activeOrg ?? orgs[0] ?? null)?.id ?? null;
-  // A person without an organization gets one on save, and the saved screen must survive that.
+  // A person without an organization gets one on save, and the dialogs after it must survive that.
   const startedSolo = useRef<boolean | null>(null);
   if (startedSolo.current === null && !orgsQuery.isLoading) startedSolo.current = targetId === null;
   return <VisitkaFormFields key={startedSolo.current ? "solo" : targetId ?? "pending"} {...props} />;
@@ -314,6 +332,8 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
   const orgsQuery = useUserOrganizations();
   const activeOrg = useActiveOrg();
   const { uploadAvatar } = useAvatarUpload();
+  const navigate = useNavigate();
+  const { data: quota } = useTierQuota();
 
   const orgs = orgsQuery.data ?? [];
   const targetOrg = activeOrg ?? orgs[0] ?? null;
@@ -358,8 +378,21 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
   const [showRequisites, setShowRequisites] = useState(true);
 
   const [contactError, setContactError] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [saved, setSaved] = useState<SavedState | null>(null);
+  const [pendingIntent, setPendingIntent] = useState<SaveIntent | null>(null);
+  const submitting = pendingIntent !== null;
+  const [revokeOpen, setRevokeOpen] = useState(false);
+  // What the revoke confirmation resumes: the draft button, or a send that ends as a draft.
+  const [revokeIntent, setRevokeIntent] = useState<SaveIntent>("draft");
+  // A draft saved instead of sending: the window offers Brigade, then closes.
+  const [upgradeFor, setUpgradeFor] = useState<SavedState | null>(null);
+  const goPricing = useRef(false);
+  // Sending needs the owner's Brigade plan (rovno#327). The front sees it for a
+  // person without an organization (their own plan) and for a visitka-only
+  // organization (limited); otherwise the server decides and the refusal is
+  // handled like the lock.
+  const sendLocked = hasOrg
+    ? Boolean(targetOrg?.limited)
+    : Boolean(quota && !planMeets(quota.plan_code, "brigade"));
 
   // When the user already has an org, the business-card name should default to
   // the org name (they should be the same), unless the user has edited it.
@@ -584,10 +617,26 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
   // the button, so the user gets a clear message instead of a silently disabled CTA.
   const canSubmit = Boolean(displayName.trim()) && newOrgValid;
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    // The form is longer than its window and Save stays in the footer, so each
-    // inline error also says itself in a toast.
+  function persist(status: NonNullable<ContractorProfileData["status"]>) {
+    const profileData = { ...buildProfileData(), status };
+    return hasOrg && targetOrg
+      ? upsertContractorProfileForOrg(targetOrg.id, profileData)
+      : createOrgWithContractorProfile(orgName.trim(), slug, profileData);
+  }
+
+  function finish(result: SavedState) {
+    onComplete?.({ type: "visitka", scope: "public", orgId: result.orgId, profileId: result.profileId });
+    onClose();
+  }
+
+  function askRevoke(intent: SaveIntent) {
+    setRevokeIntent(intent);
+    setRevokeOpen(true);
+  }
+
+  async function save(intent: SaveIntent, confirmed = false) {
+    // The form is longer than its window and the buttons stay in the footer, so
+    // each inline error also says itself in a toast.
     const refuse = (message: string) => toast({ title: message, variant: "destructive" });
     if (!hasContact) {
       setContactError(true);
@@ -610,15 +659,46 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
       refuse(t("upload.modal.step3.visitka.websiteInvalid"));
       return;
     }
-    setSubmitting(true);
+    // A locked send saves a draft and offers Brigade (mockup frame 4).
+    // A card already on moderation stays there on send: the server keeps pending to pending.
+    const keepsPending = existingProfile?.status === "pending_moderation";
+    const status = intent === "submit" && (!sendLocked || keepsPending) ? "pending_moderation" : "draft";
+    // A send that would take a published card to draft asks first, like the draft button.
+    const published = existingProfile?.status === "published";
+    if (published && !confirmed && intent === "submit" && status === "draft") {
+      askRevoke("submit");
+      return;
+    }
+    setPendingIntent(intent);
     try {
-      const profileData = buildProfileData();
-      const result = hasOrg && targetOrg
-        ? await upsertContractorProfileForOrg(targetOrg.id, profileData)
-        : await createOrgWithContractorProfile(orgName.trim(), slug, profileData);
+      let raw: { org_id: string; profile_id: string };
+      let offerBrigade = intent === "submit" && status === "draft";
+      try {
+        raw = await persist(status);
+      } catch (error) {
+        if (status !== "pending_moderation" || !isBrigadeRefusal(error)) throw error;
+        if (published && !confirmed) {
+          askRevoke("submit");
+          return;
+        }
+        // The owner's plan, which only the server sees, refused the send: keep the work as a draft.
+        raw = await persist("draft");
+        offerBrigade = true;
+      }
+      const result = { orgId: raw.org_id, profileId: raw.profile_id };
+      if (offerBrigade) {
+        // Not awaited: the refetch also reads the new organization's card, the window must not wait for it.
+        setUpgradeFor(result);
+        void queryClient.invalidateQueries({ queryKey: orgQueryKeys.all() });
+        return;
+      }
       await queryClient.invalidateQueries({ queryKey: orgQueryKeys.all() });
-      setSaved({ orgId: result.org_id, profileId: result.profile_id });
-      toast({ title: t("upload.modal.successMessages.visitka_draft") });
+      toast({
+        title: t(status === "pending_moderation"
+          ? "upload.modal.successMessages.visitka_submitted"
+          : "upload.modal.successMessages.visitka_draft"),
+      });
+      finish(result);
     } catch (error) {
       const message = (error as { message?: string } | null)?.message ?? "";
       // The RPC raises errcode '23505' on slug collision; PostgREST surfaces it
@@ -627,8 +707,6 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
       if (code === "23505" || message.includes("Slug already exists")) {
         setSlugError(t("upload.modal.step3.visitka.slugTaken"));
         toast({ title: t("upload.modal.step3.visitka.slugTaken"), variant: "destructive" });
-      } else if (message.includes("business_card_requires_brigade")) {
-        toast({ title: t("upload.modal.step3.visitka.requiresBrigade"), variant: "destructive" });
       } else {
         toast({
           title: t("upload.modal.errors.saveFailed"),
@@ -637,79 +715,75 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
         });
       }
     } finally {
-      setSubmitting(false);
+      setPendingIntent(null);
     }
   }
 
-  async function handleSubmitForModeration() {
-    if (!saved) return;
-    setSubmitting(true);
-    try {
-      await submitContractorProfileForModeration(saved.orgId);
-      await queryClient.invalidateQueries({ queryKey: orgQueryKeys.all() });
-      toast({ title: t("upload.modal.successMessages.visitka_submitted") });
-      onComplete?.({ type: "visitka", scope: "public", orgId: saved.orgId, profileId: saved.profileId });
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    // Enter in a field is the main action: send for moderation (Vlad, 2026-11-18).
+    void save("submit");
+  }
+
+  function handleDraftClick() {
+    // Going back to draft recalls a card already on moderation or published: ask first (mockup frame 3).
+    if (existingProfile?.status === "pending_moderation" || existingProfile?.status === "published") {
+      askRevoke("draft");
+      return;
+    }
+    void save("draft");
+  }
+
+  // The dialog's own close (either button, Escape) finishes the window once.
+  function handleUpgradeClose() {
+    const result = upgradeFor;
+    setUpgradeFor(null);
+    if (goPricing.current) {
+      // The host's onComplete moves to the card's leaf, which would undo the move to pricing.
+      goPricing.current = false;
+      navigate("/#pricing");
       onClose();
-    } catch (error) {
-      toast({
-        title: t("upload.modal.errors.saveFailed"),
-        description: error instanceof Error ? error.message : undefined,
-        variant: "destructive",
-      });
-    } finally {
-      setSubmitting(false);
+      return;
     }
+    if (result) finish(result);
   }
 
-  function handleFinish() {
-    if (saved) {
-      onComplete?.({ type: "visitka", scope: "public", orgId: saved.orgId, profileId: saved.profileId });
-    }
-    onClose();
+  function handleUpgradeCta() {
+    trackEvent("tier_lock_cta_clicked", {
+      required_plan: "brigade",
+      plan: quota?.plan_code ?? null,
+      feature: "submit_business_card",
+    });
+    goPricing.current = true;
   }
 
-  // ---- Success screen (after draft saved) ----------------------------------
-  if (saved) {
-    return (
-      <div className="flex flex-col min-h-0 flex-1">
-        <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-6 flex flex-col items-center text-center gap-3">
-          <div className="rounded-full bg-emerald-500/15 p-3 text-emerald-600 dark:text-emerald-500">
-            <CheckCircle2 className="h-7 w-7" aria-hidden="true" />
-          </div>
-          <h3 className="text-body font-semibold text-foreground">
-            {t("upload.modal.step3.visitka.successHeading")}
-          </h3>
-          <p className="max-w-prose text-body-sm text-muted-foreground">
-            {t("upload.modal.successMessages.visitka_draft")}
-          </p>
-        </div>
-        <div className="border-t border-border px-4 sm:px-5 py-3 sm:py-4 flex justify-end gap-2 shrink-0">
-          <Button type="button" variant="outline" onClick={handleFinish} disabled={submitting}>
-            {t("upload.modal.step3.visitka.close")}
-          </Button>
-          <Button
-            type="button"
-            className="bg-accent text-accent-foreground hover:bg-accent/90"
-            onClick={handleSubmitForModeration}
-            disabled={submitting}
-          >
-            {submitting
-              ? t("upload.modal.saving")
-              : t("upload.modal.step3.visitka.submitForModeration")}
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  const upgradeDialog = (
+    <AlertDialog open={upgradeFor !== null} onOpenChange={(open) => { if (!open) handleUpgradeClose(); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("upload.modal.step3.visitka.upgrade.title")}</AlertDialogTitle>
+          <AlertDialogDescription>{t("upload.modal.step3.visitka.upgrade.body")}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t("upload.modal.step3.visitka.upgrade.close")}</AlertDialogCancel>
+          <AlertDialogAction onClick={handleUpgradeCta}>{t("upload.modal.step3.visitka.upgrade.cta")}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 
   // ---- Loading: the form must hold the saved card before it can overwrite it --
   const profileLoading = hasOrg && (profileQuery.isLoading || !firstReadDone.current);
   if (orgsQuery.isLoading || profileLoading) {
+    // A solo save brings the new organization and a fresh card read; the window keeps its place.
     return (
-      <div className="flex flex-1 items-center justify-center gap-2 py-12 text-body-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-        {t("common.loading")}
-      </div>
+      <>
+        <div className="flex flex-1 items-center justify-center gap-2 py-12 text-body-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          {t("common.loading")}
+        </div>
+        {upgradeDialog}
+      </>
     );
   }
 
@@ -719,8 +793,9 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
 
   // ---- Form ----------------------------------------------------------------
   return (
-    // noValidate: we validate ourselves so error messages are in Russian rather
-    // than the browser's native (English-locale) "Please enter a URL" popups.
+    <>
+    {/* noValidate: we validate ourselves so error messages are in Russian rather
+        than the browser's native (English-locale) "Please enter a URL" popups. */}
     <form onSubmit={handleSubmit} noValidate className="flex flex-col min-h-0 flex-1">
       <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-4">
         {!hasOrg && (
@@ -1103,32 +1178,55 @@ function VisitkaFormFields({ onBack, onClose, onComplete }: VisitkaFormProps) {
         )}
       </div>
 
-      <div className="border-t border-border px-4 sm:px-5 py-3 sm:py-4 flex justify-between shrink-0">
+      <div className="border-t border-border px-4 sm:px-5 py-3 sm:py-4 flex flex-wrap gap-2 shrink-0">
         <Button type="button" variant="outline" onClick={onBack} disabled={submitting}>
           {t("upload.modal.back")}
         </Button>
-        {hasOrg ? (
-          <Button
-            type="submit"
-            className="bg-accent text-accent-foreground hover:bg-accent/90"
-            disabled={saveDisabled}
-          >
-            {submitting ? t("upload.modal.saving") : t("upload.modal.step3.visitka.save")}
-          </Button>
-        ) : (
-          // Creating a new org + business card is Brigade-only. With an org the
-          // rule follows the org owner's plan, which only the backend can see.
-          <TierLockTooltip requiredPlan="brigade" feature="create_business_card">
-            <Button
-              type="submit"
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-              disabled={saveDisabled}
-            >
-              {submitting ? t("upload.modal.saving") : t("upload.modal.step3.visitka.save")}
-            </Button>
-          </TierLockTooltip>
-        )}
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1 sm:flex-none sm:ml-auto"
+          onClick={handleDraftClick}
+          disabled={saveDisabled}
+        >
+          {pendingIntent === "draft" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          {pendingIntent === "draft" ? t("upload.modal.saving") : t("upload.modal.step3.visitka.save")}
+        </Button>
+        <Button
+          type="submit"
+          className="basis-full sm:basis-auto bg-accent text-accent-foreground hover:bg-accent/90"
+          disabled={saveDisabled}
+        >
+          {pendingIntent === "submit" ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            sendLocked && <Lock className="h-4 w-4" aria-hidden="true" />
+          )}
+          {pendingIntent === "submit" ? t("upload.modal.saving") : t("upload.modal.step3.visitka.submitForModeration")}
+        </Button>
       </div>
+
+      <AlertDialog open={revokeOpen} onOpenChange={setRevokeOpen}>
+        <AlertDialogContent aria-describedby={undefined}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("upload.modal.step3.visitka.revokeConfirm.title")}</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("upload.modal.step3.visitka.revokeConfirm.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setRevokeOpen(false);
+                void save(revokeIntent, true);
+              }}
+            >
+              {t("upload.modal.step3.visitka.revokeConfirm.confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </form>
+    {upgradeDialog}
+    </>
   );
 }
