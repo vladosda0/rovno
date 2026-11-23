@@ -767,6 +767,10 @@
     {
       "path": "supabase/migrations/20261121030000_ai_document_checks.sql",
       "sha256": "7c0daccfcaf6f179774e5fcb43d9fe385d166e800aa5a1f7b915974cd51b922e"
+    },
+    {
+      "path": "supabase/migrations/20261124010000_visitka_draft_any_plan.sql",
+      "sha256": "17a70e6ff081ff9be490b8d31cf1c5fc10925badfadd73caae7bb3171e66e67e"
     }
   ],
   "generated_artifacts": [

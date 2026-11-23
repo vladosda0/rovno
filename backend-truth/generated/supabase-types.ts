@@ -1643,6 +1643,7 @@ export type Database = {
           "plan": string
           "created_at": string
           "updated_at": string
+          "visitka_only": boolean
           }
           Insert: {
           "id"?: string
@@ -1654,6 +1655,7 @@ export type Database = {
           "plan"?: string
           "created_at"?: string
           "updated_at"?: string
+          "visitka_only"?: boolean
           }
           Update: {
           "id"?: string
@@ -1665,6 +1667,7 @@ export type Database = {
           "plan"?: string
           "created_at"?: string
           "updated_at"?: string
+          "visitka_only"?: boolean
           }
           Relationships: []
         }
