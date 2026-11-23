@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { RefundRequestForm } from "@/components/billing/RefundRequestForm";
 import { buildReceiptHtml } from "@/lib/receipt";
 import { formatRubFromKopecks, isPartiallyRefunded, type PaymentIntentRow } from "@/lib/billing";
-import { PLANS } from "@/data/plans";
+import { planDisplayName } from "@/data/plan-labels";
 
 // Full refunds are accepted within this window of the payment date; afterwards we
 // offer a partial-refund request instead (per policy).
@@ -31,7 +31,7 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
   const [open, setOpen] = useState(false);
   const [partialMode, setPartialMode] = useState(false);
 
-  const planName = PLANS[payment.plan_code as keyof typeof PLANS]?.display_name ?? payment.plan_code;
+  const planName = planDisplayName(payment.plan_code);
   const amountLabel = formatRubFromKopecks(payment.amount_kopecks);
   const when = payment.confirmed_at ?? payment.created_at;
   const dateFmt = new Intl.DateTimeFormat(i18n.language === "ru" ? "ru-RU" : "en-US", {

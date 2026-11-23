@@ -10,7 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { trackEvent } from "@/lib/analytics";
-import { PLANS } from "@/data/plans";
+import { planDisplayName } from "@/data/plan-labels";
 import { type TierPlanCode, planMeets, useTierQuota } from "@/hooks/useTierQuota";
 
 interface TierLockTooltipProps {
@@ -37,7 +37,7 @@ export function TierLockTooltip({
     return <>{children}</>;
   }
 
-  const planLabel = PLANS[requiredPlan]?.display_name ?? requiredPlan;
+  const planLabel = planDisplayName(requiredPlan);
   const label = lockedLabel ?? t("tier.lock.tooltip", { plan: planLabel });
 
   return (

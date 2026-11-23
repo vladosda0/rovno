@@ -13,6 +13,7 @@ import { CookieSettingsDialog } from "@/components/system/CookieSettingsDialog";
 import { KbPendingWatch } from "@/components/knowledge-base/KbPendingWatch";
 import { queryClient } from "@/lib/query-client";
 import { MfaGate } from "@/components/auth/MfaGate";
+import { prerenderedHtmlFor } from "@/lib/prerender-snapshot";
 
 const AppLayout = lazy(() => import("@/layouts/AppLayout"));
 const AuthLayout = lazy(() => import("@/layouts/AuthLayout"));
@@ -81,6 +82,9 @@ const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const RouteFallback = () => {
   const { t } = useTranslation();
+  // A prerendered public page stays on screen while its chunk loads.
+  const prerendered = prerenderedHtmlFor(window.location.pathname);
+  if (prerendered) return <div dangerouslySetInnerHTML={{ __html: prerendered }} />;
   return (
     <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">
       {t("app.loading")}

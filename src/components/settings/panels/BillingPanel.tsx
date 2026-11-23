@@ -13,7 +13,7 @@ import { PlansDialog } from "@/components/billing/PlansDialog";
 import { useTierQuota } from "@/hooks/useTierQuota";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { SignInPrompt } from "@/components/settings/SignInPrompt";
-import { PLANS } from "@/data/plans";
+import { planDisplayName } from "@/data/plan-labels";
 import { TIER_LIMITS } from "@/data/tier-limits";
 
 export function BillingPanel() {
@@ -39,7 +39,7 @@ export function BillingPanel() {
   // Plan comes from the active subscription (get_current_usage), the billing
   // source of truth — not the legacy profiles.plan field.
   const planCode = quota?.plan_code ?? "free";
-  const planLabel = PLANS[planCode]?.display_name ?? planCode;
+  const planLabel = planDisplayName(planCode);
   const canUpgrade = planCode !== "brigade";
   // Per-project participant (editor) seats: a static per-tier allowance, since
   // get_current_usage exposes no live member count. -1 renders as the ∞ label.

@@ -7,7 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { CheckoutBlocked } from "@/components/billing/CheckoutBlocked";
 import { TBankPaymentForm } from "@/components/billing/TBankPaymentForm";
-import { getPlan, isPlanCode, PLANS } from "@/data/plans";
+import { getPlan, isPlanCode } from "@/data/plans";
+import { planDisplayName } from "@/data/plan-labels";
 import { BILLING_ENABLED, CONSENT_VERSION, formatRubFromKopecks, newIdempotencyKey, ONE_TIME_CONSENT_VERSION, planRank } from "@/lib/billing";
 import type { TbankIntegrationStatus } from "@/lib/tbank-widget";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
@@ -72,7 +73,7 @@ export default function Checkout() {
     ? Math.max(plan.amount_kopecks - currentCatalogueKopecks - prepaidCreditKopecks, 0)
     : plan?.amount_kopecks ?? 0;
   const currentPlanName = currentPlanCode
-    ? PLANS[currentPlanCode]?.display_name ?? currentPlanCode
+    ? planDisplayName(currentPlanCode)
     : null;
   // Buying from a zero-priced plan is worded as a new subscription, not an upgrade.
   const showAsUpgrade = isUpgrade && currentCatalogueKopecks > 0;
@@ -279,7 +280,7 @@ export default function Checkout() {
       year: "numeric",
     });
     const existingName =
-      PLANS[subscription.plan_code as keyof typeof PLANS]?.display_name ?? subscription.plan_code;
+      planDisplayName(subscription.plan_code);
     const endsLabel = subscription.current_period_ends_at
       ? dateFmt.format(new Date(subscription.current_period_ends_at))
       : null;
@@ -310,7 +311,7 @@ export default function Checkout() {
             upgrade, the full monthly price that applies from next period). */}
         <div className="space-y-1">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-h3 text-foreground">{plan.display_name}</span>
+            <span className="text-h3 text-foreground">{planDisplayName(planCode)}</span>
             <span className="text-h3 text-foreground">
               {formatRubFromKopecks(chargeKopecks)}
               {!showAsUpgrade && autoRenew ? (
@@ -379,7 +380,7 @@ export default function Checkout() {
                     i18nKey="billing.checkout.recurringConsent"
                     values={{
                       amount: formatRubFromKopecks(plan.amount_kopecks),
-                      plan: plan.display_name,
+                      plan: planDisplayName(planCode),
                     }}
                     components={{
                       offer: (
@@ -441,7 +442,7 @@ export default function Checkout() {
                     i18nKey="billing.checkout.oneTimeToggleConsent"
                     values={{
                       amount: formatRubFromKopecks(chargeKopecks),
-                      plan: plan.display_name,
+                      plan: planDisplayName(planCode),
                     }}
                     components={{
                       offer: (

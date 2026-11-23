@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { PaymentDetailDialog } from "@/components/billing/PaymentDetailDialog";
 import { formatRubFromKopecks, isPartiallyRefunded, type PaymentIntentRow } from "@/lib/billing";
-import { PLANS } from "@/data/plans";
+import { planDisplayName } from "@/data/plan-labels";
 
 const rawSupabase = supabase as unknown as SupabaseClient;
 const COLUMNS =
@@ -72,7 +72,7 @@ export function PaymentHistory() {
   return (
     <ul className="space-y-0.5">
       {data.map((row) => {
-        const name = PLANS[row.plan_code as keyof typeof PLANS]?.display_name ?? row.plan_code;
+        const name = planDisplayName(row.plan_code);
         const when = row.confirmed_at ?? row.created_at;
         const badge =
           row.status === "refunded"

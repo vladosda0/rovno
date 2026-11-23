@@ -41,6 +41,8 @@ import { annotateArticleHtml } from "../src/lib/blog/anchorsConfig.mjs";
 import { faqJsonLdFromDoc } from "../src/lib/blog/faqConfig.mjs";
 import { dzenArticleHtml, dzenFeedXml } from "../src/lib/blog/dzenFeedConfig.mjs";
 import { isStickerAvatar, stickerWidth, STICKER_BIO_HEIGHT } from "../src/lib/blog/authorAvatarConfig.mjs";
+import { STATIC_ROUTES, llmsTxt } from "./lib/site-index.mjs";
+import { stripPublicPage } from "./lib/public-prerender.mjs";
 import { collectTagHubs, isIndexableTag, pluralizeRu, postsForTagSlug, tagNamesForSlug, tagSlug } from "../src/lib/blog/tagsConfig.mjs";
 
 // fileURLToPath (not new URL().pathname) so a build path containing a space or
@@ -54,11 +56,9 @@ const BLOG_TITLE = "Блог Ровно";
 const BLOG_DESCRIPTION =
   "Статьи команды Ровно о том, как вести стройку без хаоса: сметы, закупки, приёмка работ, контроль подрядчиков и ИИ на объекте.";
 
-// Trailing slashes are the canonical form for everything served out of a
-// directory: Caddy resolves dist/<route>/index.html for both /offer and
-// /offer/, 308-ing the bare form to the slashed one. Advertising the bare form
-// here would put a redirecting URL in the sitemap.
-const STATIC_ROUTES = ["/", "/blog/", "/offer/", "/privacy/", "/refund/", "/contacts/"];
+// STATIC_ROUTES (the sitemap's static part) and llms.txt live in
+// ./lib/site-index.mjs, where vitest checks them (site-redesign 1.8).
+
 
 // Public routes that ship no prerendered body but still need a self-canonical.
 //
@@ -734,30 +734,6 @@ function dzenXml(posts) {
   });
 }
 
-function llmsTxt(posts) {
-  const lines = [
-    `# ${SITE_NAME} (rovno.ai)`,
-    "",
-    "> Ровно — ИИ-супервайзер стройки: рабочее пространство, где смета, задачи,",
-    "> закупки, фотофиксация и документы собраны в одном месте. Для заказчиков,",
-    "> подрядчиков и строительных компаний в России.",
-    "",
-    "## Продукт",
-    `- [Главная](${SITE_ORIGIN}/): что делает Ровно`,
-    `- [Тарифы](${SITE_ORIGIN}/#pricing): Бесплатно / Мастер / Бригада`,
-    "",
-    "## Блог — статьи о стройке",
-    `- [Все статьи](${SITE_ORIGIN}/blog/)`,
-    `- [RSS](${SITE_ORIGIN}/blog/feed.xml)`,
-  ];
-  for (const post of posts) {
-    const desc = (post.seo_description ?? post.excerpt ?? "").replace(/\s+/g, " ").trim();
-    lines.push(`- [${post.title}](${SITE_ORIGIN}/blog/${post.slug}/)${desc ? `: ${desc}` : ""}`);
-  }
-  lines.push("", "## Контакты", `- Email: vlad@rovno.ai`, `- Telegram: https://t.me/stroyrovno`, "");
-  return lines.join("\n");
-}
-
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -768,7 +744,7 @@ async function main() {
     console.error("[prerender-blog] dist/index.html not found — run `vite build` first.");
     process.exit(1);
   }
-  const template = stripCanonicalTags(await readFile(templatePath, "utf8"));
+  const template = stripCanonicalTags(stripPublicPage(await readFile(templatePath, "utf8")));
 
   let posts = [];
   let dataOk = false;
@@ -905,7 +881,7 @@ async function main() {
   //
   // RESIDUAL: an article published AFTER this build is served by the fallback
   // until the next deploy, and so reports "/" as its canonical for that window.
-  // Content-wise it is an empty shell to a non-JS crawler either way; the article
+  // A non-JS crawler sees the landing markup there (prerender-public.mjs); the article
   // gets its own canonical the moment a deploy renders it. Publishing already
   // triggers that rebuild on prod (blog-rebuild-frontend from the admin, the
   // door's publish for Shurik's posts), so the window is one Timeweb build long.

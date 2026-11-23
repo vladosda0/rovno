@@ -7,6 +7,7 @@ import { initErrorTracking } from "@/lib/observability/sentry";
 import { installPreloadErrorRecovery } from "@/lib/observability/preload-recovery";
 import { installStylesheetGuard } from "@/lib/observability/stylesheet-guard";
 import { RootErrorBoundary } from "@/components/system/RootErrorBoundary";
+import { capturePrerenderSnapshot } from "@/lib/prerender-snapshot";
 
 // Non-blocking: registers early error handlers synchronously, then loads the
 // Sentry SDK chunk in parallel with the app render. No-op without a DSN.
@@ -22,6 +23,9 @@ installStylesheetGuard({
   suppressReload: import.meta.env.DEV,
 });
 initMetrika();
+// Before createRoot() wipes it: the route fallback repaints the prerendered
+// public page while its chunk loads (src/lib/prerender-snapshot.ts).
+capturePrerenderSnapshot();
 
 createRoot(document.getElementById("root")!).render(
   <RootErrorBoundary>

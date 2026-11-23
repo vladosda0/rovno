@@ -442,7 +442,7 @@ describe("ClientReportDialog", () => {
     expect(screen.getByRole("radio", { name: "Ежемесячный" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("button", { name: "Опубликовать" })).toBeDisabled();
     expect(
-      screen.getByText(/На тарифе «Бесплатно» один отчёт в 30 дней\. Следующий можно опубликовать 12 ноября\./),
+      screen.getByText(/На тарифе «Старт» один отчёт в 30 дней\. Следующий можно опубликовать 12 ноября\./),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Улучшить тариф" })).toHaveAttribute("href", "/settings?tab=billing");
     expect(screen.getByRole("button", { name: "Скачать PDF" })).toBeDisabled();

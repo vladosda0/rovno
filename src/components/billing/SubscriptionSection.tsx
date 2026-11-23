@@ -13,7 +13,7 @@ import { useCardBindingSync } from "@/hooks/useCardBindingSync";
 import { PaymentHistory } from "@/components/billing/PaymentHistory";
 import { ChangePaymentMethodDialog } from "@/components/billing/ChangePaymentMethodDialog";
 import { CancelSubscriptionDialog } from "@/components/billing/CancelSubscriptionDialog";
-import { PLANS } from "@/data/plans";
+import { planDisplayName } from "@/data/plan-labels";
 import { formatRubFromKopecks } from "@/lib/billing";
 import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
@@ -101,7 +101,7 @@ export function SubscriptionSection() {
   }
 
   const currentPlanName =
-    PLANS[subscription.plan_code as keyof typeof PLANS]?.display_name ?? subscription.plan_code;
+    planDisplayName(subscription.plan_code);
   const priceLabel =
     subscription.amount_cents != null ? formatRubFromKopecks(subscription.amount_cents) : "—";
   const dateFmt = new Intl.DateTimeFormat(i18n.language === "ru" ? "ru-RU" : "en-US", {
@@ -175,8 +175,7 @@ export function SubscriptionSection() {
           <p className="text-body-sm text-foreground">
             {t("settings.billing.pendingDowngrade", {
               plan:
-                PLANS[subscription.pending_plan_code as keyof typeof PLANS]?.display_name ??
-                subscription.pending_plan_code,
+                planDisplayName(subscription.pending_plan_code),
               date: endsAt ?? "—",
             })}
           </p>

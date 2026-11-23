@@ -59,6 +59,7 @@ import {
 import { KB_FOLDERS, normalizeKbRow } from "../src/lib/knowledge-base/kbConfig.mjs";
 import { kbArticleReason, parseKbArticleRef, pickKbCode, resolveKbArticleRecord } from "../src/lib/knowledge-base/kbArticleRecord.mjs";
 import { KB_SOLUTION_SELECT, normalizeKbSolution, sortKbSolutions } from "../src/lib/knowledge-base/kbSolutions.mjs";
+import { stripPublicPage } from "./lib/public-prerender.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = path.join(ROOT, "dist");
@@ -270,7 +271,8 @@ async function writePages(outcome) {
     return 0;
   }
 
-  const template = await readFile(templatePath, "utf8");
+  // stripPublicPage: on a rerun dist/index.html already holds the landing (prerender-public.mjs).
+  const template = stripPublicPage(await readFile(templatePath, "utf8"));
   const ru = JSON.parse(await readFile(path.join(ROOT, "src", "locales", "ru.json"), "utf8"));
   const t = createTranslator(ru);
   const cssAssets = await findLandingCssAssets();
