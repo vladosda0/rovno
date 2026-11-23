@@ -274,6 +274,10 @@ describe("a law (docs-library slice 9)", () => {
     expect(kbIsLawNote("st-9-1-pr-2-2d1")).toBe(true);
     expect(kbLawClauseLabel("st-333s32d1")).toBe("ст. 333³²·¹");
     expect(kbLawClauseLabel("gl-pre")).toBeNull();
+    // Step 9.8: a table of the law's appendix (123-ФЗ) is «табл. 12»; the appendix stamp has no label.
+    expect(kbLawClauseLabel("pril-t-12")).toBe("табл. 12");
+    expect(kbLawClauseLabel("pril")).toBeNull();
+    expect(kbLawClauseLabel("p-pril-t")).toBeNull();
     expect(kbIsLawNote("st-9-1-pr-2-1")).toBe(true);
     expect(kbIsLawNote("st-2-4-pr")).toBe(true);
     expect(kbIsLawNote("st-2-4-ch-1")).toBe(false);

@@ -136,6 +136,8 @@ describe("kbClauseLabel", () => {
     expect(kbClauseLabel(CARD_FACT)).toBe("СП 163.1325800, п. 6.4.2.8");
     expect(kbClauseLabel({ ...CARD_FACT, clause: "Приложение Ж" })).toBe("СП 163.1325800, Приложение Ж");
     expect(kbClauseLabel({ ...CARD_FACT, clause: undefined })).toBe("СП 163.1325800");
+    // docs-library 9.8: a table of a law's appendix is «табл. 12», as on the server and in the bot.
+    expect(kbClauseLabel({ ...CARD_FACT, docLabel: "123-ФЗ", clause: undefined, anchor: "pril-t-12" })).toBe("123-ФЗ, табл. 12");
   });
 });
 

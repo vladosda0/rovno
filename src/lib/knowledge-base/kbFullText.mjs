@@ -220,9 +220,13 @@ const sup = (digits) => [...digits].map((d) => SUPERSCRIPT[Number(d)]).join("");
  * `-ch-1-1` part 1¹, `-ch-7-1-1` part 7¹⁻¹; `-p-1` is point 1 of a law whose article is
  * split into points, not parts (ЗК РФ: «ст. 39.1 п. 1», step 9.2в); `-pr` the note to the
  * article, `-pr-1` its first note (КоАП: «ст. 2.4 прим.», «ст. 4.8 прим. 1», show 9.2в, frame 5).
- * Null for any other anchor.
+ *
+ * `pril-t-12` is a table of the law's appendix (123-ФЗ: «табл. 12», docs-library 9.8). Null for any other anchor.
  */
 export function kbLawClauseLabel(anchor) {
+  // A table of the law's appendix (123-ФЗ, docs-library 9.8): `pril-t-12` is «табл. 12».
+  const table = anchor ? /^pril-t-(\d+)$/.exec(anchor) : null;
+  if (table) return `табл. ${table[1]}`;
   const m = anchor
     ? /^st-(\d+(?:s\d+(?:d\d+)*)*(?:-\d+(?:s\d+(?:d\d+)*)*)*)(?:-(ch|p)-(\d+)((?:-\d+(?:d\d+)*)*)|-(pr)(?:-(\d+)((?:-\d+(?:d\d+)*)*))?)?$/.exec(anchor)
     : null;
