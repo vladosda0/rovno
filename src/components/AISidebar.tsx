@@ -135,7 +135,7 @@ import {
   addEvent, addDocument, addDocumentVersion,
   getStages, getUserById, updateProject, getDocuments,
 } from "@/data/store";
-import { format, isToday, isYesterday } from "date-fns";
+import { format } from "date-fns";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 import {
   CLIENT_REPORT_CHIP_KEY,
@@ -638,11 +638,21 @@ function getDayKey(timestampMs: number): string {
   return format(new Date(timestampMs), "yyyy-MM-dd");
 }
 
-function getDayLabel(timestampMs: number, t: Translator, dayFormatter: Intl.DateTimeFormat): string {
-  const date = new Date(timestampMs);
-  if (isToday(date)) return t("ai.sidebar.day.today");
-  if (isYesterday(date)) return t("ai.sidebar.day.yesterday");
-  return dayFormatter.format(date);
+function getPreviousDayKey(dayKey: string): string {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  return format(new Date(year, month - 1, day - 1), "yyyy-MM-dd");
+}
+
+function getDayLabel(
+  timestampMs: number,
+  todayKey: string,
+  t: Translator,
+  dayFormatter: Intl.DateTimeFormat,
+): string {
+  const dayKey = getDayKey(timestampMs);
+  if (dayKey === todayKey) return t("ai.sidebar.day.today");
+  if (dayKey === getPreviousDayKey(todayKey)) return t("ai.sidebar.day.yesterday");
+  return dayFormatter.format(new Date(timestampMs));
 }
 
 function buildProposalSummaryLines(childEvents: Event[], t: Translator): string[] {
@@ -825,6 +835,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   const [expandedStockUsedEventIds, setExpandedStockUsedEventIds] = useState<Set<string>>(new Set());
   const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
   const [visibleDayBucketCount, setVisibleDayBucketCount] = useState(INITIAL_VISIBLE_DAY_BUCKETS);
+  const [todayKey, setTodayKey] = useState(() => getDayKey(Date.now()));
   const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
   const [pendingSaveMessage, setPendingSaveMessage] = useState<AIMessage | null>(null);
   const [savingLearnMessage, setSavingLearnMessage] = useState(false);
@@ -1776,6 +1787,11 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     workspaceProfileId,
     photoConsult,
     queryClient,
+    t,
+    profileAssistantLang,
+    workspaceProfilePreferences?.aiOutputLanguage,
+    WORK_STEPS_GENERATE,
+    WORK_STEPS_HOSTED_CONSULT,
   ]);
 
   useLayoutEffect(() => {
@@ -2575,7 +2591,32 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     t,
   ]);
 
+  // Re-render when the midnight timer fires or the tab comes back; a new feed row also re-reads the clock.
+  useEffect(() => {
+    let timer: number;
+    const syncTodayKey = () => setTodayKey(getDayKey(Date.now()));
+    const scheduleNextMidnight = () => {
+      const now = new Date();
+      const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      timer = window.setTimeout(() => {
+        const nextKey = getDayKey(Date.now());
+        if (nextKey === todayKey) scheduleNextMidnight();
+        else setTodayKey(nextKey);
+      }, nextMidnight.getTime() - now.getTime());
+    };
+    scheduleNextMidnight();
+    document.addEventListener("visibilitychange", syncTodayKey);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", syncTodayKey);
+    };
+  }, [todayKey]);
+
   const dayBuckets = useMemo<DayBucket[]>(() => {
+    // The clock decides the day; todayKey is only the tick that forces a recompute.
+    void todayKey;
+    const currentDayKey = getDayKey(Date.now());
+    const yesterdayKey = getPreviousDayKey(currentDayKey);
     const map = new Map<string, DayBucket>();
     streamRows.forEach((row) => {
       const dayKey = getDayKey(row.timestampMs);
@@ -2585,16 +2626,15 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
         return;
       }
 
-      const date = new Date(row.timestampMs);
       map.set(dayKey, {
         key: dayKey,
-        label: getDayLabel(row.timestampMs, t, dayHeaderFormatter),
+        label: getDayLabel(row.timestampMs, currentDayKey, t, dayHeaderFormatter),
         rows: [row],
-        olderThanYesterday: !isToday(date) && !isYesterday(date),
+        olderThanYesterday: dayKey !== currentDayKey && dayKey !== yesterdayKey,
       });
     });
     return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
-  }, [dayHeaderFormatter, streamRows, t]);
+  }, [dayHeaderFormatter, streamRows, t, todayKey]);
 
   const visibleDayBuckets = useMemo(() => {
     if (dayBuckets.length === 0) return [];
