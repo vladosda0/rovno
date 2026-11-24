@@ -26,7 +26,7 @@ export default function Privacy() {
   }, []);
 
   return (
-    <LegalLayout title="Политика конфиденциальности" effectiveDate="24 ноября 2026 г.">
+    <LegalLayout title="Политика конфиденциальности" effectiveDate="25 ноября 2026 г.">
       <p className="text-body-sm text-muted-foreground">
         Настоящая Политика разработана в соответствии с Федеральным законом от 27.07.2006
         № 152-ФЗ «О персональных данных» и описывает порядок обработки персональных данных
