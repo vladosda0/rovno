@@ -7,13 +7,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { CheckoutBlocked } from "@/components/billing/CheckoutBlocked";
 import { TBankPaymentForm } from "@/components/billing/TBankPaymentForm";
-import { getPlan, isPlanCode, PLANS } from "@/data/plans";
+import { getPlan, isPlanCode } from "@/data/plans";
+import { planDisplayName } from "@/data/plan-labels";
 import { BILLING_ENABLED, CONSENT_VERSION, formatRubFromKopecks, newIdempotencyKey, ONE_TIME_CONSENT_VERSION, planRank } from "@/lib/billing";
 import type { TbankIntegrationStatus } from "@/lib/tbank-widget";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { InitPaymentError, useInitPayment } from "@/hooks/useInitPayment";
-import { isTerminalPaymentStatus, usePaymentStatus } from "@/hooks/usePaymentStatus";
+import { isSettledPaymentIntent, usePaymentStatus } from "@/hooks/usePaymentStatus";
 import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
 
@@ -42,7 +43,13 @@ export default function Checkout() {
   // again (double charge). An upgrade (higher tier) is the exception — it is
   // allowed through, and tbank-init-payment charges only the catalogue
   // difference. Downgrades are scheduled from PlansDialog, never paid here.
-  const { status: subStatus, subscription, isLoading: subLoading } = useActiveSubscription();
+  const {
+    status: subStatus,
+    subscription,
+    isLoading: subLoading,
+    isLoadingError: subLoadError,
+    refetch: refetchSubscription,
+  } = useActiveSubscription();
   const currentPlanCode = subscription?.plan_code ?? null;
   const isUpgrade =
     subStatus === "active" && isValidPlan && planRank(planCode) > planRank(currentPlanCode);
@@ -53,16 +60,31 @@ export default function Checkout() {
   const currentCatalogueKopecks = currentPlanCode
     ? getPlan(currentPlanCode)?.amount_kopecks ?? 0
     : 0;
-  const chargeKopecks = isUpgrade && plan
-    ? Math.max(plan.amount_kopecks - currentCatalogueKopecks, 0)
+  // A renewal confirmed up to 24h early starts in the future; the upgrade replaces it,
+  // so its paid amount is credited, as tbank-init-payment does (rovno-db#26).
+  const renewalStartsMs = subscription?.current_period_starts_at
+    ? new Date(subscription.current_period_starts_at).getTime()
+    : NaN;
+  const prepaidCreditKopecks =
+    isUpgrade && subscription?.provider === "tbank" && renewalStartsMs > Date.now()
+      ? subscription.amount_cents ?? 0
+      : 0;
+  const estimatedChargeKopecks = isUpgrade && plan
+    ? Math.max(plan.amount_kopecks - currentCatalogueKopecks - prepaidCreditKopecks, 0)
     : plan?.amount_kopecks ?? 0;
   const currentPlanName = currentPlanCode
-    ? PLANS[currentPlanCode]?.display_name ?? currentPlanCode
+    ? planDisplayName(currentPlanCode)
     : null;
   // Buying from a zero-priced plan is worded as a new subscription, not an upgrade.
   const showAsUpgrade = isUpgrade && currentCatalogueKopecks > 0;
 
   const [retryNonce, setRetryNonce] = useState(0);
+  // Once Init answers, the amount the bank will charge is the server's, not this page's estimate.
+  const [serverChargeKopecks, setServerChargeKopecks] = useState<number | null>(null);
+  const chargeKopecks = serverChargeKopecks ?? estimatedChargeKopecks;
+  const shownCreditKopecks = serverChargeKopecks !== null && isUpgrade && plan
+    ? Math.max(plan.amount_kopecks - currentCatalogueKopecks - serverChargeKopecks, 0)
+    : prepaidCreditKopecks;
   const [intentId, setIntentId] = useState<string | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [widgetReady, setWidgetReady] = useState(false);
@@ -136,19 +158,20 @@ export default function Checkout() {
   // analytics workstream, which owns the AnalyticsEventName registry.)
   const startedRef = useRef(false);
   useEffect(() => {
-    if (startedRef.current || !allowed || subLoading || blocked) return;
+    if (startedRef.current || !allowed || authStatus !== "authenticated" || subLoading || subLoadError || blocked) return;
     startedRef.current = true;
     trackEvent("billing_checkout_started", { plan: planCode });
-  }, [allowed, subLoading, blocked, planCode]);
+  }, [allowed, authStatus, subLoading, subLoadError, blocked, planCode]);
 
   // Initialise the payment once subscription state is known, the user is not
   // already subscribed, and consent is given. Re-runs on plan/auth change,
   // explicit retry, and the consent toggle (the payment gate).
   useEffect(() => {
-    if (!allowed || authStatus === "loading" || subLoading || blocked || !consentGiven) return;
+    if (!allowed || authStatus !== "authenticated" || subLoading || subLoadError || blocked || !consentGiven) return;
     let cancelled = false;
     setIntentId(null);
     setPaymentUrl(null);
+    setServerChargeKopecks(null);
     setWidgetReady(false);
     setWidgetFailed(false);
     void initPayment
@@ -166,6 +189,7 @@ export default function Checkout() {
         if (cancelled) return;
         setIntentId(res.intent_id);
         setPaymentUrl(res.payment_url);
+        if (typeof res.amount_kopecks === "number") setServerChargeKopecks(res.amount_kopecks);
         trackEvent("billing_init_payment_succeeded", { plan: planCode });
       })
       .catch((error: unknown) => {
@@ -190,7 +214,7 @@ export default function Checkout() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, authStatus, subLoading, blocked, consentGiven, autoRenew, planCode, retryNonce]);
+  }, [allowed, authStatus, subLoading, subLoadError, blocked, consentGiven, autoRenew, planCode, retryNonce]);
 
   // C1: reveal the hosted-page fallback if the widget never reports ready.
   useEffect(() => {
@@ -202,14 +226,14 @@ export default function Checkout() {
   // Navigate on terminal payment status (realtime + polling backup).
   useEffect(() => {
     const row = statusQuery.data;
-    if (!row || !isTerminalPaymentStatus(row.status)) return;
-    if (row.status === "confirmed") {
+    if (!row || !isSettledPaymentIntent(row)) return;
+    if (row.status === "confirmed" || row.status === "partial_refund") {
       navigate(`/billing/success?intent=${row.id}`, { replace: true });
     } else if (row.status === "rejected" || row.status === "cancelled") {
       const reason = row.error_code ? `&reason=${encodeURIComponent(row.error_code)}` : "";
       navigate(`/billing/fail?intent=${row.id}${reason}`, { replace: true });
-    } else if (row.status === "refunded" || row.status === "partial_refund") {
-      // G: usePaymentStatus marks refunded/partial_refund terminal (polling stops),
+    } else if (row.status === "refunded") {
+      // G: usePaymentStatus marks refunded terminal (polling stops),
       // so without a nav branch here the user is stranded on a live-looking checkout
       // (audit Fix G / P2-7). Route to the fail screen with a refund-specific reason.
       navigate(`/billing/fail?intent=${row.id}&reason=${encodeURIComponent(row.status)}`, { replace: true });
@@ -223,7 +247,29 @@ export default function Checkout() {
   if (subLoading) {
     return (
       <div className="mx-auto w-full max-w-xl px-sp-3 py-sp-4">
+        <Button variant="ghost" size="sm" asChild className="mb-sp-3 -ml-2">
+          <Link to={backHref}>
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            {t("billing.checkout.back")}
+          </Link>
+        </Button>
         <p className="text-body-sm text-muted-foreground">{t("common.loading")}</p>
+      </div>
+    );
+  }
+  if (subLoadError) {
+    return (
+      <div className="mx-auto w-full max-w-xl px-sp-3 py-sp-4">
+        <Button variant="ghost" size="sm" asChild className="mb-sp-3 -ml-2">
+          <Link to={backHref}>
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            {t("billing.checkout.back")}
+          </Link>
+        </Button>
+        <p role="alert" className="text-body-sm text-foreground">{t("settings.billing.subscriptionLoadError")}</p>
+        <Button className="mt-sp-2" variant="outline" onClick={() => refetchSubscription()}>
+          {t("common.retry")}
+        </Button>
       </div>
     );
   }
@@ -234,7 +280,7 @@ export default function Checkout() {
       year: "numeric",
     });
     const existingName =
-      PLANS[subscription.plan_code as keyof typeof PLANS]?.display_name ?? subscription.plan_code;
+      planDisplayName(subscription.plan_code);
     const endsLabel = subscription.current_period_ends_at
       ? dateFmt.format(new Date(subscription.current_period_ends_at))
       : null;
@@ -265,7 +311,7 @@ export default function Checkout() {
             upgrade, the full monthly price that applies from next period). */}
         <div className="space-y-1">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-h3 text-foreground">{plan.display_name}</span>
+            <span className="text-h3 text-foreground">{planDisplayName(planCode)}</span>
             <span className="text-h3 text-foreground">
               {formatRubFromKopecks(chargeKopecks)}
               {!showAsUpgrade && autoRenew ? (
@@ -291,6 +337,14 @@ export default function Checkout() {
                 : t("billing.checkout.oneTimeNote")}
             </p>
           )}
+          {showAsUpgrade && currentPlanName && shownCreditKopecks > 0 ? (
+            <p className="text-caption text-muted-foreground">
+              {t("billing.checkout.upgradePrepaidCreditNote", {
+                plan: currentPlanName,
+                credit: formatRubFromKopecks(shownCreditKopecks),
+              })}
+            </p>
+          ) : null}
           {user?.email ? (
             <p className="text-caption text-muted-foreground">
               {t("billing.checkout.receiptTo", { email: user.email })}
@@ -326,7 +380,7 @@ export default function Checkout() {
                     i18nKey="billing.checkout.recurringConsent"
                     values={{
                       amount: formatRubFromKopecks(plan.amount_kopecks),
-                      plan: plan.display_name,
+                      plan: planDisplayName(planCode),
                     }}
                     components={{
                       offer: (
@@ -388,7 +442,7 @@ export default function Checkout() {
                     i18nKey="billing.checkout.oneTimeToggleConsent"
                     values={{
                       amount: formatRubFromKopecks(chargeKopecks),
-                      plan: plan.display_name,
+                      plan: planDisplayName(planCode),
                     }}
                     components={{
                       offer: (

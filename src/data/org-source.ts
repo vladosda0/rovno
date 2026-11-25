@@ -15,6 +15,8 @@ export interface OrgSummary {
   role: "owner" | "admin" | "member";
   memberCount: number;
   isActiveContext: boolean;
+  /** A visitka-only organization whose owner has no Brigade plan: only the business card works (rovno#327). */
+  limited: boolean;
 }
 
 export interface OrgDoc {
@@ -42,6 +44,7 @@ interface ListUserOrganizationsRow {
   role: string;
   member_count: number;
   is_active_context: boolean;
+  limited?: boolean | null;
 }
 
 interface OrgDocumentRow {
@@ -89,7 +92,13 @@ export async function listUserOrganizations(): Promise<OrgSummary[]> {
     role: normalizeRole(row.role),
     memberCount: row.member_count,
     isActiveContext: row.is_active_context,
+    limited: row.limited === true,
   }));
+}
+
+/** The organization offered as «Также добавить в организацию …» in a project invite: none for a visitka-only one (rovno#327). */
+export function orgNameForInvites(org: OrgSummary | null | undefined): string | null {
+  return org && !org.limited ? org.name : null;
 }
 
 export async function setActiveOrgContext(orgId: string | null): Promise<void> {
@@ -153,6 +162,8 @@ export async function createOrganization(
         role: "owner",
         memberCount: 1,
         isActiveContext: false,
+        // Created from /home only on Brigade, never visitka-only.
+        limited: false,
       };
     }
 

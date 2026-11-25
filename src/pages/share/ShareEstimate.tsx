@@ -167,6 +167,20 @@ export default function ShareEstimate() {
     );
   }
 
+  if (shareStatus === "error") {
+    return (
+      <div className="p-sp-3">
+        <EmptyState
+          icon={AlertTriangle}
+          title={t("share.estimate.errorTitle")}
+          description={t("share.document.errorBody")}
+          actionLabel={t("share.document.retry")}
+          onAction={() => { void queryClient.invalidateQueries({ queryKey: ["estimate-share", shareId] }); }}
+        />
+      </div>
+    );
+  }
+
   if (!shared || !snapshot || !version) {
     return (
       <div className="p-sp-3">

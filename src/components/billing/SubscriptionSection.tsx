@@ -13,7 +13,7 @@ import { useCardBindingSync } from "@/hooks/useCardBindingSync";
 import { PaymentHistory } from "@/components/billing/PaymentHistory";
 import { ChangePaymentMethodDialog } from "@/components/billing/ChangePaymentMethodDialog";
 import { CancelSubscriptionDialog } from "@/components/billing/CancelSubscriptionDialog";
-import { PLANS } from "@/data/plans";
+import { planDisplayName } from "@/data/plan-labels";
 import { formatRubFromKopecks } from "@/lib/billing";
 import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
@@ -27,7 +27,7 @@ const rawSupabase = supabase as unknown as SupabaseClient;
 // BILLING_ENABLED, so prod (flag off) behavior is unchanged.
 export function SubscriptionSection() {
   const { t, i18n } = useTranslation();
-  const { subscription, status, readOnly, isLoading, refetch } = useActiveSubscription();
+  const { subscription, status, readOnly, isLoading, isLoadingError, refetch } = useActiveSubscription();
   const { data: card, refetch: refetchCard } = useCardOnFile();
   // A bind finished on the bank's page while this screen was closed is picked up here.
   useCardBindingSync(refetchCard);
@@ -74,6 +74,19 @@ export function SubscriptionSection() {
 
   if (isLoading) return null;
 
+  if (isLoadingError) {
+    return (
+      <SettingsSection title={t("settings.billing.subscriptionTitle")}>
+        <p role="alert" className="text-body-sm text-foreground">
+          {t("settings.billing.subscriptionLoadError")}
+        </p>
+        <Button variant="outline" onClick={() => { void refetch(); }}>
+          {t("common.retry")}
+        </Button>
+      </SettingsSection>
+    );
+  }
+
   if (!subscription || status === "none") {
     return (
       <SettingsSection
@@ -88,7 +101,7 @@ export function SubscriptionSection() {
   }
 
   const currentPlanName =
-    PLANS[subscription.plan_code as keyof typeof PLANS]?.display_name ?? subscription.plan_code;
+    planDisplayName(subscription.plan_code);
   const priceLabel =
     subscription.amount_cents != null ? formatRubFromKopecks(subscription.amount_cents) : "—";
   const dateFmt = new Intl.DateTimeFormat(i18n.language === "ru" ? "ru-RU" : "en-US", {
@@ -148,10 +161,10 @@ export function SubscriptionSection() {
               </span>
             </div>
           ) : null}
-          {status === "grace" && endsAt ? (
+          {subscription.provider !== "free" && status === "grace" && endsAt ? (
             <p className="text-caption text-warning">{t("settings.billing.graceNote", { date: endsAt })}</p>
           ) : null}
-          {readOnly ? (
+          {subscription.provider !== "free" && readOnly ? (
             <p className="text-caption text-destructive">{t("settings.billing.readOnlyNote")}</p>
           ) : null}
         </CardContent>
@@ -162,8 +175,7 @@ export function SubscriptionSection() {
           <p className="text-body-sm text-foreground">
             {t("settings.billing.pendingDowngrade", {
               plan:
-                PLANS[subscription.pending_plan_code as keyof typeof PLANS]?.display_name ??
-                subscription.pending_plan_code,
+                planDisplayName(subscription.pending_plan_code),
               date: endsAt ?? "—",
             })}
           </p>
@@ -187,34 +199,37 @@ export function SubscriptionSection() {
 
       {/* Cancel / resume sits at the very bottom as quiet inline text, not a
           bright button (per design pass): cancelling is rare and should not
-          compete with the rest of the panel. */}
-      <div className="flex flex-wrap items-center gap-sp-2 border-t border-border pt-sp-2">
-        {subscription.auto_renew ? (
-          <CancelSubscriptionDialog
-            subscriptionId={subscription.id}
-            activeUntilLabel={endsAt}
-            onCancelled={refetch}
-          />
-        ) : (
-          <>
-            {endsAt ? (
-              <p className="text-caption text-muted-foreground">
-                {t("settings.billing.autoRenewOffNote", { date: endsAt })}
-              </p>
-            ) : null}
-            {subscription.provider === "tbank" ? (
-              <button
-                type="button"
-                onClick={reactivate}
-                disabled={reactivating}
-                className="text-caption font-medium text-accent underline underline-offset-2 hover:text-accent/80 disabled:opacity-50"
-              >
-                {t("settings.billing.reactivate")}
-              </button>
-            ) : null}
-          </>
-        )}
-      </div>
+          compete with the rest of the panel. The free plan never ends and
+          has nothing to renew, so it gets no row at all. */}
+      {subscription.provider === "free" ? null : (
+        <div className="flex flex-wrap items-center gap-sp-2 border-t border-border pt-sp-2">
+          {subscription.auto_renew ? (
+            <CancelSubscriptionDialog
+              subscriptionId={subscription.id}
+              activeUntilLabel={endsAt}
+              onCancelled={refetch}
+            />
+          ) : (
+            <>
+              {endsAt ? (
+                <p className="text-caption text-muted-foreground">
+                  {t("settings.billing.autoRenewOffNote", { date: endsAt })}
+                </p>
+              ) : null}
+              {subscription.provider === "tbank" ? (
+                <button
+                  type="button"
+                  onClick={reactivate}
+                  disabled={reactivating}
+                  className="text-caption font-medium text-accent underline underline-offset-2 hover:text-accent/80 disabled:opacity-50"
+                >
+                  {t("settings.billing.reactivate")}
+                </button>
+              ) : null}
+            </>
+          )}
+        </div>
+      )}
     </SettingsSection>
   );
 }

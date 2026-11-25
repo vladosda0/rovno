@@ -27,11 +27,44 @@ const SKIP_OPTIMIZE_BELOW_BYTES = 750 * 1024; // 750 KB
 
 const HEIC_MIME_RE = /^image\/(heic|heif|heic-sequence|heif-sequence)$/i;
 const HEIC_EXT_RE = /\.(heic|heif)$/i;
+const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "heim", "heis"]);
+// Generic HEIF files (major brand mif1/msf1) are HEIC only when a HEVC brand is
+// compatible; AVIF files can carry the same generic brands.
+const AVIF_BRANDS = new Set(["avif", "avis"]);
 
-function isHeic(file: File): boolean {
+function readHeader(file: File, length: number): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(file.slice(0, length));
+  });
+}
+
+async function hasHeicSignature(file: File): Promise<boolean> {
+  let header: Uint8Array;
+  try {
+    header = await readHeader(file, 64);
+  } catch {
+    return false;
+  }
+  if (header.length < 12) return false;
+  const text = String.fromCharCode(...header);
+  if (text.slice(4, 8) !== "ftyp") return false;
+  const major = text.slice(8, 12);
+  if (HEIC_BRANDS.has(major)) return true;
+  const boxEnd = Math.min(header.length, (header[0] << 24) | (header[1] << 16) | (header[2] << 8) | header[3]);
+  const compatible: string[] = [];
+  for (let i = 16; i + 4 <= boxEnd; i += 4) compatible.push(text.slice(i, i + 4));
+  return compatible.some((b) => HEIC_BRANDS.has(b)) && !compatible.some((b) => AVIF_BRANDS.has(b));
+}
+
+async function isHeic(file: File): Promise<boolean> {
   if (file.type && HEIC_MIME_RE.test(file.type)) return true;
   // iOS Safari sometimes leaves file.type empty for HEIC; sniff by extension.
-  return !file.type && HEIC_EXT_RE.test(file.name);
+  if (!file.type && HEIC_EXT_RE.test(file.name)) return true;
+  // Some pickers hand over HEIC bytes typed and named as PNG or JPEG.
+  return hasHeicSignature(file);
 }
 
 export function isImage(file: File): boolean {
@@ -71,16 +104,17 @@ export interface ImageOptimizationResult {
  */
 export async function optimizeImageForUpload(
   file: File,
-  options?: { forceReencode?: boolean },
+  options?: { forceReencode?: boolean; maxDimension?: number },
 ): Promise<ImageOptimizationResult> {
-  if (!isImage(file)) {
+  const heic = await isHeic(file);
+  if (!heic && !isImage(file)) {
     return { file, optimized: false };
   }
 
   let working = file;
   let didConvert = false;
 
-  if (isHeic(file)) {
+  if (heic) {
     working = await decodeHeicToJpegFile(file);
     didConvert = true;
   } else if (!options?.forceReencode && file.size <= SKIP_OPTIMIZE_BELOW_BYTES) {
@@ -94,14 +128,21 @@ export async function optimizeImageForUpload(
   const { default: imageCompression } = await importOptional(
     () => import("browser-image-compression"),
   );
-  const compressed = await imageCompression(working, {
-    maxSizeMB: TARGET_MAX_SIZE_MB,
-    maxWidthOrHeight: TARGET_MAX_DIMENSION_PX,
-    initialQuality: TARGET_JPEG_QUALITY,
-    fileType: "image/jpeg",
-    useWebWorker: true,
-    alwaysKeepResolution: false,
-  });
+  let compressed: Blob;
+  try {
+    compressed = await imageCompression(working, {
+      maxSizeMB: TARGET_MAX_SIZE_MB,
+      maxWidthOrHeight: options?.maxDimension ?? TARGET_MAX_DIMENSION_PX,
+      initialQuality: TARGET_JPEG_QUALITY,
+      fileType: "image/jpeg",
+      useWebWorker: true,
+      alwaysKeepResolution: false,
+    });
+  } catch (error) {
+    // The decoded JPEG is still renderable; keep it rather than lose the photo.
+    if (didConvert) return { file: working, optimized: true };
+    throw error;
+  }
 
   const out = new File([compressed], rewriteExtensionToJpg(working.name), {
     type: "image/jpeg",
@@ -109,4 +150,20 @@ export async function optimizeImageForUpload(
   });
 
   return { file: out, optimized: didConvert || out.size !== file.size };
+}
+
+/**
+ * Photo upload paths that store the file as-is (task attachments, quick
+ * actions) call this before preparing the upload. Only HEIC is converted to
+ * JPEG; every other file is returned untouched. A HEIC that cannot be decoded
+ * is refused with `decodeFailedMessage`, since storing it raw shows a
+ * placeholder in Chrome.
+ */
+export async function prepareMediaPhotoForUpload(file: File, decodeFailedMessage: string): Promise<File> {
+  if (!(await isHeic(file))) return file;
+  try {
+    return (await optimizeImageForUpload(file)).file;
+  } catch {
+    throw new Error(decodeFailedMessage);
+  }
 }

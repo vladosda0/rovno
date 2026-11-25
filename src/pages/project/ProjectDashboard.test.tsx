@@ -8,6 +8,7 @@ import {
   __unsafeResetStoreForTests,
   getEstimate,
   updateEstimateItems,
+  updateProject,
 } from "@/data/store";
 import {
   __unsafeResetEstimateV2ForTests,
@@ -99,11 +100,49 @@ describe("ProjectDashboard", () => {
     expect(screen.queryByText("Urgent unpaid")).not.toBeInTheDocument();
   });
 
+  it("rovno#237: no reports block in demo mode, where there are no published reports", () => {
+    setAuthRole("viewer");
+    renderProjectDashboard("project-1");
+    expect(screen.queryByRole("heading", { name: "Reports" })).not.toBeInTheDocument();
+  });
+
   it("hides the budget widget for non-detail viewers", () => {
     setAuthRole("contractor");
 
     renderProjectDashboard("project-1");
 
     expect(screen.queryByRole("heading", { name: "Budget" })).not.toBeInTheDocument();
+  });
+
+  it("rovno#236: the owner can change the address, a contractor only copies it", () => {
+    renderProjectDashboard("project-1");
+    expect(screen.getByRole("button", { name: "Change address" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy address" })).toBeInTheDocument();
+  });
+
+  it("rovno#236: a contractor sees no change action", () => {
+    setAuthRole("contractor");
+    renderProjectDashboard("project-1");
+    expect(screen.queryByRole("button", { name: "Change address" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy address" })).toBeInTheDocument();
+  });
+
+  it("rovno#236: the AI description block is hidden while there is no description", () => {
+    updateProject("project-1", { ai_description: undefined });
+    renderProjectDashboard("project-1");
+    expect(screen.queryByText("AI Description")).not.toBeInTheDocument();
+    expect(screen.queryByText(/AI summary placeholder/)).not.toBeInTheDocument();
+  });
+
+  it("rovno#236: the AI description block shows when there is one", () => {
+    renderProjectDashboard("project-1");
+    expect(screen.getByText("AI Description")).toBeInTheDocument();
+  });
+
+  it("rovno#236: the project card stacks above the cards after it, so the address hints are not covered", () => {
+    const { container } = renderProjectDashboard("project-1");
+    const card = container.querySelector(".glass.rounded-card");
+    expect(card?.className).toMatch(/\brelative\b/);
+    expect(card?.className).toMatch(/\bz-10\b/);
   });
 });

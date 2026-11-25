@@ -13,6 +13,7 @@ import type {
   ViewerRegime,
 } from "@/types/entities";
 import { isDemoSessionActive } from "@/lib/auth-state";
+import { type KbCountry, normalizeKbCountry, normalizeKbRegion } from "@/data/kb-regions";
 import type { Database as WorkspaceDatabase } from "../../backend-truth/generated/supabase-types";
 
 export type WorkspaceProjectInvite = WorkspaceDatabase["public"]["Tables"]["project_invites"]["Row"];
@@ -57,6 +58,8 @@ export interface WorkspaceSource {
   getProjectMembers: (projectId: string) => Promise<Member[]>;
   getProjectInvites: (projectId: string) => Promise<WorkspaceProjectInvite[]>;
   createProject: (input: CreateWorkspaceProjectInput) => Promise<Project>;
+  /** Owner only (projects_update policy); null removes the address. */
+  updateProjectAddress: (projectId: string, address: string | null) => Promise<Project>;
   deleteProject: (projectId: string) => Promise<void>;
 }
 
@@ -74,6 +77,10 @@ export interface ProfilePreferences {
   weekStart: ProfileWeekStart;
   aiOutputLanguage: ProfileAiOutputLanguage;
   automationLevel: ProfileAutomationLevel;
+  /** Country whose norms Shurik answers by (rovno-db#230). */
+  kbCountry: KbCountry;
+  /** Region name from the country's list; null is «not selected». */
+  kbRegion: string | null;
 }
 
 export type ProfilePreferencesPatch = Partial<ProfilePreferences>;
@@ -105,12 +112,30 @@ export const DEFAULT_PROFILE_PREFERENCES: ProfilePreferences = {
   weekStart: "monday",
   aiOutputLanguage: "auto",
   automationLevel: "manual",
+  kbCountry: "RU",
+  kbRegion: null,
 };
 
 export interface CreateWorkspaceProjectInput {
   title: string;
   type: string;
   projectMode: NonNullable<Project["project_mode"]>;
+  address?: string | null;
+}
+
+export const PROJECT_ADDRESS_MAX_LENGTH = 300;
+
+/** Trimmed, at most PROJECT_ADDRESS_MAX_LENGTH characters; empty means no address. */
+export function normalizeProjectAddress(raw: string | null | undefined): string | null {
+  const value = (raw ?? "").trim().slice(0, PROJECT_ADDRESS_MAX_LENGTH).trim();
+  return value ? value : null;
+}
+
+export class ProjectUpdateNotPermittedError extends Error {
+  constructor(public readonly projectId: string) {
+    super(`Update affected 0 rows for project ${projectId}; the current user is likely not the owner.`);
+    this.name = "ProjectUpdateNotPermittedError";
+  }
 }
 
 export class ProjectDeleteNotPermittedError extends Error {
@@ -132,6 +157,8 @@ const SUPABASE_WORKSPACE_SOURCE = "supabase";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const LOCAL_PROFILE_PREFERENCES_KEY = "profile-preferences";
+const PROFILE_PREFERENCES_COLUMNS =
+  "currency, units, date_format, week_start, ai_output_language, automation_level, kb_country, kb_region";
 
 function normalizeProfilePreferences(raw: Partial<ProfilePreferences> | Record<string, unknown> | null | undefined): ProfilePreferences {
   const value = raw ?? {};
@@ -142,6 +169,7 @@ function normalizeProfilePreferences(raw: Partial<ProfilePreferences> | Record<s
   const weekStart = record.weekStart ?? record.week_start;
   const aiOutputLanguage = record.aiOutputLanguage ?? record.ai_output_language;
   const automationLevel = record.automationLevel ?? record.automation_level;
+  const kbCountry = normalizeKbCountry(record.kbCountry ?? record.kb_country);
 
   return {
     currency: currency === "RUB" || currency === "USD" || currency === "EUR" || currency === "GBP" ? currency : DEFAULT_PROFILE_PREFERENCES.currency,
@@ -150,6 +178,8 @@ function normalizeProfilePreferences(raw: Partial<ProfilePreferences> | Record<s
     weekStart: weekStart === "monday" || weekStart === "sunday" ? weekStart : DEFAULT_PROFILE_PREFERENCES.weekStart,
     aiOutputLanguage: aiOutputLanguage === "ru" || aiOutputLanguage === "en" || aiOutputLanguage === "auto" ? aiOutputLanguage : DEFAULT_PROFILE_PREFERENCES.aiOutputLanguage,
     automationLevel: automationLevel === "manual" || automationLevel === "assisted" || automationLevel === "full" || automationLevel === "observer" ? automationLevel : DEFAULT_PROFILE_PREFERENCES.automationLevel,
+    kbCountry,
+    kbRegion: normalizeKbRegion(kbCountry, record.kbRegion ?? record.kb_region),
   };
 }
 
@@ -177,7 +207,7 @@ function writeLocalProfilePreferences(next: ProfilePreferences): void {
 }
 
 function mapProfileSettingsRowToPreferences(
-  row: Pick<ProfileSettingsRow, "currency" | "units" | "date_format" | "week_start" | "ai_output_language" | "automation_level"> | null | undefined,
+  row: Pick<ProfileSettingsRow, "currency" | "units" | "date_format" | "week_start" | "ai_output_language" | "automation_level" | "kb_country" | "kb_region"> | null | undefined,
 ): ProfilePreferences {
   return normalizeProfilePreferences(row as Record<string, unknown> | null | undefined);
 }
@@ -191,6 +221,8 @@ function profilePreferencesToDbPatch(profileId: string, preferences: ProfilePref
     week_start: preferences.weekStart,
     ai_output_language: preferences.aiOutputLanguage,
     automation_level: preferences.automationLevel,
+    kb_country: preferences.kbCountry,
+    kb_region: preferences.kbRegion,
   };
 }
 
@@ -300,6 +332,8 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
         current_stage_id: "",
         progress_pct: 0,
       };
+      const address = normalizeProjectAddress(input.address);
+      if (address) project.address = address;
 
       store.addProject(project);
       store.addMember({
@@ -313,6 +347,16 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
       });
 
       return project;
+    },
+    async updateProjectAddress(projectId: string, address: string | null) {
+      const user = store.getCurrentUserForMode(mode);
+      const project = store.getProjectForMode(mode, projectId);
+      if (!project || project.owner_id !== user.id) {
+        throw new ProjectUpdateNotPermittedError(projectId);
+      }
+      const next = normalizeProjectAddress(address);
+      store.updateProject(projectId, { address: next ?? undefined }, mode);
+      return { ...project, address: next ?? undefined };
     },
     async deleteProject(projectId: string) {
       store.removeProject(projectId, mode);
@@ -700,7 +744,7 @@ function createSupabaseWorkspaceSource(
   async function readRemoteProfilePreferences(): Promise<ProfilePreferences> {
     const { data, error } = await supabase
       .from("profile_settings")
-      .select("currency, units, date_format, week_start, ai_output_language, automation_level")
+      .select(PROFILE_PREFERENCES_COLUMNS)
       .eq("profile_id", profileId)
       .maybeSingle();
 
@@ -739,7 +783,7 @@ function createSupabaseWorkspaceSource(
       const { data, error } = await supabase
         .from("profile_settings")
         .upsert(profilePreferencesToDbPatch(profileId, next), { onConflict: "profile_id" })
-        .select("currency, units, date_format, week_start, ai_output_language, automation_level")
+        .select(PROFILE_PREFERENCES_COLUMNS)
         .single();
 
       if (error) {
@@ -895,6 +939,8 @@ function createSupabaseWorkspaceSource(
         automation_level: "manual",
         progress_pct: 0,
       };
+      const address = normalizeProjectAddress(input.address);
+      if (address) insert.address = address;
 
       const { data, error } = await supabase
         .from("projects")
@@ -912,6 +958,25 @@ function createSupabaseWorkspaceSource(
       });
 
       return mapProjectRowToProject(data);
+    },
+    async updateProjectAddress(projectId: string, address: string | null) {
+      const { data, error } = await supabase
+        .from("projects")
+        .update({ address: normalizeProjectAddress(address) })
+        .eq("id", projectId)
+        .eq("owner_profile_id", profileId)
+        .select("*");
+
+      if (error) {
+        throw error;
+      }
+
+      const row = data?.[0];
+      if (!row) {
+        throw new ProjectUpdateNotPermittedError(projectId);
+      }
+
+      return mapProjectRowToProject(row);
     },
     async deleteProject(projectId: string) {
       const { error, count } = await supabase
@@ -981,7 +1046,7 @@ export async function updateWorkspaceProjectMemberRole(
     return updated;
   }
 
-  const patch: Record<string, unknown> = {
+  const patch: WorkspaceDatabase["public"]["Tables"]["project_members"]["Update"] = {
     role: input.role,
     ai_access: input.aiAccess,
     viewer_regime: input.viewerRegime ?? null,
@@ -1281,7 +1346,7 @@ export async function updateWorkspaceProjectInvite(
   }
 
   const supabase = await loadSupabaseClient();
-  const patch: Record<string, unknown> = {
+  const patch: WorkspaceDatabase["public"]["Tables"]["project_invites"]["Update"] = {
     role: input.role,
     ai_access: input.aiAccess,
     viewer_regime: input.viewerRegime ?? null,

@@ -7,6 +7,7 @@ import {
   createProjectDocumentVersion as createProjectDocumentVersionSource,
   deleteProjectDocument as deleteProjectDocumentSource,
   prepareDocumentUpload as prepareDocumentUploadSource,
+  prepareDocumentVersionUpload as prepareDocumentVersionUploadSource,
   finalizeDocumentUpload as finalizeDocumentUploadSource,
   prepareMediaUpload as prepareMediaUploadSource,
   finalizeMediaUpload as finalizeMediaUploadSource,
@@ -20,6 +21,7 @@ import {
   type CreateProjectDocumentInput,
   type CreateProjectDocumentVersionInput,
   type PrepareDocumentUploadInput,
+  type PrepareDocumentVersionUploadInput,
   type PrepareMediaUploadInput,
   type PrepareUploadResult,
   type FinalizeDocumentUploadResult,
@@ -261,6 +263,16 @@ export function useDocumentUploadMutations(projectId: string) {
     });
   }, [mode, projectId]);
 
+  const prepareVersionUpload = useCallback(async (
+    input: Omit<PrepareDocumentVersionUploadInput, "projectId">,
+  ): Promise<PrepareUploadResult> => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    return prepareDocumentVersionUploadSource(resolvedMode, {
+      ...input,
+      projectId,
+    });
+  }, [mode, projectId]);
+
   const uploadBytes = useCallback(async (
     bucket: string,
     objectPath: string,
@@ -285,6 +297,7 @@ export function useDocumentUploadMutations(projectId: string) {
 
   return {
     prepareUpload,
+    prepareVersionUpload,
     uploadBytes,
     finalizeUpload,
   };

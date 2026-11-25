@@ -860,7 +860,12 @@ export function ClientReportDialog({ open, onOpenChange, projectId }: ClientRepo
         open={revokeConfirmOpen}
         onOpenChange={setRevokeConfirmOpen}
         title={t("documents.share.revokeConfirmTitle")}
-        description={t("documents.share.revokeConfirmDescription")}
+        description={(
+          <>
+            <span className="block">{t("clientReport.revokeConfirmDescription")}</span>
+            <span className="mt-1 block">{t("clientReport.revokeConfirmMembers")}</span>
+          </>
+        )}
         confirmLabel={t("documents.share.revoke")}
         onConfirm={() => { void handleRevoke(); }}
         onCancel={() => setRevokeConfirmOpen(false)}

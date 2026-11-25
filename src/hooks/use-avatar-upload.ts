@@ -22,7 +22,7 @@ export interface AvatarUploadResult {
  * viewers on public org pages.
  */
 export function useAvatarUpload() {
-  const uploadAvatar = useCallback(async (file: File): Promise<AvatarUploadResult> => {
+  const uploadAvatar = useCallback(async (file: File, options?: { maxDimension?: number }): Promise<AvatarUploadResult> => {
     const { data: sessionData } = await supabase.auth.getSession();
     const uid = sessionData.session?.user?.id;
     if (!uid) throw new Error("Not authenticated");
@@ -32,7 +32,10 @@ export function useAvatarUpload() {
     // intact). optimizeImageForUpload only strips metadata for real images.
     if (!isImage(file)) throw new Error("Selected file is not an image");
 
-    const { file: optimized } = await optimizeImageForUpload(file, { forceReencode: true });
+    const { file: optimized } = await optimizeImageForUpload(file, {
+      forceReencode: true,
+      ...(options?.maxDimension ? { maxDimension: options.maxDimension } : {}),
+    });
 
     const path = `${uid}/${crypto.randomUUID()}.jpg`;
     await uploadFileToBucket(AVATARS_BUCKET, path, optimized, { upsert: true });

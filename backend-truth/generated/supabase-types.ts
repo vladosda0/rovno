@@ -83,6 +83,8 @@ export type Database = {
           "created_at": string
           "updated_at": string
           "active_org_id": string | null
+          "kb_country": "RU" | "AZ" | "AM" | "BY" | "KZ" | "KG" | "MD" | "TJ" | "TM" | "UZ"
+          "kb_region": string | null
           }
           Insert: {
           "profile_id"?: string
@@ -100,6 +102,8 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "active_org_id"?: string | null
+          "kb_country"?: "RU" | "AZ" | "AM" | "BY" | "KZ" | "KG" | "MD" | "TJ" | "TM" | "UZ"
+          "kb_region"?: string | null
           }
           Update: {
           "profile_id"?: string
@@ -117,6 +121,8 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "active_org_id"?: string | null
+          "kb_country"?: "RU" | "AZ" | "AM" | "BY" | "KZ" | "KG" | "MD" | "TJ" | "TM" | "UZ"
+          "kb_region"?: string | null
           }
           Relationships: []
         }
@@ -137,6 +143,7 @@ export type Database = {
           "people_enabled": boolean
           "hints_chat_enabled": boolean
           "hints_telegram_enabled": boolean
+          "briefing_lead_enabled": boolean
           }
           Insert: {
           "profile_id"?: string
@@ -154,6 +161,7 @@ export type Database = {
           "people_enabled"?: boolean
           "hints_chat_enabled"?: boolean
           "hints_telegram_enabled"?: boolean
+          "briefing_lead_enabled"?: boolean
           }
           Update: {
           "profile_id"?: string
@@ -171,6 +179,7 @@ export type Database = {
           "people_enabled"?: boolean
           "hints_chat_enabled"?: boolean
           "hints_telegram_enabled"?: boolean
+          "briefing_lead_enabled"?: boolean
           }
           Relationships: []
         }
@@ -691,6 +700,7 @@ export type Database = {
           "planned_start": string | null
           "planned_end": string | null
           "system_work_article_id": string | null
+          "dates_auto_scheduled": boolean
           }
           Insert: {
           "id"?: string
@@ -704,6 +714,7 @@ export type Database = {
           "planned_start"?: string | null
           "planned_end"?: string | null
           "system_work_article_id"?: string | null
+          "dates_auto_scheduled"?: boolean
           }
           Update: {
           "id"?: string
@@ -717,6 +728,7 @@ export type Database = {
           "planned_start"?: string | null
           "planned_end"?: string | null
           "system_work_article_id"?: string | null
+          "dates_auto_scheduled"?: boolean
           }
           Relationships: []
         }
@@ -1387,7 +1399,7 @@ export type Database = {
           "billing_customer_id": string
           "provider": "stripe" | "tbank"
           "external_subscription_id": string
-          "plan_code": string
+          "plan_code": "free" | "master" | "brigade"
           "status": "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
           "is_current": boolean
           "currency": "RUB" | "USD" | "EUR" | "GBP"
@@ -1410,7 +1422,7 @@ export type Database = {
           "billing_customer_id": string
           "provider": "stripe" | "tbank"
           "external_subscription_id": string
-          "plan_code": string
+          "plan_code": "free" | "master" | "brigade"
           "status": "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
           "is_current"?: boolean
           "currency"?: "RUB" | "USD" | "EUR" | "GBP"
@@ -1433,7 +1445,7 @@ export type Database = {
           "billing_customer_id"?: string
           "provider"?: "stripe" | "tbank"
           "external_subscription_id"?: string
-          "plan_code"?: string
+          "plan_code"?: "free" | "master" | "brigade"
           "status"?: "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
           "is_current"?: boolean
           "currency"?: "RUB" | "USD" | "EUR" | "GBP"
@@ -1526,6 +1538,8 @@ export type Database = {
           "created_at": string
           "finalized_at": string | null
           "visibility_class": "shared_project" | "internal"
+          "version_of_document_id": string | null
+          "document_version_id": string | null
           }
           Insert: {
           "id"?: string
@@ -1543,6 +1557,8 @@ export type Database = {
           "created_at"?: string
           "finalized_at"?: string | null
           "visibility_class"?: "shared_project" | "internal"
+          "version_of_document_id"?: string | null
+          "document_version_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -1560,6 +1576,8 @@ export type Database = {
           "created_at"?: string
           "finalized_at"?: string | null
           "visibility_class"?: "shared_project" | "internal"
+          "version_of_document_id"?: string | null
+          "document_version_id"?: string | null
           }
           Relationships: []
         }
@@ -1625,6 +1643,7 @@ export type Database = {
           "plan": string
           "created_at": string
           "updated_at": string
+          "visitka_only": boolean
           }
           Insert: {
           "id"?: string
@@ -1636,6 +1655,7 @@ export type Database = {
           "plan"?: string
           "created_at"?: string
           "updated_at"?: string
+          "visitka_only"?: boolean
           }
           Update: {
           "id"?: string
@@ -1647,6 +1667,7 @@ export type Database = {
           "plan"?: string
           "created_at"?: string
           "updated_at"?: string
+          "visitka_only"?: boolean
           }
           Relationships: []
         }
@@ -2049,6 +2070,7 @@ export type Database = {
           "created_at": string
           "updated_at": string
           "inn": string | null
+          "appearance": Json
           }
           Insert: {
           "id"?: string
@@ -2067,6 +2089,7 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "inn"?: string | null
+          "appearance"?: Json
           }
           Update: {
           "id"?: string
@@ -2085,6 +2108,7 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "inn"?: string | null
+          "appearance"?: Json
           }
           Relationships: []
         }
@@ -2170,7 +2194,7 @@ export type Database = {
           "provider": "tbank"
           "external_payment_id": string | null
           "order_id": string
-          "plan_code": string
+          "plan_code": "master" | "brigade"
           "amount_kopecks": number
           "currency": string
           "status": "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
@@ -2192,6 +2216,8 @@ export type Database = {
           "consent_accepted_at": string | null
           "consent_version": string | null
           "order_attempt": number
+          "credited_renewal_intent_id": string | null
+          "credited_kopecks": number
           }
           Insert: {
           "id"?: string
@@ -2199,7 +2225,7 @@ export type Database = {
           "provider": "tbank"
           "external_payment_id"?: string | null
           "order_id": string
-          "plan_code": string
+          "plan_code": "master" | "brigade"
           "amount_kopecks": number
           "currency"?: string
           "status"?: "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
@@ -2221,6 +2247,8 @@ export type Database = {
           "consent_accepted_at"?: string | null
           "consent_version"?: string | null
           "order_attempt"?: number
+          "credited_renewal_intent_id"?: string | null
+          "credited_kopecks"?: number
           }
           Update: {
           "id"?: string
@@ -2228,7 +2256,7 @@ export type Database = {
           "provider"?: "tbank"
           "external_payment_id"?: string | null
           "order_id"?: string
-          "plan_code"?: string
+          "plan_code"?: "master" | "brigade"
           "amount_kopecks"?: number
           "currency"?: string
           "status"?: "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
@@ -2250,6 +2278,8 @@ export type Database = {
           "consent_accepted_at"?: string | null
           "consent_version"?: string | null
           "order_attempt"?: number
+          "credited_renewal_intent_id"?: string | null
+          "credited_kopecks"?: number
           }
           Relationships: []
         }
@@ -2624,19 +2654,736 @@ export type Database = {
           "profile_id": string
           "project_id": string
           "created_at": string
-          "primary": unknown | null
           }
           Insert: {
           "profile_id": string
           "project_id": string
           "created_at"?: string
-          "primary"?: unknown | null
           }
           Update: {
           "profile_id"?: string
           "project_id"?: string
           "created_at"?: string
-          "primary"?: unknown | null
+          }
+          Relationships: []
+        }
+        "org_requisites": {
+          Row: {
+          "org_id": string
+          "legal_name": string | null
+          "inn": string | null
+          "kpp": string | null
+          "ogrn": string | null
+          "legal_address": string | null
+          "postal_address": string | null
+          "bank_name": string | null
+          "bank_account": string | null
+          "correspondent_account": string | null
+          "bik": string | null
+          "phone": string | null
+          "email": string | null
+          "signatory_name": string | null
+          "signatory_position": string | null
+          "updated_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "org_id"?: string
+          "legal_name"?: string | null
+          "inn"?: string | null
+          "kpp"?: string | null
+          "ogrn"?: string | null
+          "legal_address"?: string | null
+          "postal_address"?: string | null
+          "bank_name"?: string | null
+          "bank_account"?: string | null
+          "correspondent_account"?: string | null
+          "bik"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "signatory_position"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "org_id"?: string
+          "legal_name"?: string | null
+          "inn"?: string | null
+          "kpp"?: string | null
+          "ogrn"?: string | null
+          "legal_address"?: string | null
+          "postal_address"?: string | null
+          "bank_name"?: string | null
+          "bank_account"?: string | null
+          "correspondent_account"?: string | null
+          "bik"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "signatory_position"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "profile_requisites": {
+          Row: {
+          "profile_id": string
+          "legal_name": string | null
+          "inn": string | null
+          "kpp": string | null
+          "ogrn": string | null
+          "legal_address": string | null
+          "postal_address": string | null
+          "bank_name": string | null
+          "bank_account": string | null
+          "correspondent_account": string | null
+          "bik": string | null
+          "phone": string | null
+          "email": string | null
+          "signatory_name": string | null
+          "signatory_position": string | null
+          "updated_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "profile_id"?: string
+          "legal_name"?: string | null
+          "inn"?: string | null
+          "kpp"?: string | null
+          "ogrn"?: string | null
+          "legal_address"?: string | null
+          "postal_address"?: string | null
+          "bank_name"?: string | null
+          "bank_account"?: string | null
+          "correspondent_account"?: string | null
+          "bik"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "signatory_position"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "profile_id"?: string
+          "legal_name"?: string | null
+          "inn"?: string | null
+          "kpp"?: string | null
+          "ogrn"?: string | null
+          "legal_address"?: string | null
+          "postal_address"?: string | null
+          "bank_name"?: string | null
+          "bank_account"?: string | null
+          "correspondent_account"?: string | null
+          "bik"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "signatory_position"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "project_client_info": {
+          Row: {
+          "project_id": string
+          "name": string | null
+          "is_legal_entity": boolean
+          "inn": string | null
+          "address": string | null
+          "phone": string | null
+          "email": string | null
+          "signatory_name": string | null
+          "updated_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "project_id"?: string
+          "name"?: string | null
+          "is_legal_entity"?: boolean
+          "inn"?: string | null
+          "address"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "project_id"?: string
+          "name"?: string | null
+          "is_legal_entity"?: boolean
+          "inn"?: string | null
+          "address"?: string | null
+          "phone"?: string | null
+          "email"?: string | null
+          "signatory_name"?: string | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_documents": {
+          Row: {
+          "doc_id": string
+          "slug": string
+          "designation": string | null
+          "title": string
+          "category": string
+          "folder": "sp" | "gost" | "laws" | "snip" | "sanpin" | "guides" | "manufacturers" | "international" | "cis" | "other"
+          "display_mode": "full_text" | "card"
+          "object_types": unknown
+          "domains": unknown
+          "applicability_note": string | null
+          "publisher": string | null
+          "country": string | null
+          "edition": string | null
+          "effective_from": unknown | null
+          "last_checked_at": unknown | null
+          "source_links": Json
+          "registry_version": string
+          "is_published": boolean
+          "full_text_available": boolean
+          "created_at": string
+          "updated_at": string
+          "doc_status": "active" | "replaced" | "cancelled"
+          "doc_status_since": unknown | null
+          "replaced_by": string | null
+          "edition_date": unknown | null
+          "text_checked_at": unknown | null
+          "text_source_url": string | null
+          "text_pdf_url": string | null
+          "text_label": "verified" | "checking" | "copy" | null
+          "pending_amendments": Json
+          "applied_amendments": unknown
+          "text_base_year": number | null
+          "recognized_from_scan": boolean
+          "upcoming_amendments": Json
+          "text_unavailable_reason": string | null
+          "text_rights": "free" | "needs_permission" | "unknown"
+          }
+          Insert: {
+          "doc_id"?: string
+          "slug": string
+          "designation"?: string | null
+          "title": string
+          "category": string
+          "folder": "sp" | "gost" | "laws" | "snip" | "sanpin" | "guides" | "manufacturers" | "international" | "cis" | "other"
+          "display_mode": "full_text" | "card"
+          "object_types"?: unknown
+          "domains"?: unknown
+          "applicability_note"?: string | null
+          "publisher"?: string | null
+          "country"?: string | null
+          "edition"?: string | null
+          "effective_from"?: unknown | null
+          "last_checked_at"?: unknown | null
+          "source_links"?: Json
+          "registry_version": string
+          "is_published"?: boolean
+          "full_text_available"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          "doc_status"?: "active" | "replaced" | "cancelled"
+          "doc_status_since"?: unknown | null
+          "replaced_by"?: string | null
+          "edition_date"?: unknown | null
+          "text_checked_at"?: unknown | null
+          "text_source_url"?: string | null
+          "text_pdf_url"?: string | null
+          "text_label"?: "verified" | "checking" | "copy" | null
+          "pending_amendments"?: Json
+          "applied_amendments"?: unknown
+          "text_base_year"?: number | null
+          "recognized_from_scan"?: boolean
+          "upcoming_amendments"?: Json
+          "text_unavailable_reason"?: string | null
+          "text_rights"?: "free" | "needs_permission" | "unknown"
+          }
+          Update: {
+          "doc_id"?: string
+          "slug"?: string
+          "designation"?: string | null
+          "title"?: string
+          "category"?: string
+          "folder"?: "sp" | "gost" | "laws" | "snip" | "sanpin" | "guides" | "manufacturers" | "international" | "cis" | "other"
+          "display_mode"?: "full_text" | "card"
+          "object_types"?: unknown
+          "domains"?: unknown
+          "applicability_note"?: string | null
+          "publisher"?: string | null
+          "country"?: string | null
+          "edition"?: string | null
+          "effective_from"?: unknown | null
+          "last_checked_at"?: unknown | null
+          "source_links"?: Json
+          "registry_version"?: string
+          "is_published"?: boolean
+          "full_text_available"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          "doc_status"?: "active" | "replaced" | "cancelled"
+          "doc_status_since"?: unknown | null
+          "replaced_by"?: string | null
+          "edition_date"?: unknown | null
+          "text_checked_at"?: unknown | null
+          "text_source_url"?: string | null
+          "text_pdf_url"?: string | null
+          "text_label"?: "verified" | "checking" | "copy" | null
+          "pending_amendments"?: Json
+          "applied_amendments"?: unknown
+          "text_base_year"?: number | null
+          "recognized_from_scan"?: boolean
+          "upcoming_amendments"?: Json
+          "text_unavailable_reason"?: string | null
+          "text_rights"?: "free" | "needs_permission" | "unknown"
+          }
+          Relationships: []
+        }
+        "kb_clauses": {
+          Row: {
+          "id": string
+          "doc_id": string
+          "anchor": string
+          "heading": string | null
+          "body": string
+          "position": number
+          "is_published": boolean
+          "created_at": string
+          "updated_at": string
+          "number": string | null
+          "level": number
+          "amendments": unknown
+          "search_v": unknown | null
+          }
+          Insert: {
+          "id"?: string
+          "doc_id": string
+          "anchor": string
+          "heading"?: string | null
+          "body": string
+          "position": number
+          "is_published"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          "number"?: string | null
+          "level"?: number
+          "amendments"?: unknown
+          "search_v"?: unknown | null
+          }
+          Update: {
+          "id"?: string
+          "doc_id"?: string
+          "anchor"?: string
+          "heading"?: string | null
+          "body"?: string
+          "position"?: number
+          "is_published"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          "number"?: string | null
+          "level"?: number
+          "amendments"?: unknown
+          "search_v"?: unknown | null
+          }
+          Relationships: []
+        }
+        "kb_solutions": {
+          Row: {
+          "id": string
+          "slug": string
+          "title": string
+          "body": Json
+          "status": "draft" | "checked" | "reviewed" | "published"
+          "checked_at": string | null
+          "created_at": string
+          "updated_at": string
+          "reviewed_by": string | null
+          "reviewed_at": string | null
+          "status_reason": string | null
+          "recheck_since": unknown | null
+          "recheck_reason": string | null
+          "recheck_docs": unknown | null
+          }
+          Insert: {
+          "id"?: string
+          "slug": string
+          "title": string
+          "body"?: Json
+          "status"?: "draft" | "checked" | "reviewed" | "published"
+          "checked_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          "reviewed_by"?: string | null
+          "reviewed_at"?: string | null
+          "status_reason"?: string | null
+          "recheck_since"?: unknown | null
+          "recheck_reason"?: string | null
+          "recheck_docs"?: unknown | null
+          }
+          Update: {
+          "id"?: string
+          "slug"?: string
+          "title"?: string
+          "body"?: Json
+          "status"?: "draft" | "checked" | "reviewed" | "published"
+          "checked_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          "reviewed_by"?: string | null
+          "reviewed_at"?: string | null
+          "status_reason"?: string | null
+          "recheck_since"?: unknown | null
+          "recheck_reason"?: string | null
+          "recheck_docs"?: unknown | null
+          }
+          Relationships: []
+        }
+        "kb_solution_facts": {
+          Row: {
+          "id": string
+          "solution_id": string
+          "position": number
+          "fact": string
+          "doc_id": string
+          "clause_anchor": string | null
+          "quote": string | null
+          "created_at": string
+          "verdict": "follows" | "not_follows" | null
+          "verdict_reason": string | null
+          "verdicted_at": string | null
+          }
+          Insert: {
+          "id"?: string
+          "solution_id": string
+          "position": number
+          "fact": string
+          "doc_id": string
+          "clause_anchor"?: string | null
+          "quote"?: string | null
+          "created_at"?: string
+          "verdict"?: "follows" | "not_follows" | null
+          "verdict_reason"?: string | null
+          "verdicted_at"?: string | null
+          }
+          Update: {
+          "id"?: string
+          "solution_id"?: string
+          "position"?: number
+          "fact"?: string
+          "doc_id"?: string
+          "clause_anchor"?: string | null
+          "quote"?: string | null
+          "created_at"?: string
+          "verdict"?: "follows" | "not_follows" | null
+          "verdict_reason"?: string | null
+          "verdicted_at"?: string | null
+          }
+          Relationships: []
+        }
+        "kb_gaps": {
+          Row: {
+          "id": string
+          "question": string
+          "context": Json
+          "created_at": string
+          }
+          Insert: {
+          "id"?: string
+          "question": string
+          "context"?: Json
+          "created_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "question"?: string
+          "context"?: Json
+          "created_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_settings": {
+          Row: {
+          "key": string
+          "value": Json
+          "updated_at": string
+          }
+          Insert: {
+          "key"?: string
+          "value": Json
+          "updated_at"?: string
+          }
+          Update: {
+          "key"?: string
+          "value"?: Json
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_document_text_gaps": {
+          Row: {
+          "doc_id": string
+          "gaps": unknown
+          "updated_at": string
+          }
+          Insert: {
+          "doc_id"?: string
+          "gaps": unknown
+          "updated_at"?: string
+          }
+          Update: {
+          "doc_id"?: string
+          "gaps"?: unknown
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "home_ai_chat_sessions": {
+          Row: {
+          "profile_id": string
+          "recent_turns": Json
+          "rolling_summary": string | null
+          "updated_at": string
+          }
+          Insert: {
+          "profile_id"?: string
+          "recent_turns"?: Json
+          "rolling_summary"?: string | null
+          "updated_at"?: string
+          }
+          Update: {
+          "profile_id"?: string
+          "recent_turns"?: Json
+          "rolling_summary"?: string | null
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "ai_answer_ratings": {
+          Row: {
+          "profile_id": string
+          "message_id": string
+          "rating": "up" | "down"
+          "project_id": string | null
+          "question": string
+          "answer": string
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "profile_id": string
+          "message_id": string
+          "rating": "up" | "down"
+          "project_id"?: string | null
+          "question"?: string
+          "answer"?: string
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "profile_id"?: string
+          "message_id"?: string
+          "rating"?: "up" | "down"
+          "project_id"?: string | null
+          "question"?: string
+          "answer"?: string
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "contractor_portfolio_objects": {
+          Row: {
+          "id": string
+          "org_id": string
+          "title": string
+          "photos": Json
+          "position": number
+          "created_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "org_id": string
+          "title": string
+          "photos": Json
+          "position"?: number
+          "created_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "org_id"?: string
+          "title"?: string
+          "photos"?: Json
+          "position"?: number
+          "created_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_clauses_next": {
+          Row: {
+          "doc_id": string
+          "amendment_no": number
+          "anchor": string
+          "number": string | null
+          "heading": string | null
+          "body": string
+          "level": number
+          "position": number
+          "amendments": unknown
+          "created_at": string
+          }
+          Insert: {
+          "doc_id": string
+          "amendment_no": number
+          "anchor": string
+          "number"?: string | null
+          "heading"?: string | null
+          "body": string
+          "level"?: number
+          "position": number
+          "amendments"?: unknown
+          "created_at"?: string
+          }
+          Update: {
+          "doc_id"?: string
+          "amendment_no"?: number
+          "anchor"?: string
+          "number"?: string | null
+          "heading"?: string | null
+          "body"?: string
+          "level"?: number
+          "position"?: number
+          "amendments"?: unknown
+          "created_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_change_log": {
+          Row: {
+          "id": string
+          "doc_id": string | null
+          "solution_id": string | null
+          "event": "amendment_approved" | "amendment_effective" | "amendment_pending" | "cancelled" | "replaced" | "document_added" | "solution_checking" | "solution_rechecked"
+          "occurred_on": unknown
+          "amendment_no": number | null
+          "link_url": string | null
+          "replaced_by": string | null
+          "dedupe_key": string
+          "created_at": string
+          }
+          Insert: {
+          "id"?: string
+          "doc_id"?: string | null
+          "solution_id"?: string | null
+          "event": "amendment_approved" | "amendment_effective" | "amendment_pending" | "cancelled" | "replaced" | "document_added" | "solution_checking" | "solution_rechecked"
+          "occurred_on": unknown
+          "amendment_no"?: number | null
+          "link_url"?: string | null
+          "replaced_by"?: string | null
+          "dedupe_key": string
+          "created_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "doc_id"?: string | null
+          "solution_id"?: string | null
+          "event"?: "amendment_approved" | "amendment_effective" | "amendment_pending" | "cancelled" | "replaced" | "document_added" | "solution_checking" | "solution_rechecked"
+          "occurred_on"?: unknown
+          "amendment_no"?: number | null
+          "link_url"?: string | null
+          "replaced_by"?: string | null
+          "dedupe_key"?: string
+          "created_at"?: string
+          }
+          Relationships: []
+        }
+        "kb_watches": {
+          Row: {
+          "profile_id": string
+          "doc_id": string
+          "created_at": string
+          }
+          Insert: {
+          "profile_id": string
+          "doc_id": string
+          "created_at"?: string
+          }
+          Update: {
+          "profile_id"?: string
+          "doc_id"?: string
+          "created_at"?: string
+          }
+          Relationships: []
+        }
+        "ai_document_checks": {
+          Row: {
+          "id": string
+          "project_id": string
+          "subject_kind": "estimate" | "document"
+          "subject_id": string
+          "subject_version_id": string | null
+          "estimate_draft_seq": number | null
+          "run_by": string | null
+          "status": "running" | "done" | "failed"
+          "stage": string | null
+          "findings": Json
+          "hidden_finding_ids": unknown
+          "model": string | null
+          "error": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "project_id": string
+          "subject_kind": "estimate" | "document"
+          "subject_id": string
+          "subject_version_id"?: string | null
+          "estimate_draft_seq"?: number | null
+          "run_by"?: string | null
+          "status"?: "running" | "done" | "failed"
+          "stage"?: string | null
+          "findings"?: Json
+          "hidden_finding_ids"?: unknown
+          "model"?: string | null
+          "error"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "project_id"?: string
+          "subject_kind"?: "estimate" | "document"
+          "subject_id"?: string
+          "subject_version_id"?: string | null
+          "estimate_draft_seq"?: number | null
+          "run_by"?: string | null
+          "status"?: "running" | "done" | "failed"
+          "stage"?: string | null
+          "findings"?: Json
+          "hidden_finding_ids"?: unknown
+          "model"?: string | null
+          "error"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
           }
           Relationships: []
         }
@@ -2684,6 +3431,15 @@ export type Database = {
           "p_chat_id": string
           "p_user_text": string
           "p_assistant_text": string
+          "p_assistant_meta": unknown
+          }
+          Returns: unknown
+        }
+        "append_home_ai_chat_session_turns": {
+          Args: {
+          "p_user_text": string
+          "p_assistant_text": string
+          "p_assistant_meta": unknown
           }
           Returns: unknown
         }
@@ -2730,6 +3486,12 @@ export type Database = {
         "can_access_storage_object": {
           Args: {
           "p_storage_object_id": string
+          }
+          Returns: boolean
+        }
+        "can_check_project_estimate": {
+          Args: {
+          "p_project_id": string
           }
           Returns: boolean
         }
@@ -2801,6 +3563,7 @@ export type Database = {
           "p_new_status": string
           "p_comment_body": unknown
           "p_expected_status": unknown
+          "p_override_final_proof": unknown
           }
           Returns: Json
         }
@@ -2954,6 +3717,10 @@ export type Database = {
           }
           Returns: Json
         }
+        "get_home_ai_chat_session": {
+          Args: Record<PropertyKey, never>
+          Returns: Json
+        }
         "get_hr_operational_summary": {
           Args: {
           "p_project_id": string
@@ -3066,6 +3833,62 @@ export type Database = {
           }
           Returns: boolean
         }
+        "kb_assistant_clauses": {
+          Args: Record<PropertyKey, never>
+          Returns: unknown
+        }
+        "kb_assistant_search": {
+          Args: {
+          "p_question": string
+          "p_solution_limit": unknown
+          "p_clause_limit": unknown
+          "p_country": unknown
+          }
+          Returns: Json
+        }
+        "kb_changes_feed": {
+          Args: {
+          "p_limit": unknown
+          }
+          Returns: unknown
+        }
+        "kb_changes_month_count": {
+          Args: Record<PropertyKey, never>
+          Returns: number
+        }
+        "kb_document_history": {
+          Args: {
+          "p_slug": string
+          }
+          Returns: unknown
+        }
+        "kb_folder_counts": {
+          Args: Record<PropertyKey, never>
+          Returns: unknown
+        }
+        "kb_solution_history": {
+          Args: {
+          "p_slug": string
+          }
+          Returns: unknown
+        }
+        "kb_sp_full_text_enabled": {
+          Args: Record<PropertyKey, never>
+          Returns: boolean
+        }
+        "kb_watch_set": {
+          Args: {
+          "p_slug": string
+          "p_watch": boolean
+          }
+          Returns: boolean
+        }
+        "kb_watching": {
+          Args: {
+          "p_slug": string
+          }
+          Returns: boolean
+        }
         "list_canonical_stages_with_works": {
           Args: {
           "p_template_id": unknown
@@ -3113,6 +3936,12 @@ export type Database = {
           }
           Returns: string
         }
+        "passkey_credential_known": {
+          Args: {
+          "p_credential_id": string
+          }
+          Returns: boolean
+        }
         "place_cross_project_stock_transfer": {
           Args: {
           "p_from_project": string
@@ -3134,6 +3963,15 @@ export type Database = {
           "p_size_bytes": number
           "p_description": unknown
           "p_visibility_class": unknown
+          }
+          Returns: unknown
+        }
+        "prepare_document_version_upload": {
+          Args: {
+          "p_document_id": string
+          "p_client_filename": string
+          "p_mime_type": string
+          "p_size_bytes": number
           }
           Returns: unknown
         }
@@ -3204,6 +4042,13 @@ export type Database = {
           }
           Returns: Json
         }
+        "reorder_contractor_portfolio_objects": {
+          Args: {
+          "p_org_id": string
+          "p_ids": unknown
+          }
+          Returns: unknown
+        }
         "resolve_ai_chat_key": {
           Args: {
           "p_profile_id": string
@@ -3227,6 +4072,16 @@ export type Database = {
         "set_active_org_context": {
           Args: {
           "p_org_id": string
+          }
+          Returns: unknown
+        }
+        "set_ai_answer_rating": {
+          Args: {
+          "p_message_id": string
+          "p_rating": string
+          "p_project_id": unknown
+          "p_question": unknown
+          "p_answer": unknown
           }
           Returns: unknown
         }

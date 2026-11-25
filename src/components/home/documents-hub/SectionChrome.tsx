@@ -28,18 +28,23 @@ interface SectionChromeProps {
   subtitle?: string;
   search: string;
   onSearchChange: (value: string) => void;
-  preset: DateFilterPreset;
-  onPresetChange: (preset: DateFilterPreset) => void;
-  dateRange: DateRange | null;
-  onDateRangeChange: (range: DateRange | null) => void;
-  pageSize: PageSize;
-  onPageSizeChange: (size: PageSize) => void;
+  /** Date filter. Omit `onPresetChange` to hide the date button (a section whose
+   * items have no upload date, e.g. the knowledge base). */
+  preset?: DateFilterPreset;
+  onPresetChange?: (preset: DateFilterPreset) => void;
+  dateRange?: DateRange | null;
+  onDateRangeChange?: (range: DateRange | null) => void;
+  pageSize: PageSize | number;
+  /** Omit to show the page size as fixed text instead of a selector. */
+  onPageSizeChange?: (size: PageSize) => void;
   page: number;
   onPageChange: (page: number) => void;
   totalAfterFilter: number;
   isFilterActive: boolean;
   onReset: () => void;
-  systemHidden: boolean;
+  systemHidden?: boolean;
+  /** No search and reset row: a page with nothing to filter («Что изменилось»). */
+  toolbarHidden?: boolean;
   headerExtra?: ReactNode;
   children: ReactNode;
 }
@@ -53,9 +58,9 @@ export function SectionChrome({
   subtitle,
   search,
   onSearchChange,
-  preset,
+  preset = "all",
   onPresetChange,
-  dateRange,
+  dateRange = null,
   onDateRangeChange,
   pageSize,
   onPageSizeChange,
@@ -64,7 +69,8 @@ export function SectionChrome({
   totalAfterFilter,
   isFilterActive,
   onReset,
-  systemHidden,
+  systemHidden = false,
+  toolbarHidden = false,
   headerExtra,
   children,
 }: SectionChromeProps) {
@@ -98,6 +104,7 @@ export function SectionChrome({
         {headerExtra}
       </header>
 
+      {!toolbarHidden && (
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1 max-w-md">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -110,6 +117,7 @@ export function SectionChrome({
           />
         </div>
 
+        {onPresetChange && onDateRangeChange && (
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="h-9 gap-1.5">
@@ -172,6 +180,7 @@ export function SectionChrome({
             </div>
           </PopoverContent>
         </Popover>
+        )}
 
         <Button
           variant="ghost"
@@ -184,6 +193,7 @@ export function SectionChrome({
           {t("home.documentsHub.chrome.reset")}
         </Button>
       </div>
+      )}
 
       {systemHidden && (
         <p className="text-caption text-muted-foreground italic">
@@ -195,12 +205,18 @@ export function SectionChrome({
 
       {hasPagination && (
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-          <PageSizeSelector
-            value={pageSize}
-            onValueChange={onPageSizeChange}
-            label={t("home.documentsHub.chrome.pageSize")}
-            ariaLabel={t("home.documentsHub.chrome.pageSize")}
-          />
+          {onPageSizeChange ? (
+            <PageSizeSelector
+              value={pageSize as PageSize}
+              onValueChange={onPageSizeChange}
+              label={t("home.documentsHub.chrome.pageSize")}
+              ariaLabel={t("home.documentsHub.chrome.pageSize")}
+            />
+          ) : (
+            <span className="text-caption text-muted-foreground">
+              {t("home.documentsHub.chrome.pageSize")} {pageSize}
+            </span>
+          )}
           <div className="flex items-center gap-2">
             <span className="text-caption text-muted-foreground">
               {t("home.documentsHub.chrome.page", { current: page + 1, total: totalPages })}

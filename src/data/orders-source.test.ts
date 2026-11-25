@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "../../backend-truth/generated/supabase-types";
 import {
   createSupabaseOrdersSource,
@@ -1050,5 +1050,173 @@ describe("order row status mapping", () => {
     });
 
     expect(shaped.status).toBe("placed");
+  });
+});
+
+describe("member without detail access", () => {
+  const rpcLine = (id: string, orderId: string, procurementItemId: string, quantity: number) => ({
+    order_line_id: id,
+    order_id: orderId,
+    procurement_item_id: procurementItemId,
+    title: "Copper cable",
+    procurement_item_title: "Copper cable",
+    quantity,
+    unit: "m",
+    created_at: "2026-03-01T00:00:00.000Z",
+    delivery_due_at: null,
+    estimate_resource_line_resource_type: "material",
+  });
+
+  const load = (rpc: { data: unknown; error: unknown }) => {
+    const database: MockDatabase = {
+      nextId: 0,
+      tables: {
+        orders: [
+          orderRow({ id: "order-received", project_id: "project-1", status: "received" }),
+          orderRow({ id: "order-move", project_id: "project-1", status: "received" }),
+        ],
+        order_lines: [],
+        inventory_movements: [
+          movementRow({
+            id: "m-1", project_id: "project-1", order_line_id: "line-received", movement_type: "receipt",
+            delta_qty: 10, inventory_location_id: "location-1",
+          }),
+          movementRow({
+            id: "m-2", project_id: "project-1", order_line_id: "line-move", movement_type: "transfer",
+            delta_qty: -4, inventory_location_id: "location-1",
+          }),
+          movementRow({
+            id: "m-3", project_id: "project-1", order_line_id: "line-move", movement_type: "transfer",
+            delta_qty: 4, inventory_location_id: "location-2",
+          }),
+        ],
+        procurement_items: [procurementItemRow({ id: "proc-1", title: "Copper cable", unit: "m" })],
+        inventory_items: [],
+      },
+    };
+    const supabase = { ...createMockSupabase(database), rpc: async () => rpc };
+    return createSupabaseOrdersSource(supabase as never, "profile-1")
+      .getProjectOrders("project-1", "operational_summary");
+  };
+
+  const payload = {
+    procurement_items: [],
+    ordered_lines: [
+      rpcLine("line-received", "order-received", "proc-1", 10),
+      rpcLine("line-move", "order-move", "proc-1", 4),
+    ],
+  };
+
+  it("reads receipts from the movements of lines the operational summary names", async () => {
+    const orders = await load({ data: payload, error: null });
+    const received = orders.find((order) => order.id === "order-received");
+    expect(received).toMatchObject({ kind: "supplier" });
+    expect(received?.lines[0].receivedQty).toBe(10);
+    expect(received?.receiveEvents).toHaveLength(1);
+  });
+
+  it("does not repeat a line the member can read directly", async () => {
+    const database = {
+      nextId: 0,
+      tables: {
+        orders: [orderRow({ id: "order-received", project_id: "project-1", status: "received" })],
+        order_lines: [lineRow({ id: "line-received", order_id: "order-received", procurement_item_id: "proc-1" })],
+        inventory_movements: [],
+        procurement_items: [],
+        inventory_items: [],
+      },
+    } as MockDatabase;
+    const supabase = { ...createMockSupabase(database), rpc: async () => ({ data: payload, error: null }) };
+    const [order] = await createSupabaseOrdersSource(supabase as never, "profile-1")
+      .getProjectOrders("project-1", "operational_summary");
+    expect(order.lines).toHaveLength(1);
+  });
+
+  it("leaves full access off the summary", async () => {
+    const database = {
+      nextId: 0,
+      tables: { orders: [orderRow({ id: "order-received", project_id: "project-1", status: "placed" })], order_lines: [],
+        inventory_movements: [], procurement_items: [], inventory_items: [] },
+    } as MockDatabase;
+    const rpc = vi.fn(async () => ({ data: payload, error: null }));
+    await createSupabaseOrdersSource({ ...createMockSupabase(database), rpc } as never, "profile-1")
+      .getProjectOrders("project-1", "full");
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells a warehouse move from a receipt", async () => {
+    const orders = await load({ data: payload, error: null });
+    expect(orders.find((order) => order.id === "order-move")?.kind).toBe("stock");
+  });
+
+  it("reports a failed summary instead of returning orders with no receipts", async () => {
+    await expect(load({ data: payload, error: new Error("down") })).rejects.toThrow("down");
+    await expect(load({ data: null, error: null })).rejects.toThrow();
+  });
+
+  it("keeps a line of an order that the overlay page does not reach", () => {
+    const existing = [{ id: "line-b", orderId: "o", procurementItemId: "p", title: "B", qty: 1, receivedQty: 1, unit: "m" }];
+    const merged = mergeOperationalRpcLinesOntoExistingOrderLines(existing as never, [rpcLine("line-a", "o", "p", 2)] as never, new Map());
+    expect(merged.map((line) => line.id)).toEqual(["line-a", "line-b"]);
+  });
+
+  it("refuses a summary longer than it can read", async () => {
+    const page = (offset: number) => Array.from({ length: 500 }, (_, index) =>
+      rpcLine(`line-${offset + index}`, "order-received", "proc-1", 1));
+    const database = {
+      nextId: 0,
+      tables: { orders: [orderRow({ id: "order-received", project_id: "project-1", status: "received" })],
+        order_lines: [], inventory_movements: [], procurement_items: [], inventory_items: [] },
+    } as MockDatabase;
+    const rpc = async (_name: string, args: { p_offset: number }) => ({
+      data: { procurement_items: [], ordered_lines: page(args.p_offset) },
+      error: null,
+    });
+    await expect(createSupabaseOrdersSource({ ...createMockSupabase(database), rpc } as never, "profile-1")
+      .getProjectOrders("project-1", "operational_summary")).rejects.toThrow("too long");
+  });
+
+  it("reads every page of a large project", async () => {
+    const database = {
+      nextId: 0,
+      tables: {
+        orders: [
+          orderRow({ id: "order-received", project_id: "project-1", status: "received" }),
+          orderRow({ id: "order-old", project_id: "project-1", status: "received" }),
+        ],
+        order_lines: [],
+        inventory_movements: [movementRow({ id: "m-old", order_line_id: "line-last", movement_type: "receipt", delta_qty: 1 })],
+        procurement_items: [],
+        inventory_items: [],
+      },
+    } as MockDatabase;
+    const fullPage = Array.from({ length: 500 }, (_, index) =>
+      rpcLine(`line-${index}`, "order-received", "proc-1", 1));
+    const rpc = vi.fn(async (_name: string, args: { p_offset: number }) => ({
+      data: {
+        procurement_items: [],
+        ordered_lines: args.p_offset === 0 ? fullPage : [rpcLine("line-last", "order-old", "proc-1", 1)],
+      },
+      error: null,
+    }));
+    const orders = await createSupabaseOrdersSource({ ...createMockSupabase(database), rpc } as never, "profile-1")
+      .getProjectOrders("project-1", "operational_summary");
+    expect(rpc.mock.calls.map(([, args]) => args.p_offset).slice(0, 2)).toEqual([0, 500]);
+    expect(orders.find((order) => order.id === "order-old")?.receiveEvents).toHaveLength(1);
+  });
+
+  it("counts the outgoing side of a cross-project transfer against the item", () => {
+    const [outgoing] = shapeOrdersWithDetails({
+      orderRows: [orderRow({ id: "order-out", project_id: "project-1", status: "received", transfer_direction: "out" })],
+      lineRows: [lineRow({ id: "line-out", order_id: "order-out", procurement_item_id: null })],
+      movementRows: [
+        movementRow({ id: "m-in", order_line_id: "line-in", procurement_item_id: "proc-1",
+          inventory_item_id: "stock-1", movement_type: "receipt", delta_qty: 10 }),
+        movementRow({ id: "m-out", order_line_id: "line-out", procurement_item_id: null,
+          inventory_item_id: "stock-1", movement_type: "transfer", delta_qty: -6 }),
+      ],
+      procurementItemRows: [],
+    });
+    expect(outgoing.receiveEvents?.[0]).toMatchObject({ procurementItemId: "proc-1", deltaQty: -6 });
   });
 });

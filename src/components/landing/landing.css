@@ -312,8 +312,7 @@
    headers, the KeyFeatures arrows) still have NO focus indicator. They are
    unchanged by this feature and out of its scope; adding them needs a class on
    each, which is its own change. */
-.rv-landing .rv-lang-switch button:focus-visible,
-.rv-landing .rv-lang-prompt button:focus-visible {
+.rv-landing .rv-lang-switch button:focus-visible {
   outline: 2px solid var(--rv-focus-ring, currentColor) !important;
   outline-offset: 2px !important;
 }

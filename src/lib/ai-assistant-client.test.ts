@@ -475,12 +475,10 @@ describe("buildInferenceRequestBody", () => {
     expect(body).not.toHaveProperty("chatId");
   });
 
-  it("includes llmProvider when provided (qwen / hosted A-B switch)", () => {
+  it("includes llmProvider when provided", () => {
     const pack = minimalContextPack();
     const noLlm = buildInferenceRequestBody("pid-1", "consult", "hi", pack);
     expect(noLlm).not.toHaveProperty("llmProvider");
-    const qwen = buildInferenceRequestBody("pid-1", "consult", "hi", pack, undefined, undefined, "qwen");
-    expect(qwen.llmProvider).toBe("qwen");
     const cid = "a1b2c3d4-e5f6-4780-abcd-ef1234567890";
     const both = buildInferenceRequestBody("pid-1", "consult", "hi", pack, undefined, cid, "gigachat");
     expect(both.chatId).toBe(cid);

@@ -33,7 +33,7 @@ const UPGRADE_BUTTON = "Upgrade plan";
 const COMPARE_BUTTON = "Compare plans";
 const LOGIN_BUTTON = /log in/i;
 const SIGN_IN_HINT = "Sign in to manage your subscription.";
-const FREE_PLAN_TITLE = "Бесплатно plan";
+const FREE_PLAN_TITLE = "Старт plan";
 const PLAN_LOAD_ERROR = "Couldn't load your plan.";
 
 // No session → the quota query is disabled and returns no data.

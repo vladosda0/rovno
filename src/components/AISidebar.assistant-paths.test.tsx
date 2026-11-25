@@ -43,6 +43,7 @@ vi.mock("@/lib/ai-assistant-client", async (importOriginal) => {
 });
 
 import { AISidebar } from "@/components/AISidebar";
+import { seedProjectComposer } from "@/lib/shurik-ask";
 import * as AiProjectContext from "@/lib/ai-project-context";
 import { __unsafeResetStoreForTests, addMember, addProject } from "@/data/store";
 import { clearDemoSession, clearStoredAuthProfile, setAuthRole, setStoredAuthProfile } from "@/lib/auth-state";
@@ -141,6 +142,124 @@ describe("AISidebar assistant paths", () => {
       expect(screen.queryByText("PREVIEW_TITLE")).toBeInTheDocument();
     });
 
+    function renderProjectSidebar() {
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    }
+
+    async function askWithKnowledgeBase(knowledgeBase: unknown, grounding = "project_context_grounded") {
+      invokeLiveTextAssistantMock.mockResolvedValueOnce({
+        explanation: "LIVE_ASSISTANT_EXPLANATION_BODY",
+        grounding,
+        sources: [{ kind: "project_summary" as const, label: "SRC_PROJECT_A" }],
+        workProposal: {
+          proposalTitle: "PREVIEW_TITLE",
+          proposalSummary: "PREVIEW_SUMMARY",
+          suggestedWorkItems: [{ label: "PREVIEW_LINE", note: "PREVIEW_NOTE" }],
+        },
+        knowledgeBase,
+      } as never);
+      renderProjectSidebar();
+      // The conversation of this project outlives a render: count what the new turn adds.
+      const callouts = () => screen.queryAllByText(/Using (limited )?project context/i).length;
+      const before = { callouts: callouts(), answers: screen.queryAllByText("LIVE_ASSISTANT_EXPLANATION_BODY").length };
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "wall question" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+      await waitFor(() => {
+        expect(screen.queryAllByText("LIVE_ASSISTANT_EXPLANATION_BODY").length).toBe(before.answers + 1);
+      });
+      return callouts() - before.callouts;
+    }
+
+    it("«not in the base» takes the place of the project grounding callout", async () => {
+      const addedCallouts = await askWithKnowledgeBase({ sources: [], missing: true });
+      expect(screen.getAllByTestId("kb-missing").length).toBeGreaterThan(0);
+      expect(addedCallouts).toBe(0);
+    });
+
+    it("«not in the base» also replaces the limited-context callout of a snapshot-only answer", async () => {
+      expect(await askWithKnowledgeBase({ sources: [], missing: true }, "partial")).toBe(0);
+    });
+
+    it("a sourced answer keeps the callout and «Ask about this clause» puts the quote before the draft", async () => {
+      const addedCallouts = await askWithKnowledgeBase({
+        missing: false,
+        sources: [{
+          docId: "SP-155",
+          docSlug: "sp-163",
+          docLabel: "СП 163.1325800",
+          clause: "6.4.2.8",
+          anchor: "p-6-4-2-8",
+          checking: false,
+          pendingAmendments: [],
+          quote: "покрыты гидроизолирующим составом",
+        }],
+      });
+      expect(addedCallouts).toBe(1);
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "my draft" } });
+      fireEvent.click(within(screen.getByTestId("kb-sources")).getByRole("button", { expanded: false }));
+      fireEvent.click((await screen.findAllByRole("button", { name: /6\.4\.2\.8/ })).at(-1)!);
+      fireEvent.click(await screen.findByRole("button", { name: /about this clause/i }));
+      expect((composer as HTMLTextAreaElement).value).toBe(
+        "«покрыты гидроизолирующим составом» · СП 163.1325800, cl. 6.4.2.8\nmy draft",
+      );
+    });
+
+    it("shows the beta mark and the AI disclaimer under the project composer", () => {
+      renderProjectSidebar();
+      expect(screen.getByTestId("shurik-disclaimer")).toHaveTextContent(/beta/i);
+    });
+
+    it("sends GigaChat even when the browser remembers Qwen, and forgets that choice", async () => {
+      localStorage.setItem("ai-sidebar-chat-model", "qwen");
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "which model answers" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+
+      await waitFor(() => {
+        expect(invokeLiveTextAssistantMock).toHaveBeenCalledTimes(1);
+      });
+      const invokeArg = invokeLiveTextAssistantMock.mock.calls[0]?.[0] as { llmProvider?: string };
+      expect(invokeArg.llmProvider).toBe("gigachat");
+      expect(localStorage.getItem("ai-sidebar-chat-model")).toBeNull();
+    });
+
+    it("offers no model choice in the composer menu", () => {
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      // Icon-only trigger, opened from the keyboard (jsdom has no PointerEvent for Radix).
+      const composerMenu = document.querySelector("button[aria-haspopup='menu'] svg.lucide-plus")?.closest("button");
+      if (!composerMenu) throw new Error("composer menu trigger not found");
+      fireEvent.keyDown(composerMenu, { key: "Enter" });
+
+      expect(screen.queryByRole("menuitem", { name: "Learn mode" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("menuitem", { name: "Model" })).not.toBeInTheDocument();
+      expect(screen.queryByText("Qwen")).not.toBeInTheDocument();
+    });
+
     it("passes a UUID chatId on live assistant invoke (session continuity)", async () => {
       const queryClient = createQueryClient();
       render(
@@ -164,6 +283,232 @@ describe("AISidebar assistant paths", () => {
       );
       const stored = localStorage.getItem("rovno:ai-chat:project-a");
       expect(stored).toBe(first.chatId);
+    });
+
+    it("offers Try again on an evidence_unavailable failure and re-sends the same message once", async () => {
+      const { aiInferenceFailureFrom } = await import("@/lib/ai-assistant-client");
+      invokeLiveTextAssistantMock.mockRejectedValueOnce(aiInferenceFailureFrom("evidence_unavailable", "en"));
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "what is left on stage 2?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+
+      expect(
+        await screen.findByText(
+          "The project data could not be loaded, so the assistant did not answer. Please try again.",
+        ),
+      ).toBeInTheDocument();
+      const userTextCount = screen.getAllByText("what is left on stage 2?").length;
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+      expect((await screen.findAllByText("LIVE_ASSISTANT_EXPLANATION_BODY")).length).toBeGreaterThan(0);
+      expect(invokeLiveTextAssistantMock).toHaveBeenCalledTimes(2);
+      const second = invokeLiveTextAssistantMock.mock.calls[1]?.[0] as {
+        userMessage: string;
+        projectId: string;
+        priorTurns: Array<{ role: string; text: string }>;
+      };
+      expect(second.userMessage).toBe("what is left on stage 2?");
+      expect(second.projectId).toBe("project-a");
+      const first = invokeLiveTextAssistantMock.mock.calls[0]?.[0] as { priorTurns: unknown };
+      expect(second.priorTurns).toEqual(first.priorTurns);
+      expect(screen.getAllByText("what is left on stage 2?")).toHaveLength(userTextCount);
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    });
+
+    it("withdraws Try again once another turn follows the failed one", async () => {
+      const { aiInferenceFailureFrom } = await import("@/lib/ai-assistant-client");
+      invokeLiveTextAssistantMock.mockRejectedValueOnce(aiInferenceFailureFrom("evidence_unavailable", "en"));
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "what is left on stage 2?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+      expect(await screen.findByRole("button", { name: "Try again" })).toBeInTheDocument();
+
+      await waitFor(() => {
+        fireEvent.change(screen.getByLabelText("Ask Shurik..."), { target: { value: "and on stage 3?" } });
+        fireEvent.keyDown(screen.getByLabelText("Ask Shurik..."), { key: "Enter" });
+        expect(invokeLiveTextAssistantMock).toHaveBeenCalledTimes(2);
+      }, { timeout: 4000 });
+      expect((await screen.findAllByText("LIVE_ASSISTANT_EXPLANATION_BODY")).length).toBeGreaterThan(0);
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    });
+
+    it("offers no Try again for any other failure", async () => {
+      invokeLiveTextAssistantMock.mockRejectedValueOnce(new Error("Not allowed for this project."));
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "what is left on stage 2?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+
+      expect(await screen.findByText("Not allowed for this project.")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    });
+
+    it("shows no actions under a failure bubble", async () => {
+      invokeLiveTextAssistantMock.mockRejectedValueOnce(new Error("Not allowed for this project."));
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      // The project's thread outlives a test, so earlier answers may already carry the row.
+      const titles = ["Copy", "Rate good", "Rate bad", "Save to Documents", "Regenerate"];
+      const before = titles.map((title) => screen.queryAllByTitle(title).length);
+
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "why cure a slab?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+
+      expect(await screen.findByText("Not allowed for this project.")).toBeInTheDocument();
+      expect(titles.map((title) => screen.queryAllByTitle(title).length)).toEqual(before);
+    });
+
+    it("keeps the actions row under every answer, with no mode to switch on", async () => {
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      expect(screen.queryByRole("button", { name: "Learn" })).not.toBeInTheDocument();
+
+      const titles = ["Copy", "Rate good", "Rate bad", "Save to Documents", "Regenerate"];
+      const before = titles.map((title) => screen.queryAllByTitle(title).length);
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "what next?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+      await waitFor(() => {
+        expect(titles.map((title) => screen.queryAllByTitle(title).length)).toEqual(before.map((n) => n + 1));
+      });
+
+      fireEvent.click(screen.getAllByTitle("Rate good").at(-1)!);
+      expect(screen.getAllByTitle("Rate good").at(-1)).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getAllByText("what next?").at(-1)).toHaveClass("bg-accent");
+    });
+
+    it("lays a question carried in from outside the project in the composer, unsent", () => {
+      seedProjectComposer("project-a", "Что у меня по смете?");
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      expect(screen.getByLabelText("Ask Shurik...")).toHaveValue("Что у меня по смете?");
+      expect(invokeLiveTextAssistantMock).not.toHaveBeenCalled();
+    });
+
+    it("answers a selection inside Shurik's answer in the project, quote and question together", async () => {
+      vi.useRealTimers();
+      Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1280 });
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "first" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+      const answers = await screen.findAllByText("LIVE_ASSISTANT_EXPLANATION_BODY");
+      const answer = answers[answers.length - 1];
+      await waitFor(() => expect(invokeLiveTextAssistantMock).toHaveBeenCalled());
+      invokeLiveTextAssistantMock.mockClear();
+      const spy = vi.spyOn(window, "getSelection").mockReturnValue({
+        isCollapsed: false,
+        rangeCount: 1,
+        anchorNode: answer.firstChild,
+        focusNode: answer.firstChild,
+        toString: () => "LIVE_ASSISTANT",
+        getRangeAt: () => ({ getBoundingClientRect: () => ({ left: 1, bottom: 1 }) }),
+      } as unknown as Selection);
+      fireEvent.mouseUp(answer);
+      const dialog = await screen.findByTestId("shurik-selection-ask");
+      spy.mockRestore();
+      fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "why?" } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Send" }));
+      await waitFor(() => expect(invokeLiveTextAssistantMock).toHaveBeenCalled());
+      expect(invokeLiveTextAssistantMock.mock.calls[0][0]).toMatchObject({ userMessage: "«LIVE_ASSISTANT»\nwhy?" });
+    });
+
+    it("keeps the draft when a selection is answered", async () => {
+      vi.useRealTimers();
+      Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1280 });
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "first" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+      const answers = await screen.findAllByText("LIVE_ASSISTANT_EXPLANATION_BODY");
+      await waitFor(() => expect(screen.getByLabelText("Ask Shurik...")).toBeInTheDocument());
+      const answer = answers[answers.length - 1];
+      const box = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(box, { target: { value: "draft" } });
+      const select = () => {
+        const spy = vi.spyOn(window, "getSelection").mockReturnValue({
+          isCollapsed: false, rangeCount: 1, anchorNode: answer.firstChild, focusNode: answer.firstChild,
+          toString: () => "LIVE", getRangeAt: () => ({ getBoundingClientRect: () => ({ left: 1, bottom: 1 }) }),
+        } as unknown as Selection);
+        fireEvent.mouseUp(answer);
+        return spy;
+      };
+      const spy = select();
+      const dialog = await screen.findByTestId("shurik-selection-ask");
+      spy.mockRestore();
+      fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "why?" } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Send" }));
+      await waitFor(() => expect(screen.getAllByText(/why\?/).length).toBeGreaterThan(0));
+      expect(screen.getByLabelText("Ask Shurik...")).toHaveValue("draft");
+    });
+
+    it("is a rounded card with the beta mark at the end of the disclaimer", () => {
+      const { container } = render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      const card = container.querySelector(".glass-sidebar");
+      expect(card?.className).toContain("md:rounded-panel");
+      expect(card?.className).toContain("md:m-2");
+      expect(screen.getByTestId("shurik-disclaimer").lastElementChild).toHaveTextContent("beta");
     });
 
     it("uses answer-focused work log copy for hosted consult turns", async () => {
@@ -207,6 +552,40 @@ describe("AISidebar assistant paths", () => {
     });
   });
 
+  describe("actions under lines written before the assistant call", () => {
+    beforeEach(() => {
+      setupOwnerWithProjects();
+    });
+
+    it.each([
+      { readiness: { status: "blocked", gate: "unavailable" }, text: "Shurik can't use this project context right now (permissions unavailable)." },
+      { readiness: { status: "blocked", gate: "loading" }, text: "Still loading your permissions for this project. Try again in a moment." },
+      { readiness: { status: "no_project" }, text: "Project data is not available to Shurik yet. Try again shortly." },
+    ] as const)("shows none for $readiness.status $readiness.gate", async ({ readiness, text }) => {
+      liveFlag.current = true;
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const titles = ["Copy", "Rate good", "Rate bad", "Save to Documents", "Regenerate"];
+      const before = titles.map((title) => screen.queryAllByTitle(title).length);
+
+      vi.spyOn(AiProjectContext, "evaluateProjectTargetedSendReadiness").mockReturnValue(
+        readiness as ReturnType<typeof AiProjectContext.evaluateProjectTargetedSendReadiness>,
+      );
+      const composer = screen.getByLabelText("Ask Shurik...");
+      fireEvent.change(composer, { target: { value: "why cure a slab?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+      expect((await screen.findAllByText(text, undefined, { timeout: 5000 })).length).toBeGreaterThan(0);
+      expect(titles.map((title) => screen.queryAllByTitle(title).length)).toEqual(before);
+      expect(invokeLiveTextAssistantMock).not.toHaveBeenCalled();
+    }, 10_000);
+  });
+
   describe("legacy proposal queue (flag off)", () => {
     beforeEach(() => {
       liveFlag.current = false;
@@ -244,4 +623,5 @@ describe("AISidebar assistant paths", () => {
       expect(invokeLiveTextAssistantMock).not.toHaveBeenCalled();
     });
   });
+
 });

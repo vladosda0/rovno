@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Download, ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,13 +54,17 @@ export default function ShareDocument() {
   const [downloading, setDownloading] = useState(false);
   const [openingTab, setOpeningTab] = useState(false);
   const [brokenImageUrl, setBrokenImageUrl] = useState<string | null>(null);
+  // "Показать актуальную" lives in state, not in the address: opening the
+  // link again always starts from the file it was made for.
+  const [showLatest, setShowLatest] = useState(false);
 
   const query = useQuery({
-    queryKey: ["document-share", token],
-    queryFn: () => fetchSharedDocument(token),
+    queryKey: ["document-share", token, showLatest ? "latest" : "shared"],
+    queryFn: () => fetchSharedDocument(token, { latest: showLatest }),
     enabled: Boolean(token),
     staleTime: SHARED_DOCUMENT_STALE_TIME_MS,
     retry: 1,
+    placeholderData: keepPreviousData,
   });
 
   const file = query.data ?? null;
@@ -143,8 +147,14 @@ export default function ShareDocument() {
           icon={AlertTriangle}
           title={t("share.document.errorTitle")}
           description={t("share.document.errorBody")}
-          actionLabel={t("share.document.retry")}
-          onAction={() => { void query.refetch(); }}
+          actionLabel={showLatest ? t("share.document.backToShared") : t("share.document.retry")}
+          onAction={() => {
+            if (showLatest) {
+              setShowLatest(false);
+              return;
+            }
+            void query.refetch();
+          }}
         />
       </div>
     );
@@ -162,6 +172,9 @@ export default function ShareDocument() {
   const isImage = (file.mimeType?.startsWith("image/") ?? false) && brokenImageUrl !== file.signedUrl;
   const isPdf = file.mimeType === "application/pdf";
   const canOpenInline = !!file.mimeType && INLINE_SAFE_MIME_TYPES.has(file.mimeType);
+  const switchingVersion = query.isPlaceholderData;
+  const showNewerBanner = !showLatest && file.hasNewerVersion && !switchingVersion;
+  const showLatestNote = showLatest && file.showingLatest && !switchingVersion;
 
   return (
     <div className="mx-auto max-w-3xl p-sp-3 space-y-sp-2">
@@ -175,6 +188,28 @@ export default function ShareDocument() {
             <p className="text-caption text-muted-foreground">{t("share.document.subtitle")}</p>
           </div>
         </div>
+        {showNewerBanner && (
+          <div
+            role="status"
+            className="rounded-md border border-warning/40 bg-warning/10 p-2 flex flex-wrap items-center justify-between gap-2 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 duration-200"
+          >
+            <span className="text-caption text-foreground">{t("share.document.newVersion")}</span>
+            <Button size="sm" variant="outline" onClick={() => setShowLatest(true)}>
+              {t("share.document.openLatest")}
+            </Button>
+          </div>
+        )}
+        {showLatestNote && (
+          <div
+            role="status"
+            className="rounded-md border border-info/50 bg-info/10 p-2 flex flex-wrap items-center justify-between gap-2 motion-safe:animate-in motion-safe:fade-in-0 duration-200"
+          >
+            <span className="text-caption text-foreground">{t("share.document.latestShown")}</span>
+            <Button size="sm" variant="link" className="h-auto p-0" onClick={() => setShowLatest(false)}>
+              {t("share.document.backToShared")}
+            </Button>
+          </div>
+        )}
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-caption">
           <dt className="text-muted-foreground">{t("share.document.fileLabel")}</dt>
           <dd className="text-foreground break-all">{file.filename}</dd>
@@ -186,7 +221,7 @@ export default function ShareDocument() {
           )}
         </dl>
         <div className="flex flex-wrap gap-2 pt-1">
-          <Button onClick={() => { void handleDownload(); }} disabled={downloading}>
+          <Button onClick={() => { void handleDownload(); }} disabled={downloading || switchingVersion}>
             <Download className="h-4 w-4 mr-1.5" />
             {t("share.document.download")}
           </Button>
@@ -194,7 +229,7 @@ export default function ShareDocument() {
             <Button
               variant="outline"
               onClick={() => { void handleOpenInNewTab(); }}
-              disabled={openingTab}
+              disabled={openingTab || switchingVersion}
             >
               <ExternalLink className="h-4 w-4 mr-1.5" />
               {t("share.document.openInNewTab")}

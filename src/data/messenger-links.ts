@@ -83,7 +83,7 @@ export async function listLinkedIdentities(): Promise<LinkedIdentity[]> {
 }
 
 // Disconnect the current user's identity for the given provider. Idempotent.
-export async function unlinkIdentity(provider: MessengerProvider): Promise<void> {
+export async function unlinkMessengerIdentity(provider: MessengerProvider): Promise<void> {
   const { error } = await rawSupabase.rpc("unlink_identity", { p_provider: provider });
   if (error) throw new Error(error.message);
 }

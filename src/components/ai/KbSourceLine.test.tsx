@@ -1,0 +1,167 @@
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  compactAmendmentNumbers,
+  kbClauseHref,
+  kbClauseLabel,
+  KbSourceLine,
+} from "@/components/ai/KbSourceLine";
+import { mapKnowledgeBase } from "@/lib/ai-assistant-client";
+import type { KbAnswerSource } from "@/lib/ai-assistant-contract";
+
+const CARD_FACT: KbAnswerSource = {
+  docId: "SP-155",
+  docSlug: "sp-163-1325800",
+  docLabel: "СП 163.1325800",
+  clause: "6.4.2.8",
+  anchor: "p-6-4-2-8",
+  solutionSlug: "steny-v-sanuzle-pod-plitku",
+  solutionTitle: "Стены в санузле под плитку",
+  checking: false,
+  pendingAmendments: [],
+  quote: "должны быть покрыты гидроизолирующим составом",
+};
+
+const CHECKING: KbAnswerSource = {
+  docId: "SP-012",
+  docSlug: "sp-71-13330",
+  docLabel: "СП 71.13330",
+  clause: "7.4.15",
+  anchor: "p-7-4-15",
+  checking: true,
+  pendingAmendments: [1, 2, 3, 4],
+};
+
+describe("KbSourceLine", () => {
+  it("adds the date when an approved amendment changes the clause (docs-library 7.4)", () => {
+    const upcoming: KbAnswerSource = { ...CHECKING, checking: false, pendingAmendments: [],
+      upcomingAmendments: [{ no: 6, effectiveFrom: "2099-09-01" }, { no: 5, effectiveFrom: "2099-06-01" }, { no: 4, effectiveFrom: "2020-01-01" }] };
+    render(<KbSourceLine knowledgeBase={{ sources: [upcoming], missing: false }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Based on:/ }));
+    expect(screen.getByText("· from 01.06.2099 this clause changes (Amendment No. 5)")).toBeInTheDocument();
+  });
+
+  it("reads upcoming amendments from the answer and drops malformed ones", () => {
+    const kb = mapKnowledgeBase(
+      [{ kind: "knowledge_base", docId: "SP-1", docLabel: "СП 1", checking: false, pendingAmendments: [],
+         upcomingAmendments: [{ no: 5, effectiveFrom: "2027-06-01" }, { no: "x", effectiveFrom: "2027-01-01" }, { no: 7 }] }],
+      false,
+    );
+    expect(kb?.sources[0].upcomingAmendments).toEqual([{ no: 5, effectiveFrom: "2027-06-01" }]);
+  });
+
+  it("collapsed: the first clause and «and N more»; open: the card, then clauses with the checking note", () => {
+    render(<KbSourceLine knowledgeBase={{ sources: [CARD_FACT, CHECKING], missing: false }} />);
+    const trigger = screen.getByRole("button", { name: /Based on: СП 163\.1325800, cl\. 6\.4\.2\.8 and 2 more/ });
+    fireEvent.click(trigger);
+    const card = screen.getByRole("link", { name: "Solution «Стены в санузле под плитку»" });
+    expect(card).toHaveAttribute("href", "/home?tab=documents&docTab=knowledge-base&kbSolution=steny-v-sanuzle-pod-plitku");
+    expect(screen.getByText("(being checked, amendments No. 1–4 not in the text yet)")).toBeInTheDocument();
+  });
+
+  it("a clause opens its quote, the document link and «Ask about this clause» filling the composer", () => {
+    const onAsk = vi.fn();
+    render(<KbSourceLine knowledgeBase={{ sources: [CARD_FACT], missing: false }} onAskAboutClause={onAsk} />);
+    fireEvent.click(screen.getByRole("button", { name: /Based on:/ }));
+    fireEvent.click(screen.getByRole("button", { name: "СП 163.1325800, cl. 6.4.2.8" }));
+    expect(screen.getByText("«…должны быть покрыты гидроизолирующим составом…»")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the clause in the document" })).toHaveAttribute(
+      "href",
+      "/home?tab=documents&docTab=knowledge-base&kbDoc=sp-163-1325800#p-6-4-2-8",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Ask about this clause" }));
+    expect(onAsk).toHaveBeenCalledWith("«должны быть покрыты гидроизолирующим составом» · СП 163.1325800, cl. 6.4.2.8\n");
+  });
+
+  it("a law article without a clause number: the button and the window heading both name the article (slice 9)", () => {
+    const article: KbAnswerSource = { docId: "LAW-022", docSlug: "tk-rf-197-fz", docLabel: "ТК РФ", anchor: "st-81", checking: false, pendingAmendments: [], quote: "Трудовой договор может быть расторгнут" };
+    expect(kbClauseLabel(article)).toBe("ТК РФ, ст. 81");
+    // A law split into points (ЗК РФ, docs-library 9.2в): «п.», not «ч.».
+    expect(kbClauseLabel({ ...article, docLabel: "ЗК РФ", anchor: "st-39-1-p-1" })).toBe("ЗК РФ, ст. 39.1 п. 1");
+    render(<KbSourceLine knowledgeBase={{ sources: [article], missing: false }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Based on:/ }));
+    fireEvent.click(screen.getByRole("button", { name: "ТК РФ, ст. 81" }));
+    expect(screen.getByText("ТК РФ · ст. 81")).toBeInTheDocument();
+  });
+
+  it("a quote clipped by the server keeps one closing ellipsis; a repeated amendment number counts once", () => {
+    const clipped = { ...CARD_FACT, quote: "должны быть покрыты…", checking: true, pendingAmendments: [3, 3] };
+    render(<KbSourceLine knowledgeBase={{ sources: [clipped], missing: false }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Based on:/ }));
+    expect(screen.getByText(/amendment No\. 3 not in the text yet/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "СП 163.1325800, cl. 6.4.2.8" }));
+    expect(screen.getByText("«…должны быть покрыты…»")).toBeInTheDocument();
+  });
+
+  it("not in the base: the general-guidance mark instead of the line", () => {
+    render(<KbSourceLine knowledgeBase={{ sources: [], missing: true }} />);
+    expect(screen.getByTestId("kb-missing")).toHaveTextContent("General guidance: this is not in the knowledge base yet");
+  });
+
+  it("nothing to show when the base was searched, the answer used none and it is not a gap", () => {
+    const { container } = render(<KbSourceLine knowledgeBase={{ sources: [], missing: false }} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("knowledge-base helpers", () => {
+  it("compactAmendmentNumbers folds runs", () => {
+    expect(compactAmendmentNumbers([4, 1, 2, 3, 7, 9, 10])).toBe("1–4, 7, 9–10");
+  });
+
+  it("kbClauseHref is null without a document address", () => {
+    expect(kbClauseHref({ ...CHECKING, docSlug: undefined })).toBeNull();
+  });
+
+  it("mapKnowledgeBase keeps the address and clause, drops junk, and is undefined when not searched", () => {
+    expect(mapKnowledgeBase(undefined, undefined)).toBeUndefined();
+    const kb = mapKnowledgeBase(
+      [
+        { kind: "knowledge_base", docId: "SP-155", docSlug: "sp-163", docLabel: "СП 163.1325800", clause: "6.4.2.8", anchor: "p-6-4-2-8", checking: true, pendingAmendments: [3, "x"] },
+        { kind: "server_verified_tasks", docId: "x", docLabel: "y" },
+        { kind: "knowledge_base", docLabel: "без id" },
+      ],
+      false,
+    );
+    expect(kb?.sources).toEqual([
+      expect.objectContaining({ docId: "SP-155", anchor: "p-6-4-2-8", clause: "6.4.2.8", checking: true, pendingAmendments: [3] }),
+    ]);
+    expect(kb?.missing).toBe(false);
+    expect(mapKnowledgeBase([], true)).toEqual({ sources: [], missing: true });
+  });
+});
+
+describe("kbClauseLabel", () => {
+  it("prints the prefix only before a clause number", () => {
+    expect(kbClauseLabel(CARD_FACT)).toBe("СП 163.1325800, п. 6.4.2.8");
+    expect(kbClauseLabel({ ...CARD_FACT, clause: "Приложение Ж" })).toBe("СП 163.1325800, Приложение Ж");
+    expect(kbClauseLabel({ ...CARD_FACT, clause: undefined })).toBe("СП 163.1325800");
+    // docs-library 9.8: a table of a law's appendix is «табл. 12», as on the server and in the bot.
+    expect(kbClauseLabel({ ...CARD_FACT, docLabel: "123-ФЗ", clause: undefined, anchor: "pril-t-12" })).toBe("123-ФЗ, табл. 12");
+  });
+});
+
+describe("KbSourceLine country fallback (rovno-db#230)", () => {
+  it("names the fallback to Russian norms above the line for a person from another country (rovno-db#230)", () => {
+    const kb = mapKnowledgeBase(
+      [{ kind: "knowledge_base", docId: "SP-017", docLabel: "СП 17.13330 (Россия)", clause: "4.3", checking: false, pendingAmendments: [] }],
+      false,
+      "KZ",
+    );
+    expect(kb?.fallbackCountry).toBe("KZ");
+    render(<KbSourceLine knowledgeBase={kb!} />);
+    expect(screen.getByTestId("kb-country-fallback")).toHaveTextContent(
+      "Kazakhstan norms in the base do not cover this yet, answering by Russian norms.",
+    );
+    expect(screen.getByRole("button", { name: /Based on: СП 17\.13330 \(Россия\), cl\. 4\.3/ })).toBeInTheDocument();
+  });
+
+  it("drops an unknown or Russian fallback country and shows no phrase without sources", () => {
+    expect(mapKnowledgeBase([], false, "KZ")?.fallbackCountry).toBe("KZ");
+    expect(mapKnowledgeBase([], false, "RU")?.fallbackCountry).toBeUndefined();
+    expect(mapKnowledgeBase([], false, "XX")?.fallbackCountry).toBeUndefined();
+    expect(mapKnowledgeBase([], false, "constructor")?.fallbackCountry).toBeUndefined();
+    render(<KbSourceLine knowledgeBase={{ sources: [], missing: true, fallbackCountry: "KZ" }} />);
+    expect(screen.queryByTestId("kb-country-fallback")).toBeNull();
+  });
+});

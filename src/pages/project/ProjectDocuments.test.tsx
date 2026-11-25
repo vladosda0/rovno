@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ProjectDocuments from "@/pages/project/ProjectDocuments";
 import type { Document, MemberRole } from "@/types/entities";
+import * as store from "@/data/store";
 
 const { mockCreateSignedUrl } = vi.hoisted(() => ({ mockCreateSignedUrl: vi.fn() }));
 
@@ -659,6 +660,258 @@ describe("ProjectDocuments", () => {
     expect(screen.queryByRole("button", { name: "Generate" })).not.toBeInTheDocument();
     expect(screen.queryByTitle("Archive")).not.toBeInTheDocument();
     expect(screen.queryByTitle("Delete")).not.toBeInTheDocument();
+  });
+});
+
+describe("ProjectDocuments new document version (rovno-db#240)", () => {
+  const STORED = {
+    id: "so-1",
+    bucket: "project-documents",
+    objectPath: "projects/project-1/documents/i-1/contract.pdf",
+    filename: "contract.pdf",
+    mimeType: "application/pdf",
+    sizeBytes: 1024,
+  };
+
+  function storedDocument(partial: Partial<Document> = {}): Document {
+    return createDocument({
+      title: "Contract",
+      versions: [{
+        id: "version-1",
+        document_id: "doc-1",
+        number: 1,
+        status: "draft",
+        content: "",
+        storage: STORED,
+      }],
+      ...partial,
+    });
+  }
+
+  let prepareVersionUpload: ReturnType<typeof vi.fn>;
+  let uploadBytes: ReturnType<typeof vi.fn>;
+  let finalizeUpload: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockToast.mockReset();
+    mockCreateSignedUrl.mockReset();
+    mockCreateSignedUrl.mockResolvedValue({ data: { signedUrl: "https://signed.example/contract.pdf" }, error: null });
+    mockUseCurrentUser.mockReturnValue({ id: "user-1" });
+    mockUseProject.mockReturnValue({ project: { title: "Apartment Renovation" } });
+    mockUseProjectDocumentMutations.mockReturnValue({
+      createDocument: vi.fn(),
+      archiveDocument: vi.fn(),
+      deleteDocument: vi.fn(),
+      updateDocumentVisibility: vi.fn().mockResolvedValue(undefined),
+    });
+    mockUseDocumentShares.mockReturnValue({ sharesByDocumentId: new Map(), isLoading: false, isError: false, lastSettledAt: Number.POSITIVE_INFINITY });
+    prepareVersionUpload = vi.fn().mockResolvedValue({
+      uploadIntentId: "intent-2",
+      bucket: "project-documents",
+      objectPath: "projects/project-1/documents/intent-2/contract-v2.pdf",
+      filename: "contract-v2.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 7,
+    });
+    uploadBytes = vi.fn().mockResolvedValue(undefined);
+    finalizeUpload = vi.fn().mockResolvedValue({ documentId: "doc-1" });
+    mockUseDocumentUploadMutations.mockReturnValue({
+      prepareUpload: vi.fn(),
+      prepareVersionUpload,
+      uploadBytes,
+      finalizeUpload,
+    });
+    mockUseWorkspaceMode.mockReturnValue({ kind: "supabase", profileId: "user-1" });
+    mockUseProjectDocumentsState.mockReturnValue({ documents: [storedDocument()], isLoading: false });
+  });
+
+  function openPreview() {
+    renderProjectDocuments();
+    fireEvent.click(screen.getByRole("button", { name: /Contract/ }));
+  }
+
+  function chooseFile(dialog: HTMLElement, file: File) {
+    const input = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+  }
+
+  it.each(["owner", "co_owner", "contractor"] as MemberRole[])("offers New version to %s", (role) => {
+    mockUsePermission.mockReturnValue(buildPermission(role));
+    openPreview();
+    expect(screen.getByRole("button", { name: "New version" })).toBeInTheDocument();
+  });
+
+  it("offers no New version to a viewer", () => {
+    mockUsePermission.mockReturnValue(buildPermission("viewer"));
+    openPreview();
+    expect(screen.getByRole("button", { name: "Print" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New version" })).not.toBeInTheDocument();
+  });
+
+  it("offers no New version on an archived document", () => {
+    mockUsePermission.mockReturnValue(buildPermission("owner"));
+    mockUseProjectDocumentsState.mockReturnValue({
+      documents: [storedDocument({
+        versions: [
+          { id: "version-1", document_id: "doc-1", number: 1, status: "draft", content: "", storage: STORED },
+          { id: "version-2", document_id: "doc-1", number: 2, status: "archived", content: "", storage: STORED },
+        ],
+      })],
+      isLoading: false,
+    });
+    renderProjectDocuments();
+    fireEvent.click(screen.getByText("Contract"));
+    expect(screen.queryByRole("button", { name: "New version" })).not.toBeInTheDocument();
+  });
+
+  it("uploads the chosen file as a new version of this document and closes", async () => {
+    mockUsePermission.mockReturnValue(buildPermission("owner"));
+    openPreview();
+    fireEvent.click(screen.getByRole("button", { name: "New version" }));
+
+    const dialog = screen.getByRole("dialog", { name: "New document version" });
+    const submit = within(dialog).getByRole("button", { name: "Upload version" });
+    expect(submit).toBeDisabled();
+
+    const file = new File(["v2 body"], "contract-v2.pdf", { type: "application/pdf" });
+    chooseFile(dialog, file);
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith({ title: "New version uploaded", description: "Contract" }));
+    expect(prepareVersionUpload).toHaveBeenCalledWith({
+      documentId: "doc-1",
+      clientFilename: "contract-v2.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: file.size,
+    });
+    expect(uploadBytes).toHaveBeenCalledWith("project-documents", "projects/project-1/documents/intent-2/contract-v2.pdf", file);
+    expect(finalizeUpload).toHaveBeenCalledWith("intent-2");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "New document version" })).not.toBeInTheDocument());
+  });
+
+  it("keeps the dialog open with the file chosen when the upload fails", async () => {
+    mockUsePermission.mockReturnValue(buildPermission("contractor"));
+    finalizeUpload.mockRejectedValue(new Error("Storage object is not accessible"));
+    openPreview();
+    fireEvent.click(screen.getByRole("button", { name: "New version" }));
+
+    const dialog = screen.getByRole("dialog", { name: "New document version" });
+    chooseFile(dialog, new File(["v2"], "contract-v2.pdf", { type: "application/pdf" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload version" }));
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith({
+      title: "Could not upload the new version",
+      description: "Storage object is not accessible",
+      variant: "destructive",
+    }));
+    expect(screen.getByRole("dialog", { name: "New document version" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Upload version" })).toBeEnabled();
+  });
+
+  it("retries only the finalize when the same file is submitted again after a finalize failure", async () => {
+    mockUsePermission.mockReturnValue(buildPermission("owner"));
+    finalizeUpload.mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce({ documentId: "doc-1" });
+    openPreview();
+    fireEvent.click(screen.getByRole("button", { name: "New version" }));
+    const dialog = screen.getByRole("dialog", { name: "New document version" });
+    chooseFile(dialog, new File(["v2"], "contract-v2.pdf", { type: "application/pdf" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload version" }));
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Could not upload the new version" })));
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload version" }));
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith({ title: "New version uploaded", description: "Contract" }));
+    expect(prepareVersionUpload).toHaveBeenCalledTimes(1);
+    expect(uploadBytes).toHaveBeenCalledTimes(1);
+    expect(finalizeUpload).toHaveBeenNthCalledWith(2, "intent-2");
+  });
+
+  it("shows the new file in the open preview once the new version arrives", async () => {
+    mockUsePermission.mockReturnValue(buildPermission("owner"));
+    const view = renderProjectDocuments();
+    fireEvent.click(screen.getByRole("button", { name: /Contract/ }));
+    await waitFor(() => expect(mockCreateSignedUrl).toHaveBeenCalled());
+
+    const V2 = { ...STORED, id: "so-2", objectPath: "projects/project-1/documents/intent-2/contract-v2.pdf", filename: "contract-v2.pdf" };
+    mockUseProjectDocumentsState.mockReturnValue({
+      documents: [storedDocument({
+        versions: [
+          { id: "version-1", document_id: "doc-1", number: 1, status: "draft", content: "", storage: STORED },
+          { id: "version-2", document_id: "doc-1", number: 2, status: "draft", content: "", storage: V2 },
+        ],
+      })],
+      isLoading: false,
+    });
+    mockCreateSignedUrl.mockResolvedValue({ data: { signedUrl: "https://signed.example/contract-v2.pdf" }, error: null });
+    view.rerender(
+      <MemoryRouter initialEntries={[{ pathname: "/project/project-1/documents", state: null }]}>
+        <Routes>
+          <Route path="/project/:id/documents" element={<ProjectDocuments />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(mockCreateSignedUrl).toHaveBeenCalledWith(V2.objectPath, expect.anything()));
+  });
+
+  it("adds a local version in demo mode", async () => {
+    mockUsePermission.mockReturnValue(buildPermission("owner"));
+    mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
+    mockUseProjectDocumentsState.mockReturnValue({ documents: [createDocument({ title: "Contract" })], isLoading: false });
+    const addVersion = vi.spyOn(store, "addDocumentVersion").mockImplementation(() => {});
+    renderProjectDocuments();
+    fireEvent.click(screen.getByRole("button", { name: /Contract/ }));
+    fireEvent.click(screen.getByRole("button", { name: "New version" }));
+    const dialog = screen.getByRole("dialog", { name: "New document version" });
+    chooseFile(dialog, new File(["v2"], "contract-v2.pdf", { type: "application/pdf" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload version" }));
+
+    await waitFor(() => expect(addVersion).toHaveBeenCalledWith("doc-1", expect.objectContaining({ number: 2, document_id: "doc-1" })));
+    expect(prepareVersionUpload).not.toHaveBeenCalled();
+    addVersion.mockRestore();
+  });
+
+  it("refuses an SVG before asking for an upload slot", async () => {
+    mockUsePermission.mockReturnValue(buildPermission("owner"));
+    openPreview();
+    fireEvent.click(screen.getByRole("button", { name: "New version" }));
+    const dialog = screen.getByRole("dialog", { name: "New document version" });
+    chooseFile(dialog, new File(["<svg/>"], "logo.svg", { type: "image/svg+xml" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload version" }));
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith({
+      title: "Could not upload the new version",
+      description: "SVG files cannot be uploaded to documents",
+      variant: "destructive",
+    }));
+    expect(prepareVersionUpload).not.toHaveBeenCalled();
+  });
+
+  it("tells an owner with a live link that the link keeps the old file", () => {
+    mockUsePermission.mockReturnValue(buildPermission("owner"));
+    mockUseDocumentShares.mockReturnValue({
+      sharesByDocumentId: new Map([["doc-1", { documentId: "doc-1", shareToken: "t", createdAt: "2026-11-20T00:00:00Z" }]]),
+      isLoading: false,
+      isError: false,
+      lastSettledAt: Number.POSITIVE_INFINITY,
+    });
+    openPreview();
+    fireEvent.click(screen.getByRole("button", { name: "New version" }));
+    expect(screen.getByText(/The public link still opens the previous file/)).toBeInTheDocument();
+  });
+
+  it("does not show the link hint to a contractor", () => {
+    mockUsePermission.mockReturnValue(buildPermission("contractor"));
+    mockUseDocumentShares.mockReturnValue({
+      sharesByDocumentId: new Map([["doc-1", { documentId: "doc-1", shareToken: "t", createdAt: "2026-11-20T00:00:00Z" }]]),
+      isLoading: false,
+      isError: false,
+      lastSettledAt: Number.POSITIVE_INFINITY,
+    });
+    openPreview();
+    fireEvent.click(screen.getByRole("button", { name: "New version" }));
+    expect(screen.queryByText(/The public link still opens the previous file/)).not.toBeInTheDocument();
   });
 });
 

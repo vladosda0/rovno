@@ -46,6 +46,7 @@ export function NotificationsPanel() {
     setPeopleEnabled,
     setHintsChatEnabled,
     setHintsTelegramEnabled,
+    setLeadEnabled,
   } = useBriefingSettings(() => {
     toast({
       title: t("notifications.saveFailedToast"),
@@ -157,6 +158,19 @@ export function NotificationsPanel() {
                 aria-label={t("notifications.briefing.attention")}
               />
             </div>
+          </div>
+
+          <div className={ROW_CLASS}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-body-sm text-foreground">{t("notifications.briefing.lead")}</span>
+              <span className="block text-caption text-muted-foreground">{t("notifications.briefing.leadHint")}</span>
+            </span>
+            <Switch
+              checked={snapshot.leadEnabled}
+              onCheckedChange={setLeadEnabled}
+              disabled={isSaving}
+              aria-label={t("notifications.briefing.lead")}
+            />
           </div>
 
           <div className={ROW_CLASS}>

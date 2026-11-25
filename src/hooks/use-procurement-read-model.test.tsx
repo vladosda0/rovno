@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/hooks/use-workspace-source", () => ({
   useWorkspaceMode: mocks.useWorkspaceMode,
+  useWorkspaceProjectsState: () => ({ projects: [], isLoading: false }),
 }));
 
 vi.mock("@/hooks/use-mock-data", () => ({
@@ -55,6 +56,7 @@ vi.mock("@/data/inventory-store", () => ({
 vi.mock("@/hooks/use-home-sensitive-detail-map", () => ({
   useWorkspaceProjectsSensitiveDetailMap: () => ({
     canViewSensitiveDetailByProjectId: new Map<string, boolean>(),
+    financeAccessByProjectId: new Map<string, string>(),
     isLoading: false,
   }),
 }));

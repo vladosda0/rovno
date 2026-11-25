@@ -172,6 +172,7 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
       getProjectStages: vi.fn(() => stagesPromise),
       getProjectTasks: vi.fn(() => tasksPromise),
       getProjectsStatusSummary: vi.fn().mockResolvedValue({}),
+      getWorkspaceTasks: vi.fn().mockResolvedValue([]),
       createProjectStage: vi.fn(),
       createProjectTask: vi.fn(),
       updateProjectTask: vi.fn(),

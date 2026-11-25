@@ -23,6 +23,14 @@ describe("redactQueryKey", () => {
     ]);
   });
 
+  it("strips the report-share token and the report id", () => {
+    expect(redactQueryKey(["report-share", "0f".repeat(24), "1f0c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"])).toEqual([
+      "report-share",
+      "[FILTERED]",
+      "[FILTERED]",
+    ]);
+  });
+
   it("leaves ordinary keys intact, so per-resource reporting still works", () => {
     expect(redactQueryKey(["project-documents", "proj-1", { archived: true }])).toEqual([
       "project-documents",

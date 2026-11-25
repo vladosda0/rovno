@@ -404,6 +404,9 @@ describe("ClientReportDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Отозвать ссылку" }));
     const confirm = await screen.findByRole("alertdialog");
+    // rovno#237: revoking closes the link only; participants keep the reports.
+    expect(within(confirm).getByText("Ссылка перестанет работать. Позже можно создать новую.")).toBeInTheDocument();
+    expect(within(confirm).getByText("Участники проекта в приложении отчёты по-прежнему видят.")).toBeInTheDocument();
     fireEvent.click(within(confirm).getByRole("button", { name: "Отозвать ссылку" }));
 
     await waitFor(() =>
@@ -439,7 +442,7 @@ describe("ClientReportDialog", () => {
     expect(screen.getByRole("radio", { name: "Ежемесячный" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("button", { name: "Опубликовать" })).toBeDisabled();
     expect(
-      screen.getByText(/На тарифе «Бесплатно» один отчёт в 30 дней\. Следующий можно опубликовать 12 ноября\./),
+      screen.getByText(/На тарифе «Старт» один отчёт в 30 дней\. Следующий можно опубликовать 12 ноября\./),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Улучшить тариф" })).toHaveAttribute("href", "/settings?tab=billing");
     expect(screen.getByRole("button", { name: "Скачать PDF" })).toBeDisabled();

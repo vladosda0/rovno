@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProjectEstimate from "@/pages/project/ProjectEstimate";
 import { __unsafeResetStoreForTests, addMember, addProject, addTask, updateTask } from "@/data/store";
@@ -22,6 +22,7 @@ import { __unsafeResetInventoryForTests } from "@/data/inventory-store";
 import { getProcurementItems } from "@/data/procurement-store";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import * as workspaceSource from "@/data/workspace-source";
+import * as planningSource from "@/data/planning-source";
 import {
   clearDemoSession,
   clearStoredAuthProfile,
@@ -149,13 +150,13 @@ async function changeEstimateStatus(nextStatus: string) {
   await flushUi();
 }
 
-function renderProjectEstimate(projectId: string) {
+function renderProjectEstimate(projectId: string, search = "") {
   const queryClient = createQueryClient();
 
   return render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={0}>
-        <MemoryRouter initialEntries={[`/project/${projectId}/estimate`]}>
+        <MemoryRouter initialEntries={[`/project/${projectId}/estimate${search}`]}>
           <Routes>
             <Route path="/project/:id/estimate" element={<ProjectEstimate />} />
             <Route path="/project/:id/tasks" element={<div>Tasks page</div>} />
@@ -610,6 +611,118 @@ describe("ProjectEstimate", () => {
     });
     expect(getEstimateV2ProjectState(projectId).works[0]?.plannedStart).toBeTruthy();
     expect(getEstimateV2ProjectState(projectId).works[0]?.plannedEnd).toBeTruthy();
+  });
+
+  it("lets the owner enter dates for one work in the missing-dates dialog and picks the rest (rovno#235)", async () => {
+    const projectId = "project-estimate-missing-dates-entered";
+    setupLocalProject(projectId);
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+    const framing = createWork(projectId, { stageId: stage.id, title: "Framing" });
+    const roofing = createWork(projectId, { stageId: stage.id, title: "Roofing" });
+    expect(framing && roofing).toBeTruthy();
+    if (!framing || !roofing) return;
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+    await act(async () => {
+      await changeEstimateStatus("In work");
+    });
+
+    const dialog = screen.getByRole("alertdialog", { name: "Missing work dates" });
+    expect(within(dialog).getByText(
+      "Some works have no planned dates. Set them now or skip: works without dates get 7 days each, one after another.",
+    )).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Skip setup" })).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("button", { name: /^Dates: / })).toHaveLength(2);
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Dates: Roofing" }));
+      await flushUi();
+    });
+    const dayTen = screen.getAllByRole("gridcell", { name: "10" }).find((cell) => !cell.className.includes("day-outside"));
+    expect(dayTen).toBeDefined();
+    if (!dayTen) return;
+    await act(async () => {
+      fireEvent.click(dayTen);
+      await flushUi();
+    });
+
+    const save = within(dialog).getByRole("button", { name: "Save" });
+    await act(async () => {
+      fireEvent.click(save);
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(getEstimateV2ProjectState(projectId).project.estimateStatus).toBe("in_work");
+    });
+    const works = getEstimateV2ProjectState(projectId).works;
+    const roofingAfter = works.find((work) => work.id === roofing.id);
+    const framingAfter = works.find((work) => work.id === framing.id);
+    expect(new Date(roofingAfter?.plannedStart ?? "").getDate()).toBe(10);
+    expect(new Date(roofingAfter?.plannedEnd ?? "").getDate()).toBe(10);
+    expect(roofingAfter?.datesAutoScheduled).toBeFalsy();
+    expect(framingAfter?.datesAutoScheduled).toBe(true);
+  });
+
+  it("opens «Work schedule» from ?tab=work_schedule, the link of Shurik's T21 and T22 (rovno#235)", async () => {
+    const projectId = "project-estimate-tab-link";
+    setupLocalProject(projectId);
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+    createWork(projectId, { stageId: stage.id, title: "Framing" });
+
+    await act(async () => {
+      renderProjectEstimate(projectId, "?tab=work_schedule");
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Work schedule" })).toHaveAttribute("aria-selected", "true");
+    });
+  });
+
+  it("switches to «Work schedule» when the link is followed while the estimate is already open (rovno#235)", async () => {
+    const projectId = "project-estimate-tab-link-mounted";
+    setupLocalProject(projectId);
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+    createWork(projectId, { stageId: stage.id, title: "Framing" });
+
+    // useNavigate is mocked in this file; a real Link navigates inside the MemoryRouter.
+    const OpenScheduleLink = () => <Link to={`/project/${projectId}/estimate?tab=work_schedule`}>open schedule link</Link>;
+
+    await act(async () => {
+      render(
+        <QueryClientProvider client={createQueryClient()}>
+          <TooltipProvider delayDuration={0}>
+            <MemoryRouter initialEntries={[`/project/${projectId}/estimate`]}>
+              <OpenScheduleLink />
+              <Routes>
+                <Route path="/project/:id/estimate" element={<ProjectEstimate />} />
+              </Routes>
+            </MemoryRouter>
+          </TooltipProvider>
+        </QueryClientProvider>,
+      );
+      await flushUi();
+    });
+    expect(screen.getByRole("tab", { name: "Work schedule" })).toHaveAttribute("aria-selected", "false");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("link", { name: "open schedule link" }));
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Work schedule" })).toHaveAttribute("aria-selected", "true");
+    });
   });
 
   it("opens tasks from Work log while estimate is still planning", async () => {
@@ -1370,6 +1483,73 @@ describe("ProjectEstimate", () => {
     await waitFor(() => {
       expect(getEstimateV2ProjectState(projectId).project.estimateStatus).toBe("finished");
     });
+  });
+
+  it("marks all tasks done through the status RPC with the final-proof override, never a direct status write (rovno#138)", async () => {
+    const projectId = "project-estimate-finish-bulk-rpc";
+    setupLocalProject(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded) return;
+
+    const statusResult = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(statusResult.ok).toBe(true);
+
+    addTask({
+      id: "manual-finish-task-rpc",
+      project_id: projectId,
+      stage_id: seeded.stage.id,
+      title: "Manual inspection",
+      description: "",
+      status: "in_progress",
+      assignee_id: "",
+      checklist: [],
+      comments: [],
+      attachments: [],
+      photos: [],
+      linked_estimate_item_ids: [],
+      created_at: "2026-03-01T00:00:00.000Z",
+    });
+
+    const realGetPlanningSource = planningSource.getPlanningSource;
+    const changeTaskStatusSpy = vi.fn();
+    const updateProjectTaskSpy = vi.fn();
+    vi.spyOn(planningSource, "getPlanningSource").mockImplementation(async (mode) => {
+      const source = await realGetPlanningSource(mode);
+      return {
+        ...source,
+        changeTaskStatus: (...args: Parameters<typeof source.changeTaskStatus>) => {
+          changeTaskStatusSpy(...args);
+          return source.changeTaskStatus.call(source, ...args);
+        },
+        updateProjectTask: (...args: Parameters<typeof source.updateProjectTask>) => {
+          updateProjectTaskSpy(...args);
+          return source.updateProjectTask.call(source, ...args);
+        },
+      };
+    });
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      await changeEstimateStatus("Finished");
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Mark all tasks done" }));
+      await flushUi();
+    });
+
+    expect(screen.getByText("All tasks are Done")).toBeInTheDocument();
+    expect(changeTaskStatusSpy).toHaveBeenCalledWith(
+      "manual-finish-task-rpc",
+      "done",
+      expect.objectContaining({ overrideFinalProof: true }),
+    );
+    expect(updateProjectTaskSpy.mock.calls.filter(([, patch]) => patch?.status !== undefined)).toEqual([]);
   });
 
   it("keeps the estimate in work when the follow-up finish confirmation is cancelled", async () => {

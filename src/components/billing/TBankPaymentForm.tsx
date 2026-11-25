@@ -56,7 +56,6 @@ export function TBankPaymentForm({ paymentUrl, onReady, onStatus, onFailed }: TB
           onStatus?.(status);
         };
         const config = {
-          language: (i18n.language === "en" ? "en" : "ru") as "ru" | "en",
           loadedCallback: () => onReady?.(),
           changedCallback: handleStatus,
           status: { changedCallback: handleStatus },
@@ -69,7 +68,14 @@ export function TBankPaymentForm({ paymentUrl, onReady, onStatus, onFailed }: TB
               iframe: { container: cardRef.current, config, paymentStartCallback },
             },
           })
-          .catch(hardFail);
+          .then((api) => {
+            if (!active || i18n.language !== "en") return;
+            try {
+              void Promise.resolve(api?.setLang?.("en")).catch(() => undefined);
+            } catch {
+              // The language is cosmetic: the mounted form stays, in Russian.
+            }
+          }, hardFail);
       })
       .catch(hardFail);
     return () => {

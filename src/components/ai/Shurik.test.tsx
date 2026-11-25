@@ -11,6 +11,7 @@ const POSE_FILES: Record<ShurikPose, string> = {
   done: "/shurik/wink-ok.png",
   notice: "/shurik/pointing.png",
   money: "/shurik/salute.png",
+  working: "/shurik/working.png",
 };
 
 /** Returns a switch that flips the preference and tells the mounted listeners. */

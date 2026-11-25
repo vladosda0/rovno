@@ -1,13 +1,14 @@
-// Shared chrome for public blog pages: landing Nav on top, Interlude + Footer
-// below, all inside the .rv-landing design-system scope (same wiring as
-// pages/Landing.tsx — auth-aware CTA, demo session hand-off).
+// Shared chrome for public blog and knowledge-base pages: the new site header
+// and footer (site-redesign 1.5) around a body that keeps the .rv-landing look
+// until slice 2. useLandingCta stays the one auth-aware wiring of the CTAs.
 
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { seedProjects } from "@/data/seed";
 import { enterDemoSession } from "@/lib/auth-state";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
-import { Nav, Interlude, Footer } from "@/components/landing/LandingSections";
+import { SiteChrome } from "@/components/site/SiteChrome";
+import type { SiteCta } from "@/components/site/site-links";
 import "@/components/landing/landing.css";
 import "./blog.css";
 
@@ -25,13 +26,16 @@ export function useLandingCta() {
 }
 
 export function BlogShell({ children }: { children: ReactNode }) {
-  const { startPath, onDemo, authStatus } = useLandingCta();
+  const { authStatus } = useLandingCta();
+  const signedIn = authStatus === "authenticated";
+  const cta: SiteCta = {
+    startPath: signedIn ? "/home" : "/auth/signup",
+    loginPath: signedIn ? "/home" : "/auth/login",
+    signedIn,
+  };
   return (
-    <div className="rv-landing">
-      <Nav startPath={startPath} homeLink authStatus={authStatus} />
-      {children}
-      <Interlude tone="sage" />
-      <Footer onDemo={onDemo} />
-    </div>
+    <SiteChrome cta={cta}>
+      <div className="rv-landing">{children}</div>
+    </SiteChrome>
   );
 }

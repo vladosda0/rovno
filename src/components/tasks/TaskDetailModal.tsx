@@ -30,6 +30,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
+import { prepareMediaPhotoForUpload } from "@/lib/image-optimization";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -737,7 +738,11 @@ export function TaskDetailModal({
                 }
                 setUploading(true);
                 try {
-                  for (const file of uploadFiles) {
+                  const files: File[] = [];
+                  for (const rawFile of uploadFiles) {
+                    files.push(await prepareMediaPhotoForUpload(rawFile, t("tasks.modal.uploadMedia.uploadFailedFallback")));
+                  }
+                  for (const file of files) {
                     const intent = await prepareUpload({
                       mediaType: "photo",
                       clientFilename: file.name,

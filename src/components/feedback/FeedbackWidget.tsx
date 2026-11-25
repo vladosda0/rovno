@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MessageSquareText } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,7 +30,7 @@ export const FEEDBACK_MESSAGE_MAX_LENGTH = 4000;
  * Mobile: sits at bottom-20 to clear the documents-hub FAB, which occupies
  * bottom-4 right-4 on screens < md (DocumentsHubTab).
  */
-export function FeedbackWidget() {
+export function FeedbackWidget({ besidePanel = false }: { besidePanel?: boolean }) {
   const { t } = useTranslation();
   const runtimeAuth = useRuntimeAuth();
   const [open, setOpen] = useState(false);
@@ -86,7 +87,11 @@ export function FeedbackWidget() {
         variant="secondary"
         onClick={() => setOpen(true)}
         aria-label={t("feedback.button")}
-        className="fixed bottom-20 right-4 z-30 h-11 w-11 rounded-full border border-border p-0 shadow-lg md:bottom-4 md:w-auto md:px-4"
+        className={cn(
+          "fixed bottom-20 right-4 z-30 h-11 w-11 rounded-full border border-border p-0 shadow-lg md:bottom-4 md:w-auto md:px-4",
+          // The panel stands in this corner; its send button must stay reachable.
+          besidePanel && "md:right-[calc(min(420px,45vw)+24px)]",
+        )}
       >
         <MessageSquareText aria-hidden />
         <span className="hidden md:inline">{t("feedback.button")}</span>

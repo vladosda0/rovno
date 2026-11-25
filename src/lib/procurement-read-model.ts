@@ -189,6 +189,12 @@ export function getProcurementReadSnapshot(): ProcurementReadSnapshot {
     ))
     .filter((summary): summary is ProcurementReadProjectSummary => summary !== null);
 
+  return buildProcurementReadSnapshot(summaries);
+}
+
+export function buildProcurementReadSnapshot(
+  summaries: ProcurementReadProjectSummary[],
+): ProcurementReadSnapshot {
   const totals: ProcurementReadTotals = {
     totalCount: summaries.reduce((sum, summary) => sum + summary.totalCount, 0),
     requestedCount: summaries.reduce((sum, summary) => sum + summary.requestedCount, 0),

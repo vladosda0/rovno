@@ -19,7 +19,6 @@ import {
   PanelLeft,
   Plus,
   Paperclip,
-  GraduationCap,
   AtSign,
   Link2,
   Mic,
@@ -27,13 +26,9 @@ import {
   ChevronDown,
   ChevronRight,
   Check,
-  User,
   Copy,
-  ThumbsUp,
-  ThumbsDown,
   BookmarkPlus,
   RefreshCw,
-  Sparkles,
   FileText,
 } from "lucide-react";
 import { TutorialModal } from "@/components/onboarding/TutorialModal";
@@ -41,7 +36,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { selectAiUsage, TIER_QUOTA_QUERY_KEY, useTierQuota } from "@/hooks/useTierQuota";
-import { AIQuotaGate } from "@/components/billing/AIQuotaGate";
+import { ShurikAnswerActions, ShurikAnswerTurn, ShurikUserTurn } from "@/components/ai/ShurikChatTurn";
+import { SHURIK_PANEL_CARD_CLASS } from "@/components/ai/shurik-panel-card";
+import { shurikQuoteLine, takeProjectComposerSeed } from "@/lib/shurik-ask";
+import { ShurikSelectionAsk } from "@/components/ai/ShurikSelectionAsk";
+import { saveAnswerToDocuments } from "@/lib/ai-answer-save";
+import { sendAiAnswerRating, toggledRating, type AiAnswerRating } from "@/lib/ai-answer-rating";
+import { AIQuotaGate, ShurikQuotaFigure, useAiQuotaExceeded } from "@/components/billing/AIQuotaGate";
 import { AIQuotaWarning } from "@/components/billing/AIQuotaWarning";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -54,6 +55,7 @@ import { useShurikMessages } from "@/hooks/use-shurik-messages";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
 import { GroundingCallout } from "@/components/ai/GroundingCallout";
+import { KbSourceLine } from "@/components/ai/KbSourceLine";
 import { WorkProposalPreview } from "@/components/ai/WorkProposalPreview";
 import { isAIEvent } from "@/components/ai/event-utils";
 import { PreviewCard } from "@/components/ai/PreviewCard";
@@ -64,19 +66,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrentUser, useEvents, useProject, useProjects, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useWorkspaceProfilePreferences, useWorkspaceProjectState } from "@/hooks/use-workspace-source";
 import { usePlanningProjectTasksState } from "@/hooks/use-planning-source";
-import { supabase } from "@/integrations/supabase/client";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { useEstimateV2FinanceProjectSummaryFromWorkspace } from "@/hooks/use-estimate-v2-data";
 import { useProcurementReadProjectSummary } from "@/hooks/use-procurement-read-model";
 import {
@@ -92,6 +87,7 @@ import {
 } from "@/lib/ai-project-context";
 import {
   invokeLiveTextAssistant,
+  isRetryableAiInferenceFailure,
   pickInferenceMode,
   resolveAiAssistantUiLanguage,
   shouldUseHostedLiveTextAssistantPath,
@@ -139,7 +135,7 @@ import {
   addEvent, addDocument, addDocumentVersion,
   getStages, getUserById, updateProject, getDocuments,
 } from "@/data/store";
-import { format, isToday, isYesterday } from "date-fns";
+import { format } from "date-fns";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 import {
   CLIENT_REPORT_CHIP_KEY,
@@ -147,9 +143,8 @@ import {
   openClientReportDialog,
 } from "@/lib/client-report-dialog";
 import {
-  type AiLlmProvider,
-  readStoredAiLlmProvider,
-  writeStoredAiLlmProvider,
+  AI_LLM_PROVIDER,
+  clearStoredAiLlmProvider,
 } from "@/lib/ai-llm-provider";
 
 const PROJECT_SUGGESTION_KEYS = [
@@ -224,8 +219,6 @@ const GENERAL_MODE_VALUE = "general";
 // for the dead Home branch — lives in #276; do not act on the asymmetries without re-checking
 // reachability first.
 const ACTIONABLE_PROPOSAL_PATTERN = /\b(task|add task|create task|estimate|cost|budget|procurement|buy|purchase|material|document|contract|report|generate)\b|(задач|смет|бюджет|стоимост|закуп|купи|материал|документ|договор|отч[её]т)/i;
-const LEARN_USER_PROMPT_PATTERN = /^\s*(how|what|why|explain|как|что|почему|объясни|объясните)\b/i;
-const LEARN_LIST_PATTERN = /(?:^|\n)\s*(?:[-*•]|\d+\.)\s+/m;
 
 type FeedFilter =
   | "all"
@@ -235,8 +228,7 @@ type FeedFilter =
   | "document"
   | "photo"
   | "member"
-  | "ai_actions"
-  | "learn";
+  | "ai_actions";
 
 type ChatFeedDomainFilter = "task" | "estimate" | "document" | "photo" | "member";
 
@@ -268,44 +260,6 @@ const FEED_CHAT_DOMAIN_MARKERS: Record<ChatFeedDomainFilter, readonly string[]> 
 
 function normalizeChatFeedText(text: string): string {
   return text.toLocaleLowerCase("ru-RU").replace(/\s+/g, " ").trim();
-}
-
-function collectLearnRelatedMessageIds(messages: readonly AIMessage[]): Set<string> {
-  const ids = new Set<string>();
-  const isLearnExplicit = (message: AIMessage) => (
-    message.mode === "learn"
-    || ((message as AIMessage & { meta?: { mode?: string } }).meta?.mode === "learn")
-  );
-  const isLearnLikeUser = (message: AIMessage) => (
-    message.role === "user" && LEARN_USER_PROMPT_PATTERN.test(message.content.trim())
-  );
-  const isLearnLikeAssistant = (message: AIMessage) => (
-    message.role === "assistant"
-    && (message.content.length >= 240 || LEARN_LIST_PATTERN.test(message.content))
-  );
-
-  messages.forEach((message, index) => {
-    const qualifies = isLearnExplicit(message) || isLearnLikeUser(message) || isLearnLikeAssistant(message);
-    if (!qualifies) return;
-
-    ids.add(message.id);
-    if (message.role === "user") {
-      for (let nextIndex = index + 1; nextIndex < messages.length; nextIndex += 1) {
-        if (messages[nextIndex]?.role === "assistant") {
-          ids.add(messages[nextIndex].id);
-          break;
-        }
-      }
-    } else {
-      for (let prevIndex = index - 1; prevIndex >= 0; prevIndex -= 1) {
-        if (messages[prevIndex]?.role === "user") {
-          ids.add(messages[prevIndex].id);
-          break;
-        }
-      }
-    }
-  });
-  return ids;
 }
 
 function messageMatchesChatFeedDomain(message: AIMessage, domain: ChatFeedDomainFilter): boolean {
@@ -342,8 +296,8 @@ function buildPriorTurnsForInference(
   messages: readonly AIMessage[],
   currentUserMessageId: string,
 ): AiInferencePriorTurn[] {
-  return messages
-    .filter((message) => message.id !== currentUserMessageId)
+  const currentIndex = messages.findIndex((message) => message.id === currentUserMessageId);
+  return (currentIndex >= 0 ? messages.slice(0, currentIndex) : messages)
     .filter((message): message is AIMessage & { role: "user" | "assistant" } =>
       message.role === "user" || message.role === "assistant"
     )
@@ -365,14 +319,11 @@ function buildPriorTurnsForInference(
 function selectMessagesForActivityFilter(
   filter: FeedFilter,
   allMessages: AIMessage[],
-  learnSubset: AIMessage[],
 ): AIMessage[] {
   switch (filter) {
     case "all":
     case "chats":
       return allMessages;
-    case "learn":
-      return learnSubset;
     case "ai_actions":
       return allMessages.filter(messageHasAiActionSignals);
     case "task":
@@ -395,8 +346,6 @@ function archiveEntryMatchesFeedFilter(
     case "all":
     case "chats":
       return true;
-    case "learn":
-      return collectLearnRelatedMessageIds(snap).size > 0;
     case "ai_actions":
       return (
         transcriptHasAiActionSignals(snap)
@@ -689,11 +638,21 @@ function getDayKey(timestampMs: number): string {
   return format(new Date(timestampMs), "yyyy-MM-dd");
 }
 
-function getDayLabel(timestampMs: number, t: Translator, dayFormatter: Intl.DateTimeFormat): string {
-  const date = new Date(timestampMs);
-  if (isToday(date)) return t("ai.sidebar.day.today");
-  if (isYesterday(date)) return t("ai.sidebar.day.yesterday");
-  return dayFormatter.format(date);
+function getPreviousDayKey(dayKey: string): string {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  return format(new Date(year, month - 1, day - 1), "yyyy-MM-dd");
+}
+
+function getDayLabel(
+  timestampMs: number,
+  todayKey: string,
+  t: Translator,
+  dayFormatter: Intl.DateTimeFormat,
+): string {
+  const dayKey = getDayKey(timestampMs);
+  if (dayKey === todayKey) return t("ai.sidebar.day.today");
+  if (dayKey === getPreviousDayKey(todayKey)) return t("ai.sidebar.day.yesterday");
+  return dayFormatter.format(new Date(timestampMs));
 }
 
 function buildProposalSummaryLines(childEvents: Event[], t: Translator): string[] {
@@ -847,10 +806,8 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   const [inputValue, setInputValue] = useState("");
   const [composerMultiline, setComposerMultiline] = useState(false);
   const [activityFilter, setActivityFilter] = useState<FeedFilter>("all");
-  const [learnMode, setLearnMode] = useState(false);
   const [automationMode, setAutomationMode] = useState<AutomationMode>("manual");
   const [pendingGeneralProposalInput, setPendingGeneralProposalInput] = useState<string | null>(null);
-  const [aiChatModel, setAiChatModel] = useState<AiLlmProvider>(readStoredAiLlmProvider);
   const [tagPersonCursor, setTagPersonCursor] = useState(0);
   const [referenceTaskCursor, setReferenceTaskCursor] = useState(0);
   const [width, setWidth] = useState(() => {
@@ -878,7 +835,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   const [expandedStockUsedEventIds, setExpandedStockUsedEventIds] = useState<Set<string>>(new Set());
   const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
   const [visibleDayBucketCount, setVisibleDayBucketCount] = useState(INITIAL_VISIBLE_DAY_BUCKETS);
-  const [messageRatings, setMessageRatings] = useState<Record<string, "good" | "bad" | undefined>>({});
+  const [todayKey, setTodayKey] = useState(() => getDayKey(Date.now()));
   const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
   const [pendingSaveMessage, setPendingSaveMessage] = useState<AIMessage | null>(null);
   const [savingLearnMessage, setSavingLearnMessage] = useState(false);
@@ -1100,6 +1057,13 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     });
   }, [clearPhotoAnalysisTimer, projectId, startPhotoConsult]);
 
+  // A question carried in from outside the project lies in the composer, the person sends it.
+  useEffect(() => {
+    if (!projectId) return;
+    const seed = takeProjectComposerSeed(projectId);
+    if (seed) setInputValue(seed);
+  }, [projectId]);
+
   // Activity events
   const allEvents = useEvents(projectId || "");
   const events = useMemo(() => (isProjectContext ? allEvents : []), [isProjectContext, allEvents]);
@@ -1128,8 +1092,8 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   }, [width]);
 
   useEffect(() => {
-    writeStoredAiLlmProvider(aiChatModel);
-  }, [aiChatModel]);
+    clearStoredAiLlmProvider();
+  }, []);
 
   useEffect(() => {
     const legacyProposalTimers = legacyProposalTimersRef.current;
@@ -1512,6 +1476,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                 content: denied,
                 timestamp: new Date().toISOString(),
                 mode: responseMode,
+                failed: true,
               },
             ]);
             return;
@@ -1530,6 +1495,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                 content: liveAssistantNoProjectDataLine(profileAssistantLang, t),
                 timestamp: new Date().toISOString(),
                 mode: responseMode,
+                failed: true,
               },
             ]);
             return;
@@ -1627,6 +1593,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               content: denied,
               timestamp: new Date().toISOString(),
               mode: responseMode,
+              failed: true,
             },
           ]);
           return;
@@ -1645,6 +1612,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               content: liveAssistantNoProjectDataLine(profileAssistantLang, t),
               timestamp: new Date().toISOString(),
               mode: responseMode,
+              failed: true,
             },
           ]);
           return;
@@ -1665,6 +1633,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               content: liveAssistantPermissionsLine("unavailable", profileAssistantLang, t),
               timestamp: new Date().toISOString(),
               mode: responseMode,
+              failed: true,
             },
           ]);
           return;
@@ -1726,7 +1695,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
             aiOutputLanguage: workspaceProfilePreferences?.aiOutputLanguage,
             priorTurns,
             chatId,
-            llmProvider: aiChatModel,
+            llmProvider: AI_LLM_PROVIDER,
             usageType: sendUsageType,
           });
           setWorkLogs((prev) => {
@@ -1754,6 +1723,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               groundingDetails: result.groundingDetails,
               followUps: result.followUps,
               freshnessHint: result.freshnessHint,
+              knowledgeBase: result.knowledgeBase,
             },
           };
           setMessages((prev) => [...prev, assistantMsg]);
@@ -1784,6 +1754,10 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               ),
               timestamp: new Date().toISOString(),
               mode: responseMode,
+              failed: true,
+              ...(isRetryableAiInferenceFailure(err)
+                ? { retry: { userMessageId, projectId: targetProjectId } }
+                : {}),
             },
           ]);
         } finally {
@@ -1813,6 +1787,11 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     workspaceProfileId,
     photoConsult,
     queryClient,
+    t,
+    profileAssistantLang,
+    workspaceProfilePreferences?.aiOutputLanguage,
+    WORK_STEPS_GENERATE,
+    WORK_STEPS_HOSTED_CONSULT,
   ]);
 
   useLayoutEffect(() => {
@@ -1850,7 +1829,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
         pendingContent,
         `pending-${Date.now()}`,
         nextProjectMode,
-        learnMode ? "learn" : "default",
+        "default",
       );
       return;
     }
@@ -1860,31 +1839,10 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     if (activeWindow !== "none" || proposalQueue) return;
   }
 
-  function handleSend(text?: string) {
-    if (activeWindow !== "none" || proposalQueue) return;
-    const content = (text ?? inputValue).trim();
-    if (!content) return;
-    // Read before the append below: this is what makes the send the thread's
-    // first move. `setMessages([])` on "new dialog" resets it, so a second
-    // conversation in the same mount counts again, which is what the baseline
-    // wants to measure.
-    const isThreadFirstMove = messages.length === 0;
-    // Taken together with the composer's contents and dies with them, so the
-    // permission and quota returns below cannot leave it pointing at a chip the
-    // user can no longer see.
-    const chipSeed = chipSeedRef.current;
-    chipSeedRef.current = null;
-    setInputValue("");
-
-    // Clear photo consult when sending (prompt was used)
-    if (photoConsult) {
-      closePhotoConsult(photoConsult.photo.project_id);
-      setPhotoConsult(null);
-    }
-
+  function aiSendBlockedByAccessOrQuota(): boolean {
     if (!isGuest && resolvedPermissionProjectId && !permResult.can("ai.generate")) {
       toast({ title: t("ai.sidebar.toast.accessDenied.title"), description: t("ai.sidebar.toast.accessDenied.generationDescription"), variant: "destructive" });
-      return;
+      return true;
     }
 
     // Tier-limit short-circuit: surface the paywall toast and don't POST to
@@ -1898,9 +1856,48 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
           title: t(`quota.gate.${currentUsageType}.title`),
           description: t(`quota.gate.${currentUsageType}.body`, { periodEnd }),
         });
-        return;
+        return true;
       }
     }
+    return false;
+  }
+
+  // A question about a selection goes apart from the composer. False when it cannot go now.
+  function sendApartFromComposer(content: string): boolean {
+    if (activeWindow !== "none" || proposalQueue || photoConsult) {
+      toast({ title: t("ai.sidebar.toast.aiBusy.title") });
+      return false;
+    }
+    if (aiSendBlockedByAccessOrQuota()) return false;
+    handleSend(content, { keepComposer: true });
+    return true;
+  }
+
+  function handleSend(text?: string, { keepComposer = false }: { keepComposer?: boolean } = {}) {
+    if (activeWindow !== "none" || proposalQueue) return;
+    const content = (text ?? inputValue).trim();
+    if (!content) return;
+    // Read before the append below: this is what makes the send the thread's
+    // first move. `setMessages([])` on "new dialog" resets it, so a second
+    // conversation in the same mount counts again, which is what the baseline
+    // wants to measure.
+    const isThreadFirstMove = messages.length === 0;
+    // Taken together with the composer's contents and dies with them, so the
+    // permission and quota returns below cannot leave it pointing at a chip the
+    // user can no longer see.
+    const chipSeed = keepComposer ? null : chipSeedRef.current;
+    if (!keepComposer) {
+      chipSeedRef.current = null;
+      setInputValue("");
+    }
+
+    // Clear photo consult when sending (prompt was used)
+    if (photoConsult) {
+      closePhotoConsult(photoConsult.photo.project_id);
+      setPhotoConsult(null);
+    }
+
+    if (aiSendBlockedByAccessOrQuota()) return;
 
     if (!isProjectContext && isHomeContext && homeProjectMode === GENERAL_MODE_VALUE && shouldAskProjectBeforeProposal(content)) {
       const userMsg: AIMessage = {
@@ -1908,7 +1905,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
         role: "user",
         content,
         timestamp: new Date().toISOString(),
-        mode: learnMode ? "learn" : "default",
+        mode: "default",
       };
       setMessages((prev) => [...prev, userMsg, {
         id: `msg-${Date.now() + 1}`,
@@ -1925,7 +1922,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       role: "user",
       content,
       timestamp: new Date().toISOString(),
-      mode: learnMode ? "learn" : "default",
+      mode: "default",
     };
     setMessages((prev) => [...prev, userMsg]);
 
@@ -2291,7 +2288,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   ), [members]);
 
   const filteredEvents = useMemo(() => {
-    if (activityFilter === "learn" || activityFilter === "chats") return [] as Event[];
+    if (activityFilter === "chats") return [] as Event[];
     if (activityFilter === "all") return events;
     if (activityFilter === "ai_actions") return events.filter((event) => isAIEvent(event));
     return events.filter((event) => event.type.startsWith(activityFilter));
@@ -2316,15 +2313,9 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     return map;
   }, [events]);
 
-  const learnMessageIds = useMemo(() => collectLearnRelatedMessageIds(messages), [messages]);
-  const learnMessages = useMemo(
-    () => messages.filter((message) => learnMessageIds.has(message.id)),
-    [messages, learnMessageIds],
-  );
-
   const activeThreadMessages = useMemo(
-    () => selectMessagesForActivityFilter(activityFilter, messages, learnMessages),
-    [activityFilter, messages, learnMessages],
+    () => selectMessagesForActivityFilter(activityFilter, messages),
+    [activityFilter, messages],
   );
 
   // ── Grounded opener (PRD rovno-ai-sidebar-opener-prd.md) ────────────────────
@@ -2600,7 +2591,32 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     t,
   ]);
 
+  // Re-render when the midnight timer fires or the tab comes back; a new feed row also re-reads the clock.
+  useEffect(() => {
+    let timer: number;
+    const syncTodayKey = () => setTodayKey(getDayKey(Date.now()));
+    const scheduleNextMidnight = () => {
+      const now = new Date();
+      const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      timer = window.setTimeout(() => {
+        const nextKey = getDayKey(Date.now());
+        if (nextKey === todayKey) scheduleNextMidnight();
+        else setTodayKey(nextKey);
+      }, nextMidnight.getTime() - now.getTime());
+    };
+    scheduleNextMidnight();
+    document.addEventListener("visibilitychange", syncTodayKey);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", syncTodayKey);
+    };
+  }, [todayKey]);
+
   const dayBuckets = useMemo<DayBucket[]>(() => {
+    // The clock decides the day; todayKey is only the tick that forces a recompute.
+    void todayKey;
+    const currentDayKey = getDayKey(Date.now());
+    const yesterdayKey = getPreviousDayKey(currentDayKey);
     const map = new Map<string, DayBucket>();
     streamRows.forEach((row) => {
       const dayKey = getDayKey(row.timestampMs);
@@ -2610,16 +2626,15 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
         return;
       }
 
-      const date = new Date(row.timestampMs);
       map.set(dayKey, {
         key: dayKey,
-        label: getDayLabel(row.timestampMs, t, dayHeaderFormatter),
+        label: getDayLabel(row.timestampMs, currentDayKey, t, dayHeaderFormatter),
         rows: [row],
-        olderThanYesterday: !isToday(date) && !isYesterday(date),
+        olderThanYesterday: dayKey !== currentDayKey && dayKey !== yesterdayKey,
       });
     });
     return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
-  }, [dayHeaderFormatter, streamRows, t]);
+  }, [dayHeaderFormatter, streamRows, t, todayKey]);
 
   const visibleDayBuckets = useMemo(() => {
     if (dayBuckets.length === 0) return [];
@@ -2745,7 +2760,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   const filterOptions: { key: FeedFilter; label: string }[] = [
     { key: "all", label: t("ai.sidebar.filter.all") },
     { key: "chats", label: t("ai.sidebar.filter.chats") },
-    { key: "learn", label: t("ai.sidebar.filter.learn") },
     { key: "task", label: t("ai.sidebar.filter.task") },
     { key: "estimate", label: t("ai.sidebar.filter.estimate") },
     { key: "document", label: t("ai.sidebar.filter.document") },
@@ -2779,10 +2793,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       else next.add(dayKey);
       return next;
     });
-  };
-
-  const handleToggleLearnMode = () => {
-    setLearnMode((prev) => !prev);
   };
 
   const handleNewConversation = useCallback(() => {
@@ -2847,12 +2857,23 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     }
   }
 
-  function handleRateLearnMessage(messageId: string, rating: "good" | "bad") {
-    setMessageRatings((prev) => {
-      const current = prev[messageId];
-      const next: Record<string, "good" | "bad" | undefined> = { ...prev };
-      next[messageId] = current === rating ? undefined : rating;
-      return next;
+  function handleRateMessage(message: AIMessage, pressed: AiAnswerRating) {
+    const rating = toggledRating(message.rating, pressed);
+    setMessages((prev) => prev.map((item) => {
+      if (item.id !== message.id) return item;
+      const { rating: _previous, ...rest } = item;
+      return rating ? { ...rest, rating } : rest;
+    }));
+    if (workspaceMode.kind !== "supabase") return;
+    const index = messages.findIndex((item) => item.id === message.id);
+    const question = messages.slice(0, Math.max(index, 0)).reverse().find((item) => item.role === "user");
+    const ratedProjectId = message.liveTextProjectId ?? resolvedPermissionProjectId;
+    void sendAiAnswerRating({
+      messageId: message.id,
+      rating,
+      projectId: isPersistableAiProjectId(ratedProjectId) ? ratedProjectId : null,
+      question: question?.content ?? "",
+      answer: message.content,
     });
   }
 
@@ -2958,61 +2979,15 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
       return;
     }
     const message = pendingSaveMessage;
-    const profileId = workspaceMode.profileId;
-    const rawSupabase = supabase as unknown as SupabaseClient;
-    const title = message.content.slice(0, 120).replace(/\n/g, " ").trim()
-      || t("ai.sidebar.learnNote.defaultTitle");
-
     setSavingLearnMessage(true);
     try {
+      await saveAnswerToDocuments(target, message.content, workspaceMode.profileId, t("ai.sidebar.learnNote.defaultTitle"));
       if (target.kind === "personal") {
-        const { error } = await rawSupabase
-          .from("workspace_documents")
-          .insert({
-            owner_profile_id: profileId,
-            title,
-            type: "knowledge_base",
-            origin: "ai_generated",
-            description: message.content,
-            created_by: profileId,
-          });
-        if (error) throw error;
         toast({
           title: t("ai.sidebar.toast.saved.title"),
           description: t("ai.sidebar.toast.saved.description"),
         });
       } else {
-        const { data: docRows, error: docErr } = await rawSupabase
-          .from("documents")
-          .insert({
-            project_id: target.projectId,
-            type: "knowledge_base",
-            title,
-            origin: "ai_generated",
-            description: message.content,
-            created_by: profileId,
-          })
-          .select("id")
-          .single();
-        if (docErr) throw docErr;
-        const newDocId = (docRows as { id: string }).id;
-        const { error: verErr } = await rawSupabase
-          .from("document_versions")
-          .insert({
-            document_id: newDocId,
-            version_number: 1,
-            is_current: true,
-            created_by: profileId,
-          });
-        if (verErr) {
-          // Best-effort cleanup: drop the orphan documents row so a retry
-          // does not duplicate it. PostgREST does not give us a real
-          // transaction across two .insert() calls; the proper fix is a
-          // SECURITY DEFINER RPC that wraps both inserts in one tx
-          // (tracked as a follow-up).
-          await rawSupabase.from("documents").delete().eq("id", newDocId);
-          throw verErr;
-        }
         toast({
           title: t("ai.sidebar.toast.savedToProject.title"),
           description: t("ai.sidebar.toast.savedToProject.description"),
@@ -3035,11 +3010,41 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     }
   }
 
+  function handleRetryFailedTurn(message: AIMessage) {
+    if (activeWindow !== "none" || proposalQueue) {
+      toast({ title: t("ai.sidebar.toast.aiBusy.title"), description: t("ai.sidebar.toast.aiBusy.description"), variant: "destructive" });
+      return;
+    }
+    const sourceUserMessage = retrySourceMessage(message);
+    if (!message.retry || !sourceUserMessage) return;
+    if (aiSendBlockedByAccessOrQuota()) return;
+
+    setMessages((prev) => prev.filter((item) => item.id !== message.id));
+    runAssistantForContent(
+      sourceUserMessage.content,
+      sourceUserMessage.id,
+      message.retry.projectId,
+      sourceUserMessage.mode ?? "default",
+    );
+  }
+
+  // Only while the failed turn is the last one, its question is still in the thread and its
+  // project is still in scope, so the new answer lands right under its question.
+  function retrySourceMessage(message: AIMessage): AIMessage | undefined {
+    if (messages[messages.length - 1]?.id !== message.id) return undefined;
+    const currentTargetProjectId = isProjectContext
+      ? projectId
+      : (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE ? homeProjectMode : "");
+    if (!message.retry || message.retry.projectId !== currentTargetProjectId) return undefined;
+    return messages.find((item) => item.id === message.retry?.userMessageId && item.role === "user");
+  }
+
   function handleRegenerateLearnMessage(message: AIMessage) {
     if (activeWindow !== "none" || proposalQueue) {
       toast({ title: t("ai.sidebar.toast.aiBusy.title"), description: t("ai.sidebar.toast.aiBusy.description"), variant: "destructive" });
       return;
     }
+    if (aiSendBlockedByAccessOrQuota()) return;
 
     const messageIndex = messages.findIndex((item) => item.id === message.id);
     if (messageIndex < 0) return;
@@ -3075,40 +3080,43 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
   }
 
   function renderLiveChatMessage(message: AIMessage) {
-    const isLearnMessage = message.mode === "learn";
-    const isLearnContext = isLearnMessage
-      || learnMode
-      || activityFilter === "learn"
-      || ((message as AIMessage & { meta?: { mode?: string } }).meta?.mode === "learn");
-    const isUserMessage = message.role === "user";
-    const rating = messageRatings[message.id];
+    if (message.role === "user") {
+      return <ShurikUserTurn key={`active-chat-${message.id}`} content={message.content} />;
+    }
     const isSaved = savedMessageIds.has(message.id);
     const isRegenerating = regeneratingMessageId === message.id;
-    const body = (
-      <>
-          <div className="flex items-center gap-1.5">
-            {isUserMessage && (
-              <div className="flex h-5 w-5 items-center justify-center rounded-md bg-muted">
-                <User className="h-3 w-3 text-muted-foreground" />
-              </div>
-            )}
-            <p className="text-caption font-medium text-foreground">
-              {isUserMessage ? t("ai.sidebar.chat.you") : t("ai.sidebar.chat.ai")}
-            </p>
-            {isLearnMessage && (
-              <span className="rounded-pill bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-                {t("ai.sidebar.chat.learnBadge")}
-              </span>
-            )}
-            <span className="ml-auto text-[10px] text-muted-foreground whitespace-nowrap">
-              {new Date(message.timestamp).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          </div>
-          <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words [overflow-wrap:anywhere] max-w-full">
-            {message.content}
-          </p>
-          {!isUserMessage && message.liveTextAssistantV1 && message.liveTextProjectId ? (
+    return (
+      <ShurikAnswerTurn key={`active-chat-${message.id}`} message={message}>
+          {retrySourceMessage(message) ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-1.5 h-7 gap-1.5 px-2 text-caption"
+              onClick={() => handleRetryFailedTurn(message)}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {t("ai.sidebar.chat.actions.retry")}
+            </Button>
+          ) : null}
+          {message.liveTextAssistantV1 && message.liveTextProjectId ? (
             <>
+              {message.liveTextAssistantV1.knowledgeBase ? (
+                <KbSourceLine
+                  knowledgeBase={message.liveTextAssistantV1.knowledgeBase}
+                  onAskAboutClause={(text) => {
+                    chipSeedRef.current = null;
+                    // Keep a draft the person already typed: the quote goes in front of it.
+                    setInputValue((prev) => (prev.trim() ? `${text}${prev}` : text));
+                    requestAnimationFrame(() => {
+                      composerTextareaRef.current?.focus();
+                      resizeComposer();
+                    });
+                  }}
+                />
+              ) : null}
+              {/* Frame 4: the «not in the base» line takes this spot. The server does not set it on a degraded turn. */}
+              {message.liveTextAssistantV1.knowledgeBase?.missing ? null : (
               <GroundingCallout
                 grounding={message.liveTextAssistantV1.grounding}
                 groundingNote={message.liveTextAssistantV1.groundingNote}
@@ -3118,6 +3126,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                 freshnessHint={message.liveTextAssistantV1.freshnessHint}
                 language={message.liveTextAssistantV1.assistantUiLanguage ?? "en"}
               />
+              )}
               {message.liveTextAssistantV1.followUps
                 && message.liveTextAssistantV1.followUps.length > 0 ? (
                 <div className="mt-1.5 min-w-0 max-w-full">
@@ -3144,77 +3153,18 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
               ) : null}
             </>
           ) : null}
-          {!isUserMessage && isLearnContext && (
-            <div className="mt-1.5 flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                title={t("ai.sidebar.chat.actions.copy")}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
-                onClick={() => { void handleCopyLearnMessage(message); }}
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                title={t("ai.sidebar.chat.actions.rateGood")}
-                className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                  rating === "good"
-                    ? "text-accent bg-accent/15"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
-                }`}
-                onClick={() => handleRateLearnMessage(message.id, "good")}
-              >
-                <ThumbsUp className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                title={t("ai.sidebar.chat.actions.rateBad")}
-                className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                  rating === "bad"
-                    ? "text-destructive bg-destructive/15"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
-                }`}
-                onClick={() => handleRateLearnMessage(message.id, "bad")}
-              >
-                <ThumbsDown className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                title={t("ai.sidebar.chat.actions.saveToDocuments")}
-                className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                  isSaved
-                    ? "text-accent bg-accent/15"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
-                }`}
-                onClick={() => handleSaveLearnMessage(message)}
-              >
-                <BookmarkPlus className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                title={isRegenerating ? t("ai.sidebar.chat.actions.regenerating") : t("ai.sidebar.chat.actions.regenerate")}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors disabled:opacity-60"
-                disabled={isRegenerating}
-                onClick={() => handleRegenerateLearnMessage(message)}
-              >
-                {isRegenerating
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <RefreshCw className="h-3.5 w-3.5" />}
-              </button>
-            </div>
+          {!message.failed && !message.retry && (
+            <ShurikAnswerActions
+              rating={message.rating}
+              saved={isSaved}
+              regenerating={isRegenerating}
+              onCopy={() => { void handleCopyLearnMessage(message); }}
+              onRate={(rating) => handleRateMessage(message, rating)}
+              onSave={() => { void handleSaveLearnMessage(message); }}
+              onRegenerate={() => handleRegenerateLearnMessage(message)}
+            />
           )}
-      </>
-    );
-    return (
-      <div key={`active-chat-${message.id}`} className="px-0 py-1.5 min-w-0 max-w-full">
-        {isUserMessage ? (
-          <div className="rounded-md border border-border/60 bg-sidebar-accent/40 px-2 py-1.5 min-w-0 max-w-full">
-            {body}
-          </div>
-        ) : (
-          <ShurikBubble wink={isFreshAssistantReply(message, Date.now())}>{body}</ShurikBubble>
-        )}
-      </div>
+      </ShurikAnswerTurn>
     );
   }
 
@@ -3223,20 +3173,23 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
     "bg-success/10", "bg-destructive/10",
   ];
 
+  const quotaExceeded = useAiQuotaExceeded(currentUsageType);
+  const panelRootRef = useRef<HTMLDivElement>(null);
+  // Only over an empty conversation: a thread with anything in it stays readable above the card.
+  const showQuotaFigure = quotaExceeded && messages.length === 0 && streamRows.length === 0;
+
+  const composerModeHint = photoConsult ? t("ai.sidebar.composer.placeholderConsult") : null;
   // In a project chat the empty composer greets the person by the time of day and by name.
-  const composerPlaceholder = learnMode
-    ? t("ai.sidebar.composer.placeholderLearn")
-    : photoConsult
-      ? t("ai.sidebar.composer.placeholderConsult")
-      : isProjectContext
-        ? shurikGreeting(t, new Date(), profileFullName(user))
-        : t("ai.sidebar.composer.placeholderDefault");
+  // The greeting is not an instruction, so the accessible name keeps the default there.
+  const composerPlaceholder = composerModeHint ?? (isProjectContext
+    ? shurikGreeting(t, new Date(), profileFullName(user))
+    : t("ai.sidebar.composer.placeholderDefault"));
 
   const composerTextarea = (
     <Textarea
       ref={composerTextareaRef}
       placeholder={composerPlaceholder}
-      aria-label={t("ai.sidebar.composer.placeholderDefault")}
+      aria-label={composerModeHint ?? t("ai.sidebar.composer.placeholderDefault")}
       className={cn(
         /* block + min-h-0: default Textarea uses flex; avoids flex row preventing autosized height growth */
         "block min-h-[38px] max-h-[220px] w-full resize-none border-0 bg-transparent px-1 py-2 text-body-sm shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-50",
@@ -3278,26 +3231,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
             <AtSign className="h-4 w-4 shrink-0" />
             {t("ai.sidebar.composer.tag")}
           </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2" onSelect={() => handleToggleLearnMode()}>
-            <GraduationCap className="h-4 w-4 shrink-0" />
-            <span className="flex-1 text-left">{t("ai.sidebar.composer.learnMode")}</span>
-            {learnMode ? <Check className="ml-auto h-4 w-4 shrink-0" /> : null}
-          </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="gap-2">
-              <Sparkles className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">{t("ai.sidebar.composer.model")}</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="p-1">
-              <DropdownMenuRadioGroup
-                value={aiChatModel}
-                onValueChange={(v) => setAiChatModel(v as AiLlmProvider)}
-              >
-                <DropdownMenuRadioItem value="gigachat">GigaChat</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="qwen">Qwen</DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
           <DropdownMenuItem className="gap-2" onSelect={() => handleAttachFilePhoto()}>
             <Paperclip className="h-4 w-4 shrink-0" />
             {t("ai.sidebar.composer.attach")}
@@ -3345,23 +3278,6 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-
-      {learnMode && (
-        <span className="group inline-flex h-9 items-center rounded-full border border-sidebar-border bg-transparent px-2.5 text-caption font-medium text-foreground shrink-0">
-          <span className="relative mr-1 inline-flex h-3.5 w-3.5 items-center justify-center">
-            <GraduationCap className="h-3.5 w-3.5 text-accent group-hover:hidden" />
-            <button
-              type="button"
-              aria-label={t("ai.sidebar.composer.disableLearn")}
-              onClick={handleToggleLearnMode}
-              className="absolute inset-0 hidden items-center justify-center text-muted-foreground hover:text-foreground group-hover:inline-flex"
-            >
-              <XIcon className="h-3.5 w-3.5" />
-            </button>
-          </span>
-          {t("ai.sidebar.composer.learnBadge")}
-        </span>
-      )}
     </div>
   );
 
@@ -3468,19 +3384,18 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
         />
       )}
       <div
-        onPointerDownCapture={() => {
-          if (!aiSidebarClickedInside && !collapsed && !isGuest) {
-            setAiSidebarClickedInside(true);
-          }
+        ref={panelRootRef}
+        onPointerDownCapture={(event) => {
+          if (aiSidebarClickedInside || collapsed || isGuest || showNotifications) return;
+          const target = event.target as Element | null;
+          if (target?.closest?.(`#${SHURIK_PANEL_TAB_IDS.notifications.tab}`)) return;
+          setAiSidebarClickedInside(true);
         }}
-        className="glass-sidebar flex flex-col h-[calc(100svh-48px-var(--demo-banner-h,0px))] shrink-0 relative box-border"
+        className={cn(SHURIK_PANEL_CARD_CLASS, "flex flex-col shrink-0 box-border")}
         style={{
           width: panelWidth,
           minWidth: collapsed ? COLLAPSED_WIDTH : (isMobile ? "100%" : MIN_WIDTH),
           maxWidth: collapsed ? COLLAPSED_WIDTH : (isMobile ? "100%" : MAX_WIDTH),
-          top: "calc(48px + var(--demo-banner-h, 0px))",
-          position: "sticky",
-          zIndex: 10,
           overflow: "hidden",
         }}
       >
@@ -3607,7 +3522,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
 
                   {/* Activity feed: day headers stay fixed; only rows + chat scroll */}
                   <div
-                    className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col px-3 box-border"
+                    className={cn("flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col px-3 box-border", showQuotaFigure && "hidden")}
                     style={{ width: "100%" }}
                   >
                     {streamRows.length > 0 ? (
@@ -3999,6 +3914,8 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                     </div>
                   )}
 
+                  {showQuotaFigure && <ShurikQuotaFigure />}
+
                   {!isInputLocked && (
                     <>
                       <AIQuotaWarning usageType={currentUsageType} />
@@ -4020,7 +3937,7 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                             setInputValue(text);
                           }}
                         />
-                      ) : (
+                      ) : quotaExceeded ? null : (
                         <SuggestionChips
                           suggestions={suggestions}
                           onSelect={(text, index) => {
@@ -4066,6 +3983,15 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
                         ) : null}
                       </div>
                       </AIQuotaGate>
+
+                      {isProjectContext && (
+                        <p className="w-full min-w-0 px-1 text-[10px] leading-snug text-muted-foreground" data-testid="shurik-disclaimer">
+                          {t("ai.sidebar.composer.disclaimer")}
+                          <span className="ml-1 whitespace-nowrap rounded-pill bg-accent/15 px-1.5 py-0.5 font-medium text-accent">
+                            {t("ai.sidebar.composer.beta")}
+                          </span>
+                        </p>
+                      )}
 
                       {isHomeContext && (
                         <div className="w-full min-w-0">
@@ -4113,6 +4039,21 @@ export function AISidebar({ collapsed, onCollapsedChange, panelTab, onPanelTabCh
           </div>
         )}
       </div>
+
+      <ShurikSelectionAsk
+        containerRef={panelRootRef}
+        within="[data-shurik-answer-text]"
+        onSubmit={(quote, _label, question) => {
+          if (question) return sendApartFromComposer(`${shurikQuoteLine(quote)}${question}`);
+          chipSeedRef.current = null;
+          setInputValue((prev) => `${shurikQuoteLine(quote)}${prev}`);
+          requestAnimationFrame(() => {
+            composerTextareaRef.current?.focus();
+            resizeComposer();
+          });
+          return true;
+        }}
+      />
 
       <SaveLearnTargetDialog
         open={pendingSaveMessage !== null}

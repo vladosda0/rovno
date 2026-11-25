@@ -41,10 +41,10 @@ const NOT_PLURAL: string[] = [
   // "filters.status", // не плюрал: подпись со счётчиком
 ];
 
-function flatten(tree: LocaleTree, prefix = ""): [string, string][] {
-  return Object.entries(tree).flatMap(([key, value]): [string, string][] => {
+function flatten(tree: LocaleTree, prefix = ""): [string, unknown][] {
+  return Object.entries(tree).flatMap(([key, value]): [string, unknown][] => {
     const path = prefix ? `${prefix}.${key}` : key;
-    return typeof value === "string" ? [[path, value]] : flatten(value, path);
+    return typeof value === "object" && value !== null ? flatten(value, path) : [[path, value]];
   });
 }
 
@@ -133,6 +133,11 @@ describe("ru/en locale parity", () => {
   it.each(LANGUAGES)("keeps every %s exclusion down to the single form it claims to be", (language) => {
     const overgrown = NOT_PLURAL.filter((base) => (CATEGORIES[language].get(base)?.size ?? 0) > 1).sort();
     expect(overgrown).toEqual([]);
+  });
+
+  // A number, boolean or null is not a translation: i18next would hand it to the UI as is.
+  it.each(LANGUAGES)("has a string at every %s leaf", (language) => {
+    expect(LOCALES[language].filter(([, value]) => typeof value !== "string").map(([key]) => key)).toEqual([]);
   });
 
   it("has no ordinary key present in only one locale", () => {

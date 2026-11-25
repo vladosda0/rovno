@@ -7,10 +7,10 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus, FileText, Upload, CreditCard, AlertTriangle,
-  Clock, CheckCircle2, FolderOpen, ChevronRight,
+  Clock, FolderOpen, ChevronRight,
 } from "lucide-react";
 import { useProjects, useCurrentUser, useWorkspaceMode } from "@/hooks/use-mock-data";
-import { useProjectsRecentEventsMap } from "@/hooks/use-activity-source";
+import { useProjectsRecentEventsState } from "@/hooks/use-activity-source";
 import * as store from "@/data/store";
 import { OrgBlock } from "@/components/home/OrgBlock";
 import { PendingInvitationsBlock } from "@/components/home/PendingInvitationsBlock";
@@ -18,7 +18,8 @@ import { useWorkspaceProjectsSensitiveDetailMap } from "@/hooks/use-home-sensiti
 import { getActivityDisplayDetailForHome } from "@/lib/activity-display";
 import { getEventCaption, resolveCaptionEnding } from "@/lib/event-catalog";
 import { isAIEvent } from "@/components/ai/event-utils";
-import { useProjectsStatusSummary } from "@/hooks/use-planning-source";
+import { useProjectsStatusSummary, useWorkspaceTasksState } from "@/hooks/use-planning-source";
+import { useWorkspaceProjectsState } from "@/hooks/use-workspace-source";
 import {
   deriveProjectProgressPct,
   deriveProjectStatus,
@@ -35,7 +36,7 @@ export function OverviewTab() {
   // The demo is a mockup, not an account: /settings (incl. billing) is
   // unreachable there, so don't offer a quick action that would dead-end.
   const isDemo = workspaceMode.kind === "demo";
-  const allTasks = store.getAllTasks();
+  const { tasks: allTasks, isLoading: tasksLoading, isError: tasksFailed } = useWorkspaceTasksState();
 
   const upcomingTasks = allTasks
     .filter((t) => t.status === "in_progress" || t.status === "not_started")
@@ -53,11 +54,19 @@ export function OverviewTab() {
   // status, progress from the tasks. The stored `progress_pct` is never updated
   // after creation, so it is not the truth about either.
   const statusSummaries = useProjectsStatusSummary(recentProjects.map((p) => p.id));
-  const recentActivityByProject = useProjectsRecentEventsMap(
+  const {
+    eventsByProject: recentActivityByProject,
+    isSettled: recentActivitySettled,
+  } = useProjectsRecentEventsState(
     projects.slice(0, 3).map((project) => project.id),
     2,
   );
   const { canViewSensitiveDetailByProjectId } = useWorkspaceProjectsSensitiveDetailMap();
+  const projectsState = useWorkspaceProjectsState();
+  const recentActivityKnown = recentActivitySettled && !projectsState.isLoading && !projectsState.isError;
+  const hasRecentActivity = projects
+    .slice(0, 3)
+    .some((project) => (recentActivityByProject[project.id] ?? []).length > 0);
   const activityRedactionByProject = useMemo(() => {
     const record: Record<string, { canViewFinanceDetail: boolean }> = {};
     for (const [pid, canView] of canViewSensitiveDetailByProjectId) {
@@ -82,9 +91,6 @@ export function OverviewTab() {
       <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" onClick={() => navigate("/home?tab=projects")}>
           <Plus className="h-3.5 w-3.5 mr-1.5" /> {t("overview.createProject")}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => navigate("/home?tab=tasks")}>
-          <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> {t("overview.newTask")}
         </Button>
         <Button size="sm" variant="outline" onClick={() => navigate("/home?tab=documents")}>
           <Upload className="h-3.5 w-3.5 mr-1.5" /> {t("overview.uploadDocument")}
@@ -176,7 +182,7 @@ export function OverviewTab() {
               </div>
               <div className="space-y-1.5">
                 {upcomingTasks.map((task) => {
-                  const project = store.getProject(task.project_id);
+                  const project = projects.find((p) => p.id === task.project_id);
                   return (
                     <Link
                       key={task.id}
@@ -194,7 +200,10 @@ export function OverviewTab() {
                     </Link>
                   );
                 })}
-                {upcomingTasks.length === 0 && (
+                {tasksFailed && (
+                  <p className="text-caption text-destructive py-4 text-center">{t("tasksTab.loadFailed")}</p>
+                )}
+                {!tasksLoading && !tasksFailed && upcomingTasks.length === 0 && (
                   <p className="text-caption text-muted-foreground py-4 text-center">{t("overview.noUpcoming")}</p>
                 )}
               </div>
@@ -280,6 +289,11 @@ export function OverviewTab() {
                   });
                 })}
               </div>
+              {recentActivityKnown && !hasRecentActivity && (
+                <p className="text-caption text-muted-foreground py-4 text-center">
+                  {t("overview.activityEmpty")}
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

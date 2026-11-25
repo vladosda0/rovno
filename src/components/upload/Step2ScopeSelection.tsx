@@ -41,7 +41,8 @@ export function Step2ScopeSelection({
   const activeOrg = useActiveOrg();
   const projects = useProjects();
 
-  const orgAvailable = Boolean(activeOrg?.id);
+  // A visitka-only organization without Brigade holds only its business card (rovno#327).
+  const orgAvailable = Boolean(activeOrg?.id) && !activeOrg?.limited;
   const projectAvailable = projects.length > 0;
 
   function scopeDisabled(value: UploadScope): boolean {
@@ -52,6 +53,7 @@ export function Step2ScopeSelection({
 
   function scopeDescription(value: UploadScope): string {
     if (value === "org") {
+      if (activeOrg?.limited) return t("home.documentsHub.empty.orgLimited.title");
       return orgAvailable
         ? t("upload.modal.step2.scopes.org.description", { name: activeOrg?.name ?? "" })
         : t("upload.modal.step2.scopes.orgUnavailable");

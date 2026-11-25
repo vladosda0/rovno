@@ -194,6 +194,7 @@ describe("useProjectDocumentsState/useProjectMedia", () => {
       deleteProjectDocument: vi.fn(),
       updateProjectDocumentVisibility: vi.fn().mockResolvedValue(undefined),
       prepareDocumentUpload: vi.fn(),
+      prepareDocumentVersionUpload: vi.fn(),
       finalizeDocumentUpload: vi.fn(),
       prepareMediaUpload: vi.fn(),
       finalizeMediaUpload: vi.fn(),

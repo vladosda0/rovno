@@ -120,6 +120,9 @@ export function useWorkspaceCurrentUser(): User {
 export function useWorkspaceProfilePreferencesState(): {
   preferences: ProfilePreferences | undefined;
   isLoading: boolean;
+  isError: boolean;
+  isRefetching: boolean;
+  refetch: () => void;
 } {
   const mode = useWorkspaceModeState();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
@@ -136,13 +139,20 @@ export function useWorkspaceProfilePreferencesState(): {
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
 
+  const refetch = () => {
+    void preferencesQuery.refetch();
+  };
+
   if (mode.kind === "pending-supabase") {
-    return { preferences: undefined, isLoading: true };
+    return { preferences: undefined, isLoading: true, isError: false, isRefetching: false, refetch };
   }
 
   return {
     preferences: preferencesQuery.data,
     isLoading: preferencesQuery.isPending,
+    isError: preferencesQuery.isError,
+    isRefetching: preferencesQuery.isFetching,
+    refetch,
   };
 }
 
@@ -234,7 +244,27 @@ export function useUpdateWorkspaceProfileContactInfo() {
   });
 }
 
-export function useWorkspaceProjectsState(): { projects: Project[]; isLoading: boolean } {
+export function useUpdateWorkspaceProjectAddress(projectId: string) {
+  const mode = useWorkspaceModeState();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (address: string | null) => {
+      if (mode.kind !== "local" && mode.kind !== "demo" && mode.kind !== "supabase") {
+        throw new Error("Project is not available yet.");
+      }
+      const source = await getWorkspaceSource(mode);
+      return source.updateProjectAddress(projectId, address);
+    },
+    onSuccess: (project) => {
+      if (mode.kind !== "supabase") return;
+      queryClient.setQueryData(workspaceQueryKeys.project(mode.profileId, projectId), project);
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.project(mode.profileId, projectId) });
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects(mode.profileId) });
+    },
+  });
+}
+
+export function useWorkspaceProjectsState(): { projects: Project[]; isLoading: boolean; isError: boolean } {
   const mode = useWorkspaceModeState();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const projectsQuery = useQuery({
@@ -250,12 +280,13 @@ export function useWorkspaceProjectsState(): { projects: Project[]; isLoading: b
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return { projects: store.getProjects(), isLoading: false };
+    return { projects: store.getProjects(), isLoading: false, isError: false };
   }
 
   return {
     projects: projectsQuery.data ?? [],
     isLoading: Boolean(supabaseMode) && projectsQuery.isPending,
+    isError: projectsQuery.isLoadingError,
   };
 }
 

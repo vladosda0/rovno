@@ -23,7 +23,11 @@ const mocks = vi.hoisted(() => ({
   getPlanningSource: vi.fn(),
   changeTaskStatus: vi.fn(),
   toast: vi.fn(),
+  heic: vi.fn(),
 }));
+
+vi.mock("heic2any", () => ({ default: (options: unknown) => mocks.heic(options) }));
+vi.mock("browser-image-compression", () => ({ default: async (file: File) => file }));
 
 vi.mock("@/hooks/use-mock-data", () => ({
   useProject: mocks.useProject,
@@ -562,6 +566,40 @@ describe("ProjectTasks", () => {
       expect.objectContaining({ expectedStatus: "in_progress" }),
     );
     expect(finalizeUpload).toHaveBeenCalled();
+  });
+
+  it("uploads a HEIC acceptance photo typed as PNG as a JPEG", async () => {
+    mocks.heic.mockResolvedValue(new Blob(["decoded"], { type: "image/jpeg" }));
+    const prepareUpload = vi.fn().mockResolvedValue({
+      bucket: "media",
+      objectPath: "project-1/photo.jpg",
+      uploadIntentId: "intent-1",
+    });
+    const uploadBytes = vi.fn().mockResolvedValue(undefined);
+    const finalizeUpload = vi.fn().mockResolvedValue(undefined);
+    mocks.useMediaUploadMutations.mockReturnValue({ prepareUpload, uploadBytes, finalizeUpload });
+    mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+    mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);
+
+    const { container } = renderProjectTasks();
+
+    fireEvent.click(screen.getByText("Estimate task"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Done" }));
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const heicAsPng = new File(
+      [new Uint8Array([0, 0, 0, 0x18, ...new TextEncoder().encode("ftypheic"), 0, 0, 0, 0])],
+      "img_3641.png",
+      { type: "image/png" },
+    );
+    fireEvent.change(fileInput, { target: { files: [heicAsPng] } });
+    fireEvent.click(screen.getByRole("button", { name: /Mark Done/i }));
+
+    await waitFor(() => expect(finalizeUpload).toHaveBeenCalled());
+    expect(prepareUpload).toHaveBeenCalledWith(
+      expect.objectContaining({ clientFilename: "img_3641.jpg", mimeType: "image/jpeg" }),
+    );
+    expect((uploadBytes.mock.calls[0][2] as File).type).toBe("image/jpeg");
   });
 
   it("drops the photo selection after a failed Done confirm, so a retry cannot re-upload the same files", async () => {
@@ -1178,5 +1216,37 @@ describe("ProjectTasks", () => {
     expect(screen.getByText("Add final result photos")).toBeInTheDocument();
     expect(screen.getByText("No files selected")).toBeInTheDocument();
     expect(mocks.changeTaskStatus).not.toHaveBeenCalled();
+  });
+
+  it("uploads nothing when the Done prompt is left while a HEIC photo is still converting", async () => {
+    let releaseDecode: () => void = () => {};
+    mocks.heic.mockReset().mockImplementation(
+      () => new Promise<Blob>((resolve) => { releaseDecode = () => resolve(new Blob(["d"], { type: "image/jpeg" })); }),
+    );
+    const prepareUpload = vi.fn();
+    const uploadBytes = vi.fn();
+    const finalizeUpload = vi.fn();
+    mocks.useMediaUploadMutations.mockReturnValue({ prepareUpload, uploadBytes, finalizeUpload });
+    mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+    mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);
+
+    const { container } = renderProjectTasks();
+    fireEvent.click(screen.getByText("Estimate task"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Done" }));
+    const header = new Uint8Array([0, 0, 0, 0x10, ...new TextEncoder().encode("ftypheic"), 0, 0, 0, 0]);
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: { files: [new File([header], "img.png", { type: "image/png" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Mark Done/i }));
+    await waitFor(() => expect(mocks.heic).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    releaseDecode();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(prepareUpload).not.toHaveBeenCalled();
+    expect(finalizeUpload).not.toHaveBeenCalled();
   });
 });

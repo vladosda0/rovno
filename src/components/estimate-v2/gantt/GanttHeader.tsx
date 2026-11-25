@@ -41,6 +41,30 @@ export function GanttHeader({
     () => new Intl.DateTimeFormat(i18n.language, { month: "short", year: "numeric" }),
     [i18n.language],
   );
+  // «Недели» in two tiers (rovno#235): «Октябрь 2026» above, the dates of each week below.
+  const monthNameLabel = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { month: "long" }),
+    [i18n.language],
+  );
+  const weekDayNumber = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { day: "numeric" }),
+    [i18n.language],
+  );
+  const weekLabel = (weekStartDay: number): string => {
+    const start = dayToDate(weekStartDay);
+    const end = dayToDate(weekStartDay + 6);
+    if (start.getMonth() === end.getMonth()) {
+      return t("estimate.gantt.header.weekRange", { start: weekDayNumber.format(start), end: weekDayNumber.format(end) });
+    }
+    return t("estimate.gantt.header.weekRangeAcrossMonths", { start: dayLabel.format(start), end: dayLabel.format(end) });
+  };
+  const monthTitle = (date: Date): string => {
+    const name = monthNameLabel.format(date);
+    return t("estimate.gantt.header.month", {
+      month: name.charAt(0).toLocaleUpperCase(i18n.language) + name.slice(1),
+      year: date.getFullYear(),
+    });
+  };
   const monthSeparators: number[] = [];
   for (let day = Math.max(timelineStartDay, visibleStartDay - 2); day <= Math.min(timelineEndDay, visibleEndDay + 2); day += 1) {
     const date = dayToDate(day);
@@ -74,19 +98,34 @@ export function GanttHeader({
 
         {scale === "weeks" && (() => {
           const blocks: ReactNode[] = [];
-          const weekTicks = buildWeekTicks(visibleStartDay, visibleEndDay);
-          for (const tick of weekTicks) {
+          for (const tick of buildMonthTicks(visibleStartDay, visibleEndDay)) {
+            const monthStart = tick.monthStartDay;
+            blocks.push(
+              <div
+                key={`week-month-${monthStart}`}
+                className="absolute top-0 h-1/2 overflow-hidden whitespace-nowrap border-b border-border/60 px-2 pt-0.5"
+                style={{
+                  left: (monthStart - timelineStartDay) * pxPerDay,
+                  width: tick.dayCount * pxPerDay,
+                }}
+              >
+                <span className="text-[10px] font-medium text-foreground">{monthTitle(dayToDate(monthStart))}</span>
+              </div>,
+            );
+          }
+          for (const tick of buildWeekTicks(visibleStartDay, visibleEndDay)) {
             const weekStart = tick.weekStartDay;
             blocks.push(
               <div
                 key={`week-${weekStart}`}
-                className="absolute top-0 h-full border-r border-border/60 px-2 pt-1"
+                className="absolute bottom-0 h-1/2 overflow-hidden whitespace-nowrap border-r border-border/60 px-0.5 pt-0.5"
                 style={{
                   left: (weekStart - timelineStartDay) * pxPerDay,
                   width: 7 * pxPerDay,
                 }}
+                title={weekLabel(weekStart)}
               >
-                <span className="text-[10px] text-muted-foreground">{t("estimate.gantt.header.week", { number: tick.weekNumber })}</span>
+                <span className="text-[10px] tracking-tight text-muted-foreground">{weekLabel(weekStart)}</span>
               </div>,
             );
           }

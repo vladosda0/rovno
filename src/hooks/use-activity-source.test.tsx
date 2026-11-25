@@ -8,6 +8,7 @@ import {
   useNotificationEventMap,
   useProjectEvents,
   useProjectsRecentEventsMap,
+  useProjectsRecentEventsState,
 } from "@/hooks/use-activity-source";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { Event, Notification } from "@/types/entities";
@@ -454,5 +455,44 @@ describe("use-activity-source hooks", () => {
     expect(screen.getByTestId("recent-project-2")).toHaveTextContent("evt-2a|evt-2b");
     expect(source.getProjectEvents).toHaveBeenCalledWith("project-1", 2);
     expect(source.getProjectEvents).toHaveBeenCalledWith("project-2", 2);
+  });
+
+  it("reports recent events as settled only after they load, and never on a failure", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
+    authenticateRuntimeAuth();
+    let resolveEvents: (events: Event[]) => void = () => {};
+    const getProjectEvents = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<Event[]>((resolve) => { resolveEvents = resolve; }))
+      .mockRejectedValueOnce(new Error("network"));
+    vi.spyOn(activitySource, "getActivitySource").mockResolvedValue({
+      getProjectEvents,
+    } as unknown as Awaited<ReturnType<typeof activitySource.getActivitySource>>);
+
+    function SettledProbe({ projectId }: { projectId: string }) {
+      const { isSettled } = useProjectsRecentEventsState([projectId], 2);
+      return <span data-testid={`settled-${projectId}`}>{String(isSettled)}</span>;
+    }
+
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <SettledProbe projectId="project-1" />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByTestId("settled-project-1")).toHaveTextContent("false");
+    await waitFor(() => expect(getProjectEvents).toHaveBeenCalledTimes(1));
+    act(() => resolveEvents([event()]));
+    await waitFor(() => expect(screen.getByTestId("settled-project-1")).toHaveTextContent("true"));
+
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <SettledProbe projectId="project-2" />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(getProjectEvents).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByTestId("settled-project-2")).toHaveTextContent("false");
   });
 });

@@ -25,6 +25,7 @@ import type {
   InferenceGroundingKind,
   LiveTextAssistantSource,
   LiveTextFollowUpPrompt,
+  LiveTextKnowledgeBase,
   PresentationalWorkProposal,
 } from "@/lib/ai-assistant-contract";
 
@@ -49,6 +50,7 @@ export interface AIMessageLiveTextAssistantV1 {
   };
   followUps?: LiveTextFollowUpPrompt[];
   freshnessHint?: Record<string, unknown> | null;
+  knowledgeBase?: LiveTextKnowledgeBase;
 }
 
 export interface AIMessage {
@@ -56,9 +58,18 @@ export interface AIMessage {
   role: AIMessageRole;
   content: string;
   timestamp: string;
+  /** Saved transcripts may still say "learn"; nothing reads it for the look of a message any more. */
   mode?: "default" | "learn";
+  /** The person's thumbs on this answer. The server takes it but does not give it back. */
+  rating?: "good" | "bad";
   proposal?: AIProposal;
   liveTextAssistantV1?: AIMessageLiveTextAssistantV1;
   /** Project id the live text turn used (handoff to `/project/:id/estimate`). */
   liveTextProjectId?: string;
+  /** Failed turn that may be re-sent unchanged: the user message it answered and its project. */
+  retry?: { userMessageId: string; projectId: string };
+  /** Outside a project: the question to carry into the project the person picks. */
+  needsProjectQuestion?: string;
+  /** The bubble carries a failure text (access, quota, provider error), not an answer. */
+  failed?: true;
 }

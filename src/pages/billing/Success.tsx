@@ -5,7 +5,7 @@ import { CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BILLING_ENABLED } from "@/lib/billing";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
-import { isTerminalPaymentStatus, usePaymentStatus } from "@/hooks/usePaymentStatus";
+import { isPaidPaymentIntent, isSettledPaymentIntent, usePaymentStatus } from "@/hooks/usePaymentStatus";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { trackEvent } from "@/lib/analytics";
 
@@ -23,21 +23,17 @@ export default function Success() {
   const intentQuery = usePaymentStatus(intentId);
   const { subscription, refetch } = useActiveSubscription();
 
-  useEffect(() => {
-    if (intentQuery.data?.status === "confirmed") {
-      trackEvent("billing_payment_confirmed", { plan: intentQuery.data.plan_code });
-    }
-  }, [intentQuery.data?.status, intentQuery.data?.plan_code]);
-
   // The active-subscription row flips to the paid plan a beat AFTER the payment
   // reads confirmed (apply_confirmed_payment runs just after the status update
   // server-side, and react-query may still hold the pre-purchase row). Until the
   // subscription reflects the plan we just paid for, its period is the OLD one
   // (e.g. the Free period), which is exactly the wrong date users saw here. Poll
   // until it syncs, then show the real date.
-  const paidPlan = intentQuery.data?.status === "confirmed"
-    ? intentQuery.data.plan_code ?? null
-    : null;
+  // A partial refund leaves the rest of the payment paid (T-Bank CONFIRMED -> PARTIAL_REFUNDED),
+  // but only once the confirmation is on the row; until then the page waits like for 'pending'.
+  const intent = intentQuery.data;
+  const confirmed = isPaidPaymentIntent(intent);
+  const paidPlan = confirmed ? intent?.plan_code ?? null : null;
   const upgradeApplied = !!paidPlan && subscription?.plan_code === paidPlan;
   const needsSync = !!paidPlan && !upgradeApplied;
   const pollsRef = useRef(0);
@@ -59,9 +55,11 @@ export default function Success() {
 
   // T-Bank redirects here as soon as the payer finishes on its side; the payment
   // is only real once the notification webhook marks the intent confirmed.
-  const intent = intentQuery.data;
-  const confirmed = intent?.status === "confirmed";
-  const failed = !!intent && isTerminalPaymentStatus(intent.status) && !confirmed;
+  const failed = !!intent && isSettledPaymentIntent(intent) && !confirmed;
+  const confirmedPlan = confirmed ? intent?.plan_code : undefined;
+  useEffect(() => {
+    if (confirmed) trackEvent("billing_payment_confirmed", { plan: confirmedPlan });
+  }, [confirmed, confirmedPlan]);
   useEffect(() => {
     if (!BILLING_ENABLED) return;
     if (!intentId) {

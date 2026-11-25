@@ -585,6 +585,7 @@ describe("ProjectParticipants", () => {
         readOnly: false,
         isLoading: false,
         isError: Boolean(opts.subscriptionError),
+        isLoadingError: Boolean(opts.subscriptionError),
         refetch: () => {},
       });
       const ownerSeam = {

@@ -10,7 +10,7 @@ import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import {
   createLinkCode,
   listLinkedIdentities,
-  unlinkIdentity,
+  unlinkMessengerIdentity,
   telegramDeepLink,
   TELEGRAM_BOT_USERNAME,
   type LinkedIdentity,
@@ -92,7 +92,7 @@ export function IntegrationsPanel() {
   const handleUnlink = async () => {
     setUnlinking(true);
     try {
-      await unlinkIdentity("telegram");
+      await unlinkMessengerIdentity("telegram");
       setCode(null);
       await refresh();
       toast({ title: t("integrations.telegram.unlinkedToast") });

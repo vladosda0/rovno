@@ -29,7 +29,7 @@ vi.mock("@/hooks/use-workspace-source", async (importOriginal) => {
 vi.mock("@/data/messenger-links", () => ({
   createLinkCode: (...args: unknown[]) => mockCreateLinkCode(...args),
   listLinkedIdentities: (...args: unknown[]) => mockListLinkedIdentities(...args),
-  unlinkIdentity: (...args: unknown[]) => mockUnlinkIdentity(...args),
+  unlinkMessengerIdentity: (...args: unknown[]) => mockUnlinkIdentity(...args),
   telegramDeepLink: (code: string) => `https://t.me/rovno_ai_bot?start=${code}`,
   TELEGRAM_BOT_USERNAME: "rovno_ai_bot",
 }));

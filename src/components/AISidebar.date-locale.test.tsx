@@ -136,6 +136,59 @@ describe("AISidebar dates follow the interface language", () => {
     expect(dayHeader("Sep 1, 2026")).not.toBeInTheDocument();
   });
 
+  it("moves Today and Yesterday on when the panel stays open past midnight", () => {
+    vi.setSystemTime(new Date(2026, 8, 10, 23, 59, 30));
+    addTaskEvent("yesterday", YESTERDAY);
+    addTaskEvent("this-morning", THIS_MORNING);
+    renderSidebar();
+    expect(dayHeader("Today")).toBeInTheDocument();
+    expect(dayHeader("Yesterday")).toBeInTheDocument();
+    // Вчерашний день раскрыт, более старые свёрнуты.
+    expect(screen.getByText(/Task yesterday/)).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(dayHeader("Today")).not.toBeInTheDocument();
+    expect(dayHeader("Yesterday")).toBeInTheDocument();
+    expect(dayHeader("Sep 9, 2026")).toBeInTheDocument();
+  });
+
+  it("moves Today on when the tab comes back after sleeping past midnight", () => {
+    vi.setSystemTime(new Date(2026, 8, 10, 22, 0));
+    addTaskEvent("this-morning", THIS_MORNING);
+    renderSidebar();
+    expect(dayHeader("Today")).toBeInTheDocument();
+
+    // Sleep pauses the timer clock: the wall clock jumps, no timer fires.
+    vi.setSystemTime(new Date(2026, 8, 11, 9, 0));
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(dayHeader("Today")).not.toBeInTheDocument();
+    expect(dayHeader("Yesterday")).toBeInTheDocument();
+  });
+
+  it("files a new-day event under Today before the midnight timer has fired", () => {
+    vi.setSystemTime(new Date(2026, 8, 10, 23, 59, 30));
+    addTaskEvent("this-morning", THIS_MORNING);
+    renderSidebar();
+    expect(dayHeader("Today")).toBeInTheDocument();
+
+    // The wall clock passes midnight, but no timer and no visibility event fire.
+    vi.setSystemTime(new Date(2026, 8, 11, 0, 30));
+    act(() => {
+      addTaskEvent("after-midnight", new Date(2026, 8, 11, 0, 20));
+    });
+
+    expect(dayHeader("Today")).toBeInTheDocument();
+    expect(dayHeader("Yesterday")).toBeInTheDocument();
+    expect(dayHeader("Sep 11, 2026")).not.toBeInTheDocument();
+    expect(screen.getByText(/Task after-midnight/)).toBeInTheDocument();
+  });
+
   it.each([
     { lang: "ru", stamp: "10 сент. 2026 г., 14:30" },
     { lang: "en", stamp: "Sep 10, 2026, 02:30 PM" },
@@ -143,15 +196,7 @@ describe("AISidebar dates follow the interface language", () => {
     await i18n.changeLanguage(lang);
     renderSidebar();
 
-    // The composer's "+" button is icon-only, so it has no accessible name to query by.
-    // It is opened from the keyboard: jsdom 20 has no PointerEvent, and Radix only
-    // opens on a pointerdown that carries `button: 0`.
-    const composerMenu = document.querySelector("button[aria-haspopup='menu'] svg.lucide-plus")?.closest("button");
-    if (!composerMenu) throw new Error("composer menu trigger not found");
-    fireEvent.keyDown(composerMenu, { key: "Enter" });
-    fireEvent.click(screen.getByRole("menuitem", { name: i18n.t("ai.sidebar.composer.learnMode") }));
-
-    const composer = screen.getByPlaceholderText(i18n.t("ai.sidebar.composer.placeholderLearn"));
+    const composer = screen.getByRole("textbox", { name: i18n.t("ai.sidebar.composer.placeholderDefault") });
     fireEvent.change(composer, { target: { value: "Why does a slab need time to cure?" } });
     fireEvent.keyDown(composer, { key: "Enter" });
     act(() => {

@@ -485,6 +485,66 @@ export function autoScheduleSequential(
   });
 }
 
+/** Length of a work whose dates the app picks at «В работу» (rovno#235). */
+export const AUTO_SCHEDULE_SPAN_DAYS = 7;
+
+/**
+ * Dates for the works that have none, picked at «В работу» (rovno#235).
+ *
+ * Works are walked in estimate order (stage order, then work order). A work with both dates
+ * keeps them. A work without them (or with only one) gets AUTO_SCHEDULE_SPAN_DAYS calendar days
+ * starting the day after the previous work in that order ends, entered or picked, but never
+ * before `todayIso`; it is marked `datesAutoScheduled`. Dependencies are applied by the caller
+ * afterwards. The result keeps the input order.
+ */
+export function autoScheduleMissingWorks(
+  works: EstimateV2Work[],
+  todayIso: string,
+  stageOrderById: Map<string, number> = new Map<string, number>(),
+  spanDays: number = AUTO_SCHEDULE_SPAN_DAYS,
+): EstimateV2Work[] {
+  const today = toDayIndex(todayIso) ?? toDayIndex(new Date()) ?? 0;
+  const span = Math.max(1, Math.round(spanDays));
+
+  const sorted = [...works].sort((a, b) => {
+    const aKey = workSortKey(a, stageOrderById);
+    const bKey = workSortKey(b, stageOrderById);
+    if (aKey[0] !== bKey[0]) return aKey[0] - bKey[0];
+    if (aKey[1] !== bKey[1]) return aKey[1] - bKey[1];
+    return aKey[2].localeCompare(bKey[2]);
+  });
+
+  const updatesById = new Map<string, { plannedStart: string; plannedEnd: string }>();
+  let previousEnd: number | null = null;
+  sorted.forEach((work) => {
+    const start = toDayIndex(work.plannedStart);
+    const end = toDayIndex(work.plannedEnd);
+    if (start != null && end != null) {
+      previousEnd = end;
+      return;
+    }
+    const plannedStart = previousEnd == null ? today : Math.max(today, previousEnd + 1);
+    const plannedEnd = plannedStart + span - 1;
+    updatesById.set(work.id, {
+      plannedStart: fromDayIndex(plannedStart),
+      plannedEnd: fromDayIndex(plannedEnd),
+    });
+    previousEnd = plannedEnd;
+  });
+
+  if (updatesById.size === 0) return works;
+  return works.map((work) => {
+    const update = updatesById.get(work.id);
+    if (!update) return work;
+    return {
+      ...work,
+      plannedStart: update.plannedStart,
+      plannedEnd: update.plannedEnd,
+      datesAutoScheduled: true,
+    };
+  });
+}
+
 export function validateNoCycles(
   dependencies: Pick<EstimateV2Dependency, "fromWorkId" | "toWorkId">[],
 ): { valid: true; cyclePath: null } | { valid: false; cyclePath: string[] } {

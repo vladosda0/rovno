@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AddressSuggestInput } from "@/components/address/AddressSuggestInput";
 import { Progress } from "@/components/ui/progress";
 import {
   Plus, Search, SortAsc,
@@ -55,6 +56,7 @@ export function ProjectsTab() {
 
   // Manual project creation (inline on tab)
   const [manualTitle, setManualTitle] = useState("");
+  const [manualAddress, setManualAddress] = useState("");
   const [manualType, setManualType] = useState("residential");
   const [manualProjectMode, setManualProjectMode] = useState<"build_myself" | "contractor">("contractor");
   const [manualCreating, setManualCreating] = useState(false);
@@ -119,6 +121,7 @@ export function ProjectsTab() {
         title,
         type: manualType,
         projectMode: manualProjectMode,
+        address: manualAddress,
       });
 
       await planningSource.createProjectStage({
@@ -151,6 +154,7 @@ export function ProjectsTab() {
       });
       toast({ title: t("projectsTab.projectCreated"), description: title });
       setManualTitle("");
+      setManualAddress("");
       setManualType("residential");
       setManualProjectMode("contractor");
       navigate(`/project/${createdProject.id}/estimate`);
@@ -247,6 +251,20 @@ export function ProjectsTab() {
               autoFocus
               required
             />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-body-sm font-medium text-foreground" htmlFor="manual-project-address">
+              {t("projectsTab.addressLabel")}
+              <span className="ml-1 font-normal text-muted-foreground">{t("projectsTab.addressOptional")}</span>
+            </label>
+            <AddressSuggestInput
+              id="manual-project-address"
+              value={manualAddress}
+              onChange={setManualAddress}
+              onPick={setManualAddress}
+              placeholder={t("projectDashboard.addressPlaceholder")}
+            />
+            <p className="text-caption text-muted-foreground">{t("projectsTab.addressHelp")}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">

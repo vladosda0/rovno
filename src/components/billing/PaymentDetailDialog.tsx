@@ -12,8 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { RefundRequestForm } from "@/components/billing/RefundRequestForm";
 import { buildReceiptHtml } from "@/lib/receipt";
-import { formatRubFromKopecks, type PaymentIntentRow } from "@/lib/billing";
-import { PLANS } from "@/data/plans";
+import { formatRubFromKopecks, isPartiallyRefunded, type PaymentIntentRow } from "@/lib/billing";
+import { planDisplayName } from "@/data/plan-labels";
 
 // Full refunds are accepted within this window of the payment date; afterwards we
 // offer a partial-refund request instead (per policy).
@@ -31,7 +31,7 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
   const [open, setOpen] = useState(false);
   const [partialMode, setPartialMode] = useState(false);
 
-  const planName = PLANS[payment.plan_code as keyof typeof PLANS]?.display_name ?? payment.plan_code;
+  const planName = planDisplayName(payment.plan_code);
   const amountLabel = formatRubFromKopecks(payment.amount_kopecks);
   const when = payment.confirmed_at ?? payment.created_at;
   const dateFmt = new Intl.DateTimeFormat(i18n.language === "ru" ? "ru-RU" : "en-US", {
@@ -41,7 +41,13 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
   });
   const dateLabel = dateFmt.format(new Date(when));
   const shortId = payment.id.slice(0, 8);
-  const statusText = payment.status === "refunded" ? t("billing.payment.statusRefunded") : undefined;
+  const partiallyRefunded = isPartiallyRefunded(payment);
+  const statusText =
+    payment.status === "refunded"
+      ? t("billing.payment.statusRefunded")
+      : partiallyRefunded
+        ? t("billing.payment.statusPartialRefund")
+        : undefined;
 
   const daysSince = (Date.now() - new Date(when).getTime()) / 86_400_000;
   const withinWindow = daysSince <= REFUND_WINDOW_DAYS;
@@ -118,13 +124,13 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
           </TabsContent>
 
           <TabsContent value="refund" className="pt-sp-2">
-            {payment.status !== "confirmed" ? (
-              // The history lists confirmed + refunded rows, so a non-confirmed
-              // row here is a full refund: never offer another refund request for
-              // it. (partial_refund is excluded from the history for now — see
-              // PaymentHistory; its remainder-refund UX is a separate follow-up.)
+            {payment.status !== "confirmed" || partiallyRefunded ? (
+              // A refunded or partially refunded row never offers another refund
+              // request; the remainder-refund UX is a separate follow-up.
               <p className="text-body-sm text-muted-foreground">
-                {t("billing.refund.alreadyRefunded")}
+                {partiallyRefunded
+                  ? t("billing.refund.alreadyPartiallyRefunded")
+                  : t("billing.refund.alreadyRefunded")}
               </p>
             ) : withinWindow || partialMode ? (
               <RefundRequestForm

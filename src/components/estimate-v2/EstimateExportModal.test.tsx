@@ -3,8 +3,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ExportPayload } from "@/lib/estimate-export-data";
 import { EstimateExportModal } from "@/components/estimate-v2/EstimateExportModal";
 
-const { mockDownloadSheets, mockPrint, mockToast, mockSaveOrgCard, mockSaveClientInfo, orgCard, clientInfo } = vi.hoisted(() => ({
-  orgCard: { data: { legalName: "ООО Ремонт", signatoryName: "Петров П. П." } },
+const { mockDownloadSheets, mockPrint, mockToast, mockSaveOrgCard, mockSaveClientInfo, orgCard, clientInfo, tier, mockPartyDetails } = vi.hoisted(() => ({
+  orgCard: { data: { legalName: "ООО Ремонт", signatoryName: "Петров П. П." } as Record<string, string> },
+  tier: { plan: "free" as string },
+  mockPartyDetails: vi.fn(),
   clientInfo: { data: { name: "Иванов И. И." } },
   mockDownloadSheets: vi.fn(),
   mockPrint: vi.fn(),
@@ -19,8 +21,20 @@ vi.mock("@/hooks/use-toast", () => ({
   toast: mockToast,
   useToast: () => ({ toast: mockToast, dismiss: vi.fn(), toasts: [] }),
 }));
-vi.mock("@/hooks/use-orgs", () => ({ useActiveOrg: () => ({ id: "org-1" }) }));
+vi.mock("@/hooks/use-orgs", () => ({ useActiveOrg: () => ({ id: "org-1", role: "owner" }) }));
+vi.mock("@/hooks/useTierQuota", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/useTierQuota")>()),
+  useTierQuota: () => tier.plan === "loading"
+    ? { data: undefined, isLoading: true }
+    : { data: tier.plan === "error" ? undefined : { plan_code: tier.plan }, isLoading: false },
+}));
+vi.mock("@/data/requisites-lookup-source", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/data/requisites-lookup-source")>()),
+  lookupPartyDetails: mockPartyDetails,
+}));
 vi.mock("@/hooks/use-org-card", () => ({
+  useOrgCardScope: () => ({ kind: "org", orgId: "org-1", canEdit: true }),
+  useClientInfoScope: () => ({ kind: "server", projectId: "p1" }),
   useOrgCard: () => orgCard,
   useClientInfo: () => clientInfo,
   useSetOrgCard: () => ({ mutateAsync: mockSaveOrgCard }),
@@ -198,17 +212,33 @@ describe("EstimateExportModal: Download PDF", () => {
     expect(text).toContain("Снос перегородок");
   });
 
-  it("tells the person when the signing details could not be saved", async () => {
+  it("still builds the PDF from the screen when the signing details could not be saved", async () => {
     mockSaveOrgCard.mockRejectedValue(new Error("network"));
     renderModal();
 
     fireEvent.click(screen.getByRole("radio", { name: /For signing/ }));
     fireEvent.click(screen.getByRole("button", { name: "Download PDF" }));
 
-    await waitFor(() =>
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" })),
-    );
-    expect(mockDownloadSheets).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockDownloadSheets).toHaveBeenCalledTimes(1));
+    expect(mockSaveClientInfo).toHaveBeenCalledTimes(1);
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: "The details were not saved. The document uses what is on screen.",
+      variant: "destructive",
+    }));
+    const text = mockDownloadSheets.mock.calls[0][0].map((sheet: HTMLElement) => sheet.textContent).join(" ");
+    expect(text).toContain("ООО Ремонт");
+  });
+
+  it("still prints the signing variant when the client details could not be saved", async () => {
+    mockSaveClientInfo.mockRejectedValue(new Error("network"));
+    renderModal();
+
+    fireEvent.click(screen.getByRole("radio", { name: /For signing/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Print" }));
+
+    await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(1));
+    expect(mockSaveOrgCard).toHaveBeenCalledTimes(1);
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
   });
 
   it("still prints with Print", async () => {
@@ -218,5 +248,96 @@ describe("EstimateExportModal: Download PDF", () => {
 
     await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(1));
     expect(mockDownloadSheets).not.toHaveBeenCalled();
+  });
+});
+
+describe("EstimateExportModal: contractor verification mark (rovno#243)", () => {
+  const MARK = /Contractor verified in EGRUL \d{2}\.\d{2}\.\d{4} · Rovno AI/;
+  const TOGGLE = "Verification mark in the document";
+
+  function active(inn: string) {
+    return {
+      status: "ok",
+      value: {
+        type: "legal", legalName: "ООО Ремонт", inn, kpp: null, ogrn: null, legalAddress: null,
+        addressIncomplete: false, addressHint: null, signatoryName: null, signatoryPosition: null, status: "active",
+      },
+    };
+  }
+
+  beforeEach(() => {
+    orgCard.data = { legalName: "ООО Ремонт", signatoryName: "Петров П. П.", inn: "7812345678" };
+    tier.plan = "free";
+    mockPartyDetails.mockReset();
+    mockPartyDetails.mockImplementation(async (inn: string) => active(inn));
+    try { window.localStorage.clear(); } catch { /* ignore */ }
+  });
+
+  afterEach(() => {
+    orgCard.data = { legalName: "ООО Ремонт", signatoryName: "Петров П. П." };
+  });
+
+  it("free plan: the mark is always in the signing document, with no switch", async () => {
+    renderModal();
+    fireEvent.click(screen.getByRole("radio", { name: /For signing/ }));
+    await waitFor(() => expect(screen.queryAllByText(MARK).length).toBeGreaterThan(0), { timeout: 2000 });
+    expect(mockPartyDetails).toHaveBeenCalledWith("7812345678", null);
+    expect(screen.queryByRole("switch", { name: TOGGLE })).toBeNull();
+  });
+
+  it("paid plan: the switch is on by default and turning it off removes the mark", async () => {
+    tier.plan = "master";
+    renderModal();
+    fireEvent.click(screen.getByRole("radio", { name: /For signing/ }));
+    await waitFor(() => expect(screen.queryAllByText(MARK).length).toBeGreaterThan(0), { timeout: 2000 });
+    const toggle = screen.getByRole("switch", { name: TOGGLE });
+    expect(toggle).toHaveAttribute("data-state", "checked");
+    fireEvent.click(toggle);
+    await waitFor(() => expect(screen.queryAllByText(MARK).length).toBe(0));
+    expect(window.localStorage.getItem("rovno.estimateExport.verifiedMark")).toBe("off");
+  });
+
+  it("keeps a paid user's «off» while the plan is still loading", async () => {
+    tier.plan = "loading";
+    window.localStorage.setItem("rovno.estimateExport.verifiedMark", "off");
+    renderModal();
+    fireEvent.click(screen.getByRole("radio", { name: /For signing/ }));
+    await waitFor(() => expect(mockPartyDetails).toHaveBeenCalled(), { timeout: 2000 });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryAllByText(MARK).length).toBe(0);
+  });
+
+  it("prints the mark when the plan could not be read, whatever was stored", async () => {
+    tier.plan = "error";
+    window.localStorage.setItem("rovno.estimateExport.verifiedMark", "off");
+    renderModal();
+    fireEvent.click(screen.getByRole("radio", { name: /For signing/ }));
+    await waitFor(() => expect(screen.queryAllByText(MARK).length).toBeGreaterThan(0), { timeout: 2000 });
+  });
+
+  it("names the sole trader register EGRIP in the mark and the switch of a sole trader", async () => {
+    tier.plan = "master";
+    orgCard.data = { legalName: "ИП Петров П. П.", signatoryName: "Петров П. П.", inn: "781234567890" };
+    mockPartyDetails.mockImplementation(async (inn: string) => {
+      const answer = active(inn);
+      return { ...answer, value: { ...answer.value, type: "individual" } };
+    });
+    renderModal();
+    fireEvent.click(screen.getByRole("radio", { name: /For signing/ }));
+    await waitFor(
+      () => expect(screen.queryAllByText(/Contractor verified in EGRIP \d{2}\.\d{2}\.\d{4} · Rovno AI/).length).toBeGreaterThan(0),
+      { timeout: 2000 },
+    );
+    expect(screen.queryAllByText(MARK).length).toBe(0);
+    expect(screen.getByText("“Contractor verified in EGRIP · Rovno AI” under your details")).toBeTruthy();
+  });
+
+  it("no mark while the contractor is not verified; the switch says why", async () => {
+    tier.plan = "brigade";
+    mockPartyDetails.mockImplementation(async () => ({ status: "ok", value: null }));
+    renderModal();
+    fireEvent.click(screen.getByRole("radio", { name: /For signing/ }));
+    await waitFor(() => expect(screen.getByText("Appears once your organization passes the check")).toBeTruthy(), { timeout: 2000 });
+    expect(screen.queryAllByText(MARK).length).toBe(0);
   });
 });

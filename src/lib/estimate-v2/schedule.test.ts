@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { EstimateV2Dependency, EstimateV2Work } from "@/types/estimate-v2";
 import {
   applyFSConstraints,
+  autoScheduleMissingWorks,
   autoScheduleSequential,
   buildMonthTicks,
   buildWeekTicks,
@@ -220,5 +221,76 @@ describe("estimate-v2 schedule helpers", () => {
     expect(window.start).toBeGreaterThanOrEqual(10);
     expect(window.end).toBeLessThanOrEqual(120);
     expect(window.end).toBeGreaterThanOrEqual(window.start);
+  });
+});
+
+describe("autoScheduleMissingWorks (rovno#235)", () => {
+  const stageOrderById = new Map([["s-1", 1], ["s-2", 2]]);
+  const today = "2026-10-15T09:30:00.000Z";
+  const day = (iso: string | null | undefined) => toDayIndex(iso);
+  const span = (entry: EstimateV2Work | undefined) => (day(entry?.plannedEnd) ?? 0) - (day(entry?.plannedStart) ?? 0) + 1;
+
+  it("gives every dateless work 7 days in a chain from today, across stages", () => {
+    const works = [
+      work("w-2", "s-2", 1),
+      work("w-1-2", "s-1", 2),
+      work("w-1-1", "s-1", 1),
+    ];
+    const byId = new Map(autoScheduleMissingWorks(works, today, stageOrderById).map((entry) => [entry.id, entry]));
+
+    expect(day(byId.get("w-1-1")?.plannedStart)).toBe(day(today));
+    expect(span(byId.get("w-1-1"))).toBe(7);
+    expect(day(byId.get("w-1-2")?.plannedStart)).toBe((day(today) ?? 0) + 7);
+    expect(day(byId.get("w-2")?.plannedStart)).toBe((day(today) ?? 0) + 14);
+    expect(span(byId.get("w-2"))).toBe(7);
+    expect([...byId.values()].every((entry) => entry.datesAutoScheduled === true)).toBe(true);
+  });
+
+  it("keeps entered dates in place and chains the next picked work after them", () => {
+    const works = [
+      work("demolition", "s-1", 1),
+      work("plaster", "s-1", 2, { plannedStart: "2026-10-20T00:00:00.000Z", plannedEnd: "2026-10-26T00:00:00.000Z" }),
+      work("wiring", "s-1", 3),
+    ];
+    const byId = new Map(autoScheduleMissingWorks(works, today, stageOrderById).map((entry) => [entry.id, entry]));
+
+    expect(day(byId.get("demolition")?.plannedStart)).toBe(day(today));
+    expect(day(byId.get("demolition")?.plannedEnd)).toBe((day(today) ?? 0) + 6);
+    expect(byId.get("plaster")?.plannedStart).toBe("2026-10-20T00:00:00.000Z");
+    expect(byId.get("plaster")?.plannedEnd).toBe("2026-10-26T00:00:00.000Z");
+    expect(byId.get("plaster")?.datesAutoScheduled).toBeFalsy();
+    expect(day(byId.get("wiring")?.plannedStart)).toBe((day("2026-10-26T00:00:00.000Z") ?? 0) + 1);
+    expect(byId.get("wiring")?.datesAutoScheduled).toBe(true);
+  });
+
+  it("never starts a picked work before today, even after an entered work in the past", () => {
+    const works = [
+      work("old", "s-1", 1, { plannedStart: "2026-09-01T00:00:00.000Z", plannedEnd: "2026-09-05T00:00:00.000Z" }),
+      work("next", "s-1", 2),
+    ];
+    const byId = new Map(autoScheduleMissingWorks(works, today, stageOrderById).map((entry) => [entry.id, entry]));
+
+    expect(day(byId.get("next")?.plannedStart)).toBe(day(today));
+    expect(byId.get("old")?.plannedStart).toBe("2026-09-01T00:00:00.000Z");
+  });
+
+  it("treats a work with only one date as dateless", () => {
+    const works = [work("half", "s-1", 1, { plannedStart: "2026-11-01T00:00:00.000Z" })];
+    const [half] = autoScheduleMissingWorks(works, today, stageOrderById);
+
+    expect(day(half?.plannedStart)).toBe(day(today));
+    expect(span(half)).toBe(7);
+    expect(half?.datesAutoScheduled).toBe(true);
+  });
+
+  it("returns works in their input order and leaves a fully dated estimate untouched", () => {
+    const works = [
+      work("b", "s-1", 2, { plannedStart: "2026-10-20T00:00:00.000Z", plannedEnd: "2026-10-21T00:00:00.000Z" }),
+      work("a", "s-1", 1, { plannedStart: "2026-10-16T00:00:00.000Z", plannedEnd: "2026-10-18T00:00:00.000Z" }),
+    ];
+    const result = autoScheduleMissingWorks(works, today, stageOrderById);
+
+    expect(result.map((entry) => entry.id)).toEqual(["b", "a"]);
+    expect(result).toEqual(works);
   });
 });

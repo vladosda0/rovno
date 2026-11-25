@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import type { PaymentIntentRow } from "@/lib/billing";
+import { formatRubFromKopecks, type PaymentIntentRow } from "@/lib/billing";
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { functions: { invoke: vi.fn() } },
@@ -21,12 +21,13 @@ vi.mock("@/lib/receipt", async (importOriginal) => {
 
 import { PaymentDetailDialog } from "@/components/billing/PaymentDetailDialog";
 
-function payment(status: string): PaymentIntentRow {
+function payment(status: string, refundedKopecks?: number): PaymentIntentRow {
   return {
     id: "22222222-0000-0000-0000-000000000000",
     profile_id: "p1",
     plan_code: "master",
     amount_kopecks: 99000,
+    amount_refunded_kopecks: refundedKopecks,
     currency: "RUB",
     status,
     error_code: null,
@@ -36,10 +37,10 @@ function payment(status: string): PaymentIntentRow {
   };
 }
 
-function openReceipt(status: string) {
+function openReceipt(status: string, refundedKopecks?: number) {
   render(
     <PaymentDetailDialog
-      payment={payment(status)}
+      payment={payment(status, refundedKopecks)}
       userEmail="vlad@example.com"
       trigger={<button type="button">open</button>}
     />,
@@ -84,5 +85,24 @@ describe("PaymentDetailDialog receipt tab", () => {
     const list = dialog.querySelector("dl") as HTMLElement;
     expect(within(list).queryByText("Refunded")).toBeNull();
     expect(html).not.toContain("Refunded");
+  });
+
+  it("shows a partial refund without the refunded amount, on screen and in the receipt", () => {
+    const { dialog, html } = openReceipt("partial_refund", 30000);
+
+    const list = dialog.querySelector("dl") as HTMLElement;
+    const refunded = formatRubFromKopecks(30000);
+    expect(within(list).getByText("Partially refunded")).toBeInTheDocument();
+    expect(within(list).queryByText(refunded)).toBeNull();
+    expect(html).toContain("Partially refunded");
+    expect(html).not.toContain(refunded);
+  });
+
+  it("marks a confirmed row with money already returned as partially refunded", () => {
+    const { dialog, html } = openReceipt("confirmed", 30000);
+
+    const list = dialog.querySelector("dl") as HTMLElement;
+    expect(within(list).getByText("Partially refunded")).toBeInTheDocument();
+    expect(html).toContain("Partially refunded");
   });
 });

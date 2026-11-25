@@ -1,5 +1,6 @@
 import { isOptionalImportPending } from "@/lib/observability/optional-import";
 import { captureMessage } from "@/lib/observability/sentry";
+import { isCrawlerAssetFetchFailure } from "@/lib/observability/third-party-noise";
 
 /**
  * Recovery for a failed dynamic import.
@@ -180,6 +181,9 @@ export function reportDeferredRecovery(): void {
 
   // Marked before reporting, so a throw inside capture cannot double-report.
   writeRecord({ ...record, reported: true });
+
+  // beforeSend sees only this recovery string, so the crawler filter has to run on the recorded reason here.
+  if (isCrawlerAssetFetchFailure(record.reason, window.navigator.userAgent)) return;
 
   captureMessage(RECOVERY_MESSAGES[record.kind], {
     tags: { source: "preload-recovery", recoveryKind: record.kind },

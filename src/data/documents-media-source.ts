@@ -67,6 +67,14 @@ export interface PrepareDocumentUploadInput {
   visibilityClass?: DocMediaVisibilityClass;
 }
 
+export interface PrepareDocumentVersionUploadInput {
+  projectId: string;
+  documentId: string;
+  clientFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 export interface PrepareUploadResult {
   uploadIntentId: string;
   bucket: string;
@@ -118,6 +126,7 @@ export interface DocumentsMediaSource {
   deleteProjectDocument: (input: DeleteProjectDocumentInput) => Promise<void>;
   updateProjectDocumentVisibility: (input: UpdateProjectDocumentVisibilityInput) => Promise<void>;
   prepareDocumentUpload: (input: PrepareDocumentUploadInput) => Promise<PrepareUploadResult>;
+  prepareDocumentVersionUpload: (input: PrepareDocumentVersionUploadInput) => Promise<PrepareUploadResult>;
   finalizeDocumentUpload: (uploadIntentId: string) => Promise<FinalizeDocumentUploadResult>;
   prepareMediaUpload: (input: PrepareMediaUploadInput) => Promise<PrepareUploadResult>;
   finalizeMediaUpload: (uploadIntentId: string, options?: { taskId?: string; isFinal?: boolean }) => Promise<FinalizeMediaUploadResult>;
@@ -255,6 +264,10 @@ function createBrowserDocumentsMediaSource(mode: WorkspaceMode["kind"]): Documen
         mimeType: input.mimeType,
         sizeBytes: input.sizeBytes,
       };
+    },
+    async prepareDocumentVersionUpload() {
+      // Local and demo documents get a new version through the store directly.
+      throw new Error("Uploading a document version is not supported in local mode.");
     },
     async finalizeDocumentUpload(uploadIntentId) {
       return {
@@ -783,6 +796,37 @@ export async function prepareSupabaseDocumentUpload(
   };
 }
 
+export async function prepareSupabaseDocumentVersionUpload(
+  supabase: TypedSupabaseClient,
+  input: PrepareDocumentVersionUploadInput,
+): Promise<PrepareUploadResult> {
+  const { data, error } = await supabase.rpc("prepare_document_version_upload", {
+    p_document_id: input.documentId,
+    p_client_filename: input.clientFilename,
+    p_mime_type: input.mimeType,
+    p_size_bytes: input.sizeBytes,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = data as unknown as PrepareUploadRpcRow[];
+  if (!rows || rows.length === 0) {
+    throw new Error("prepare_document_version_upload returned no rows.");
+  }
+
+  const row = rows[0];
+  return {
+    uploadIntentId: row.upload_intent_id,
+    bucket: row.bucket,
+    objectPath: row.object_path,
+    filename: row.filename,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+  };
+}
+
 export async function finalizeSupabaseDocumentUpload(
   supabase: TypedSupabaseClient,
   uploadIntentId: string,
@@ -1040,6 +1084,9 @@ export function createSupabaseDocumentsMediaSource(
     async prepareDocumentUpload(input) {
       return prepareSupabaseDocumentUpload(supabase, input);
     },
+    async prepareDocumentVersionUpload(input) {
+      return prepareSupabaseDocumentVersionUpload(supabase, input);
+    },
     async finalizeDocumentUpload(uploadIntentId) {
       return finalizeSupabaseDocumentUpload(supabase, uploadIntentId);
     },
@@ -1128,6 +1175,14 @@ export async function prepareDocumentUpload(
 ): Promise<PrepareUploadResult> {
   const source = await getDocumentsMediaSource(mode);
   return source.prepareDocumentUpload(input);
+}
+
+export async function prepareDocumentVersionUpload(
+  mode: WorkspaceMode,
+  input: PrepareDocumentVersionUploadInput,
+): Promise<PrepareUploadResult> {
+  const source = await getDocumentsMediaSource(mode);
+  return source.prepareDocumentVersionUpload(input);
 }
 
 export async function finalizeDocumentUpload(

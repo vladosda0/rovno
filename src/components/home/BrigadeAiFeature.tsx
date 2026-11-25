@@ -27,12 +27,14 @@ interface Props {
 export function BrigadeAiFeature({ title, feature, children }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { subscription, status, isLoading } = useActiveSubscription();
+  const { subscription, status, isLoading, isLoadingError, refetch } = useActiveSubscription();
   const planCode = subscription?.plan_code ?? "free";
   // Eligible only on the Brigade plan AND while the subscription is live (active or in the
   // grace window). A lapsed/expired brigade row keeps its plan_code, so gating on the plan
   // alone would leak the features to a non-paying user (§15.5 soft-block).
   const eligible = planMeets(planCode, "brigade") && (status === "active" || status === "grace");
+  // A failed first read is not "free": offer a retry instead of the upsell.
+  const loadFailed = isLoadingError;
 
   const header = (
     <div className="flex flex-wrap items-center gap-2">
@@ -51,6 +53,15 @@ export function BrigadeAiFeature({ title, feature, children }: Props) {
         <div className="h-24 animate-pulse rounded-lg bg-muted/40" />
       ) : eligible ? (
         children
+      ) : loadFailed ? (
+        <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4 text-center">
+          <p role="alert" className="text-[15px] text-muted-foreground">
+            {t("billing.planLoadError")}
+          </p>
+          <Button size="sm" variant="outline" className="mt-3" onClick={() => { void refetch(); }}>
+            {t("common.retry")}
+          </Button>
+        </div>
       ) : (
         <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4 text-center">
           <Lock className="mx-auto h-4 w-4 text-muted-foreground" />

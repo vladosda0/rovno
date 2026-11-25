@@ -28,7 +28,7 @@ const appRelease = resolveAppRelease({ env: process.env, gitShortSha, warn: cons
 // Keep a single vite.config.ts so Vitest always loads this file.
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode, isSsrBuild }) => ({
   esbuild: mode === "test" ? { jsx: "automatic" } : undefined,
   define: {
     __APP_RELEASE__: JSON.stringify(appRelease),
@@ -82,6 +82,9 @@ export default defineConfig(({ mode }) => ({
     // gzip-size pass holds every chunk + gzip buffers at peak RSS and was the
     // exact point of repeated OOM kills (exit 137). The sizes are cosmetic.
     reportCompressedSize: false,
+    // `vite build --ssr src/ssr/public-pages.tsx` (package.json) only needs the
+    // renderer module for scripts/prerender-public.mjs, not a copy of public/.
+    copyPublicDir: !isSsrBuild,
   },
   // NOTE: deliberately NO manualChunks for @sentry. Forcing all
   // node_modules/@sentry into one named chunk promoted it to a STATIC/eager

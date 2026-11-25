@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { PaymentDetailDialog } from "@/components/billing/PaymentDetailDialog";
-import { formatRubFromKopecks, type PaymentIntentRow } from "@/lib/billing";
-import { PLANS } from "@/data/plans";
+import { formatRubFromKopecks, isPartiallyRefunded, type PaymentIntentRow } from "@/lib/billing";
+import { planDisplayName } from "@/data/plan-labels";
 
 const rawSupabase = supabase as unknown as SupabaseClient;
 const COLUMNS =
-  "id, profile_id, plan_code, amount_kopecks, currency, status, error_code, error_message, confirmed_at, created_at";
+  "id, profile_id, plan_code, amount_kopecks, amount_refunded_kopecks, currency, status, error_code, error_message, confirmed_at, created_at";
 
 export function PaymentHistory() {
   const { t, i18n } = useTranslation();
@@ -29,12 +29,11 @@ export function PaymentHistory() {
         // full refund are the SAME row whose status flips confirmed -> refunded.
         // Filtering to 'confirmed' alone hid refunded payments entirely, so a
         // "paid then refunded" user saw an empty history. Failed attempts
-        // (rejected/cancelled) stay excluded as retry noise. partial_refund is
-        // intentionally excluded for now: its correct UX (show the refunded
-        // amount + allow refunding the remaining balance) is a separate follow-up,
-        // and until then a partial row must not render as a plain full refund.
+        // (rejected/cancelled) stay excluded as retry noise. partial_refund stays
+        // listed with its own badge: the money is partly still paid, and this list
+        // is the only way to the payment's detail dialog and receipt.
         .select(COLUMNS)
-        .in("status", ["confirmed", "refunded"])
+        .in("status", ["confirmed", "refunded", "partial_refund"])
         // Order by created_at (always set), not confirmed_at: a refunded row from
         // an out-of-order REFUNDED-before-CONFIRMED callback has confirmed_at NULL,
         // and Postgres DESC defaults to NULLS FIRST, which would float it to the
@@ -73,15 +72,21 @@ export function PaymentHistory() {
   return (
     <ul className="space-y-0.5">
       {data.map((row) => {
-        const name = PLANS[row.plan_code as keyof typeof PLANS]?.display_name ?? row.plan_code;
+        const name = planDisplayName(row.plan_code);
         const when = row.confirmed_at ?? row.created_at;
-        const isRefunded = row.status === "refunded";
+        const badge =
+          row.status === "refunded"
+            ? t("billing.payment.statusRefunded")
+            : isPartiallyRefunded(row)
+              ? t("billing.payment.statusPartialRefund")
+              : null;
         return (
           <li key={row.id}>
             {/* The whole row opens the payment detail + refund-request dialog.
                 "Request refund" is no longer a standalone control in the list;
                 it lives inside the dialog, which only offers a refund for rows
-                still in 'confirmed' (refunded rows show an info note instead). */}
+                still in 'confirmed' (refunded and partially refunded rows show an
+                info note instead). */}
             <PaymentDetailDialog
               payment={row}
               userEmail={user?.email ?? ""}
@@ -90,20 +95,23 @@ export function PaymentHistory() {
                   type="button"
                   className="flex w-full items-center gap-sp-2 rounded-md px-sp-2 py-1.5 text-left text-body-sm transition-colors hover:bg-muted/50"
                 >
-                  <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {dateFmt.format(new Date(when))}
-                  </span>
-                  <span className="flex-1 truncate text-foreground">{name}</span>
-                  <span className="shrink-0 font-medium tabular-nums text-foreground">
-                    {formatRubFromKopecks(row.amount_kopecks)}
-                  </span>
-                  {isRefunded ? (
-                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-caption font-medium text-muted-foreground">
-                      {t("billing.payment.statusRefunded")}
+                  {/* On a phone the row content wraps instead of pushing the row past the card. */}
+                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-sp-2 gap-y-0.5">
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {dateFmt.format(new Date(when))}
                     </span>
-                  ) : (
-                    <Check className="h-4 w-4 shrink-0 text-success" />
-                  )}
+                    <span className="min-w-16 flex-1 truncate text-foreground">{name}</span>
+                    <span className="shrink-0 font-medium tabular-nums text-foreground">
+                      {formatRubFromKopecks(row.amount_kopecks)}
+                    </span>
+                    {badge ? (
+                      <span className="ml-auto shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-caption font-medium text-muted-foreground">
+                        {badge}
+                      </span>
+                    ) : (
+                      <Check className="ml-auto h-4 w-4 shrink-0 text-success" />
+                    )}
+                  </span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
               }

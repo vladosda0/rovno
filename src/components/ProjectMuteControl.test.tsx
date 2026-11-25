@@ -32,11 +32,13 @@ function createFakeBackend(initial: { mutedProjectIds?: string[]; projects?: bri
       peopleEnabled: true,
       hintsChatEnabled: true,
       hintsTelegramEnabled: true,
+      leadEnabled: false,
     })),
     saveSettings: vi.fn(async () => {}),
     setPeopleEnabled: vi.fn(async () => {}),
     setHintsChatEnabled: vi.fn(async () => {}),
     setHintsTelegramEnabled: vi.fn(async () => {}),
+    setLeadEnabled: vi.fn(async () => {}),
     setProjectMuted: vi.fn(async (projectId: string, isMuted: boolean) => {
       muted = isMuted ? [...muted.filter((id) => id !== projectId), projectId] : muted.filter((id) => id !== projectId);
     }),

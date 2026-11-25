@@ -16,7 +16,7 @@ const STATUS_META: Record<string, { labelKey: string; color: string }> = {
 
 export function ProcurementTab() {
   const { t } = useTranslation();
-  const { snapshot, sensitiveDetailLoading } = useHomeProcurementReadSnapshot();
+  const { snapshot, sensitiveDetailLoading, loadFailed } = useHomeProcurementReadSnapshot();
   const allItemsCount = snapshot.totals.totalCount;
 
   if (sensitiveDetailLoading) {
@@ -38,6 +38,10 @@ export function ProcurementTab() {
         <h2 className="text-body font-semibold text-foreground">{t("procurementTab.allProcurement")}</h2>
         <Badge variant="secondary" className="text-caption">{t("procurementTab.itemsCount", { count: allItemsCount })}</Badge>
       </div>
+
+      {loadFailed && (
+        <p role="alert" className="text-body-sm text-destructive">{t("procurementTab.loadFailed")}</p>
+      )}
 
       {snapshot.projects.map((project) => {
         if (!project.rows.length) return null;
@@ -76,7 +80,7 @@ export function ProcurementTab() {
         );
       })}
 
-      {allItemsCount === 0 && (
+      {allItemsCount === 0 && !loadFailed && (
         <Card>
           <CardContent className="p-4 sm:p-6">
             <p className="text-caption text-muted-foreground py-8 text-center">{t("procurementTab.empty")}</p>

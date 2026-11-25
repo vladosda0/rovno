@@ -1,6 +1,14 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import i18n from "@/i18n";
+
+const activeOrgRole = vi.hoisted(() => ({ value: null as string | null }));
+vi.mock("@/hooks/use-orgs", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-orgs")>()),
+  useActiveOrg: () => (activeOrgRole.value ? { id: "o1", role: activeOrgRole.value } : null),
+}));
+vi.mock("@/components/upload/MultiStepUploadModal", () => ({ MultiStepUploadModal: () => null }));
+
 import { MemoryRouter } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DocumentTemplatesTab } from "@/components/home/DocumentTemplatesTab";
@@ -17,6 +25,20 @@ function renderTab() {
 }
 
 describe("DocumentTemplatesTab", () => {
+  it("offers a member no way into the card form", () => {
+    activeOrgRole.value = "member";
+    renderTab();
+    expect(screen.queryByRole("button", { name: "Create business card" })).not.toBeInTheDocument();
+    activeOrgRole.value = null;
+  });
+
+  it("offers an owner the card form", () => {
+    activeOrgRole.value = "owner";
+    renderTab();
+    expect(screen.getByRole("button", { name: "Create business card" })).toBeInTheDocument();
+    activeOrgRole.value = null;
+  });
+
   it("renders the three pinned Rovno templates", () => {
     renderTab();
     expect(screen.getByRole("heading", { name: "Document templates" })).toBeInTheDocument();

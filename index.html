@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="strict-origin" />
 
     <script>
       // www.rovno.ai -> rovno.ai, стройагент.рф -> rovno.ai. Timeweb App Platform
@@ -50,9 +51,8 @@
       deliberately absent here — advertising an English version of /offer,
       /privacy or /blog/ would claim a translation that does not exist.
 
-      The landing is the one route with a second language version, so it manages
-      og:locale, og:locale:alternate, canonical and hreflang itself, scoped to
-      "/" and torn down on unmount. See src/components/landing/LandingSeo.tsx.
+      The landing's own head (title, description, link card, JSON-LD) is written
+      into dist/index.html at build time by scripts/prerender-public.mjs.
     -->
     <meta property="og:locale" content="ru_RU" />
 

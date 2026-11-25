@@ -1,10 +1,27 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { ProcurementTab } from "@/components/home/ProcurementTab";
 import { __unsafeResetStoreForTests } from "@/data/store";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
+
+const snapshotOverride = vi.hoisted(() => ({ loadFailed: false }));
+
+vi.mock("@/hooks/use-procurement-read-model", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/hooks/use-procurement-read-model")>();
+  return {
+    ...actual,
+    useHomeProcurementReadSnapshot: () =>
+      snapshotOverride.loadFailed
+        ? {
+          snapshot: { projects: [], totals: { totalCount: 0 } },
+          sensitiveDetailLoading: false,
+          loadFailed: true,
+        }
+        : actual.useHomeProcurementReadSnapshot(),
+  };
+});
 
 function renderProcurementTab() {
   const queryClient = new QueryClient({
@@ -31,6 +48,14 @@ describe("ProcurementTab", () => {
     clearDemoSession();
     enterDemoSession("project-1");
     setAuthRole("owner");
+    snapshotOverride.loadFailed = false;
+  });
+
+  it("says the load failed instead of saying there is no procurement", () => {
+    snapshotOverride.loadFailed = true;
+    renderProcurementTab();
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load procurement");
+    expect(screen.queryByText("No procurement items across projects.")).not.toBeInTheDocument();
   });
 
   it("shows formatted currency for owner", () => {

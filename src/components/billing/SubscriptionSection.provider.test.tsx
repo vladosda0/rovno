@@ -9,11 +9,13 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 
 let subscription: SubscriptionRow;
+let hookStatus: "active" | "grace" | "expired" = "active";
+let hookReadOnly = false;
 vi.mock("@/hooks/useActiveSubscription", () => ({
   useActiveSubscription: () => ({
     subscription,
-    status: "active",
-    readOnly: false,
+    status: hookStatus,
+    readOnly: hookReadOnly,
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
@@ -67,6 +69,8 @@ describe("SubscriptionSection resume link", () => {
   beforeEach(() => {
     rpc.mockReset();
     rpc.mockResolvedValue({ error: null });
+    hookStatus = "active";
+    hookReadOnly = false;
   });
 
   it.each(["promo", "free"])("offers no resume for a %s subscription", (provider) => {
@@ -75,6 +79,20 @@ describe("SubscriptionSection resume link", () => {
 
     expect(screen.queryByRole("button", { name: "Resume subscription" })).toBeNull();
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("tells a free subscription nothing about auto-renewal or an end date", () => {
+    subscription = cancelledSub("free");
+    renderSection();
+
+    expect(screen.queryByText(/Auto-renewal is off/)).toBeNull();
+  });
+
+  it.each(["promo", "tbank"])("keeps the auto-renewal note for a %s subscription", (provider) => {
+    subscription = cancelledSub(provider);
+    renderSection();
+
+    expect(screen.getByText(/Auto-renewal is off\. Access stays until/)).toBeTruthy();
   });
 
   it("keeps the resume link for a cancelled T-Bank subscription", async () => {
@@ -88,5 +106,38 @@ describe("SubscriptionSection resume link", () => {
       p_subscription_id: "s1",
       p_auto_renew: true,
     });
+  });
+});
+
+describe("SubscriptionSection expiry notes", () => {
+  beforeEach(() => {
+    hookStatus = "active";
+    hookReadOnly = false;
+  });
+
+  it("shows a free subscription past its period end neither the grace nor the read-only note", () => {
+    subscription = cancelledSub("free");
+    hookStatus = "grace";
+    const graceView = renderSection();
+    expect(screen.queryByText(/Renew to keep full access/)).toBeNull();
+    graceView.unmount();
+
+    hookStatus = "expired";
+    hookReadOnly = true;
+    renderSection();
+    expect(screen.queryByText(/Access is limited to read-only/)).toBeNull();
+  });
+
+  it("keeps the grace and read-only notes for a T-Bank subscription", () => {
+    subscription = cancelledSub("tbank");
+    hookStatus = "grace";
+    const graceView = renderSection();
+    expect(screen.getByText(/Renew to keep full access/)).toBeTruthy();
+    graceView.unmount();
+
+    hookStatus = "expired";
+    hookReadOnly = true;
+    renderSection();
+    expect(screen.getByText(/Access is limited to read-only/)).toBeTruthy();
   });
 });

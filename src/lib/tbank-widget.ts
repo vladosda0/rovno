@@ -43,7 +43,6 @@ export type TbankIntegrationStatus =
 export type TbankPaymentStartCallback = () => Promise<string>;
 
 export interface TbankFeatureConfig {
-  language?: "ru" | "en";
   loadedCallback?: () => void;
   changedCallback?: (status: TbankIntegrationStatus) => void;
   // integration.js nests the status callback under `status` for the iframe / addcard.iframe
@@ -68,8 +67,13 @@ export interface TbankInitConfig {
   };
 }
 
+// integration.js sets its forms to Russian during init; the language is switched afterwards.
+export interface TbankIntegration {
+  setLang?: (lang: "ru" | "en") => Promise<void>;
+}
+
 export interface PaymentIntegrationApi {
-  init: (config: TbankInitConfig) => Promise<unknown>;
+  init: (config: TbankInitConfig) => Promise<TbankIntegration | undefined>;
 }
 
 declare global {

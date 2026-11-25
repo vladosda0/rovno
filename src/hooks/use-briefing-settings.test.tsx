@@ -15,6 +15,7 @@ const SAVED: briefingSettingsSource.BriefingSettingsSnapshot = {
   peopleEnabled: true,
   hintsChatEnabled: true,
   hintsTelegramEnabled: true,
+  leadEnabled: false,
 };
 
 function setup() {
@@ -31,6 +32,7 @@ function setup() {
     setPeopleEnabled: vi.fn(async () => {}),
     setHintsChatEnabled: vi.fn(async () => {}),
     setHintsTelegramEnabled: vi.fn(async () => {}),
+    setLeadEnabled: vi.fn(async () => {}),
   };
   vi.spyOn(briefingSettingsSource, "getBriefingSettingsSource").mockResolvedValue(source);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });

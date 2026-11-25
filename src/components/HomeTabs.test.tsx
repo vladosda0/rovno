@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import { markFeatureOpened } from "@/lib/new-features";
 import { MemoryRouter } from "react-router-dom";
 import { HomeTabs } from "@/components/HomeTabs";
 
@@ -43,5 +44,19 @@ describe("HomeTabs", () => {
   it("falls back to Overview when ?tab=bogus", () => {
     renderTabs("/home?tab=bogus");
     expect(screen.getByRole("link", { name: /Overview/i })).toHaveAttribute("aria-current", "page");
+  });
+  it("puts a new-feature dot on Documents until «What changed» and the card are opened", () => {
+    localStorage.clear();
+    const { unmount } = renderTabs("/home");
+    const documents = screen.getByRole("link", { name: /Documents/i });
+    expect(within(documents).getByText("has something new")).toHaveClass("sr-only");
+    expect(within(screen.getByRole("link", { name: /Tasks/i })).queryByText("has something new")).toBeNull();
+    unmount();
+
+    markFeatureOpened("kb-changes");
+    markFeatureOpened("contractor-card");
+    renderTabs("/home");
+    expect(screen.queryByText("has something new")).not.toBeInTheDocument();
+    localStorage.clear();
   });
 });

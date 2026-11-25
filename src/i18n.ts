@@ -20,7 +20,8 @@ export type AppLanguage = "ru" | "en";
  * landing declare itself a duplicate of `/?lang=en` and the Russian page lost
  * its indexable URL), and every existing user on an English-locale OS would
  * have found the WHOLE app in English on their next load. Non-Russian speakers
- * are now offered English by LandingLanguagePrompt instead of being switched.
+ * switch to English themselves, with `?lang=` or the switcher (the English
+ * offer strip was removed in rovno#333, the cookie notice took its place).
  */
 const DEFAULT_LANGUAGE: AppLanguage = "ru";
 
@@ -71,31 +72,6 @@ export function getUrlLanguage(search?: string): AppLanguage | null {
  */
 export function getStoredLanguage(): AppLanguage | null {
   return matchLanguage(readStorage());
-}
-
-/**
- * Would this visitor rather not read Russian?
- *
- * This does NOT decide the interface language — see resolveInitialLanguage.
- * It only decides whether LandingLanguagePrompt offers the switch. Keeping the
- * browser's preference out of the boot path is the whole point: a guess that
- * changes what a page IS breaks canonical stability, whereas a guess that
- * changes what a page OFFERS is free to be wrong.
- *
- * Walks navigator.languages in preference order and answers on the first tag we
- * ship. A browser that asks for neither (German only, say) resolves to true:
- * they certainly did not ask for Russian, and English is the better offer.
- * Note this cannot be expressed as `detectBrowserLanguage() !== "ru"` — that
- * would fold a German browser into the Russian default and never offer at all.
- */
-export function prefersNonRussian(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const tags = navigator.languages?.length ? navigator.languages : [navigator.language];
-  for (const tag of tags) {
-    const match = matchLanguage(tag);
-    if (match) return match !== "ru";
-  }
-  return true;
 }
 
 /**

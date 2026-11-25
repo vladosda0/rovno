@@ -1,15 +1,16 @@
 import { Outlet, useLocation, useSearchParams } from "react-router-dom";
-import { Suspense, lazy, useEffect, useState, useSyncExternalStore } from "react";
+import { Suspense, lazy, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
 import { TopBar } from "@/components/TopBar";
 import { ShurikFloat } from "@/components/ai/ShurikFloat";
-import { ShurikNotificationsPanel } from "@/components/ai/ShurikNotificationsPanel";
-import type { ShurikPanelTab } from "@/components/ai/ShurikPanelTabs";
+import { ShurikOutsidePanel } from "@/components/ai/ShurikOutsidePanel";
+import { outsidePanelOpeningTab, type ShurikPanelTab } from "@/components/ai/ShurikPanelTabs";
 import { DemoSignupCta } from "@/components/system/DemoSignupCta";
 import { ClientReportDialogHost } from "@/components/client-report/ClientReportDialogHost";
 import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import { subscribePhotoConsult } from "@/lib/photo-consult-store";
+import { subscribeShurikAsk } from "@/lib/shurik-ask";
 import { useBrowserTimezoneSync } from "@/hooks/use-browser-timezone-sync";
 import { useProfileGenderHint } from "@/hooks/use-profile-gender-hint";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
@@ -35,10 +36,10 @@ const AISidebar = lazy(() =>
 );
 
 /**
- * The project AI sidebar, with the chat, appears ONLY on project pages
- * (`/project/:id/...`). Every other AppLayout route — Home, Settings, Profile,
- * Demo, and the full T-Bank billing flow (checkout / success / fail) — has
- * Shurik in the same corner, but his panel there holds notifications only.
+ * The project AI sidebar appears ONLY on project pages (`/project/:id/...`). Every
+ * other AppLayout route — Home, Settings, Profile, Demo, and the full T-Bank
+ * billing flow (checkout / success / fail) — has Shurik in the same corner, and his
+ * panel there stands on the right with its own chat and notifications.
  * Matched by pathname prefix, so query strings are irrelevant.
  */
 const AI_SIDEBAR_ROUTE_PREFIX = "/project/";
@@ -59,14 +60,13 @@ export default function AppLayout() {
   useBrowserTimezoneSync();
   useProfileGenderHint();
   const { messages: shurikMessages, unreadCount: shurikUnreadCount, markRead: markShurikMessagesRead } = useShurikMessages();
-  // The page the notifications panel was opened over. It is open only while that is still the
-  // page: any navigation, a query string or a trip into a project included, closes it.
-  const [notificationsPanelPage, setNotificationsPanelPage] = useState<string | null>(null);
+  const [outsidePanelOpen, setOutsidePanelOpen] = useState(false);
+  const [outsideTab, setOutsideTab] = useState<ShurikPanelTab>("chat");
   const currentPage = location.pathname + location.search;
-  const notificationsPanelOpen = notificationsPanelPage === currentPage;
-  const setNotificationsPanelOpen = (open: boolean) => setNotificationsPanelPage(open ? currentPage : null);
+  // On a computer the panel stays open across pages, or a source pressed in an answer would
+  // close the conversation. On a phone it is the whole screen, so a new page closes it.
   useEffect(() => {
-    setNotificationsPanelPage((page) => (page === currentPage ? page : null));
+    if (window.innerWidth < MOBILE_BREAKPOINT_PX) setOutsidePanelOpen(false);
   }, [currentPage]);
   useSyncExternalStore(subscribeAuthState, getAuthStateSnapshot);
 
@@ -82,14 +82,31 @@ export default function AppLayout() {
   const runtimeAuth = useRuntimeAuth();
   const workspaceMode = useWorkspaceMode();
   const isDemo = workspaceMode.kind === "demo";
-  // Outside a project Shurik has only messages to show, and a guest has none to receive.
+  // A guest has neither messages to receive nor anyone to talk to him as.
   const hasShurikOutsideProject = workspaceMode.kind === "supabase"
     || workspaceMode.kind === "demo"
     || (workspaceMode.kind === "local" && isAuthenticated());
-  const showOutsidePanel = hideAi && hasShurikOutsideProject && notificationsPanelOpen;
-  const showOutsideFloat = hideAi && hasShurikOutsideProject && !notificationsPanelOpen;
+  const showOutsidePanel = hideAi && hasShurikOutsideProject && outsidePanelOpen;
+  const showOutsideFloat = hideAi && hasShurikOutsideProject && !outsidePanelOpen;
   const panelOpen = hideAi ? showOutsidePanel : !aiSidebarCollapsed;
   const floatShown = hideAi ? showOutsideFloat : aiSidebarCollapsed;
+
+  // Entering a project closes this panel and opens the project's chat in its place.
+  const outsidePanelWasOpen = useRef(false);
+  outsidePanelWasOpen.current = showOutsidePanel || (outsidePanelWasOpen.current && !hideAi);
+  useEffect(() => {
+    if (hideAi || !outsidePanelWasOpen.current) return;
+    outsidePanelWasOpen.current = false;
+    setOutsidePanelOpen(false);
+    setPanelTab("chat");
+    setAiSidebarCollapsed(false);
+  }, [hideAi]);
+
+  // A page of the base asked Shurik: the panel opens on the chat, which takes the question.
+  useEffect(() => subscribeShurikAsk(() => {
+    setOutsideTab("chat");
+    setOutsidePanelOpen(true);
+  }), []);
 
   useEffect(() => {
     return subscribePhotoConsult(({ context }) => {
@@ -132,9 +149,15 @@ export default function AppLayout() {
     writeAiSidebarSessionPreference(collapsed);
   };
 
-  const openShurikNotifications = () => {
+  // With no tab named: unread messages first, otherwise the chat (the answer to question 3 of slice 6).
+  const openOutsidePanel = (tab?: ShurikPanelTab) => {
+    setOutsideTab(tab ?? outsidePanelOpeningTab(shurikUnreadCount));
+    setOutsidePanelOpen(true);
+  };
+
+  const openShurikFromTopBar = () => {
     if (hideAi) {
-      setNotificationsPanelOpen(true);
+      openOutsidePanel();
       return;
     }
     setPanelTab("notifications");
@@ -154,7 +177,7 @@ export default function AppLayout() {
           setSidebarCollapsedByUser(!open);
         }}
         hideAi={hideAi}
-        onOpenShurikNotifications={hideAi && !hasShurikOutsideProject ? undefined : openShurikNotifications}
+        onOpenShurikNotifications={hideAi && !hasShurikOutsideProject ? undefined : openShurikFromTopBar}
         shurikUnreadCount={shurikUnreadCount}
       />
       {/* pt reserves the fixed TopBar (3rem) plus the demo strip when a demo
@@ -167,7 +190,7 @@ export default function AppLayout() {
             hintText={hintText}
             onOpen={(tab) => {
               if (hideAi) {
-                setNotificationsPanelOpen(true);
+                openOutsidePanel(tab);
                 return;
               }
               if (tab) setPanelTab(tab);
@@ -185,19 +208,6 @@ export default function AppLayout() {
             />
           </Suspense>
         )}
-        {showOutsidePanel && (
-          <ShurikNotificationsPanel
-            messages={shurikMessages}
-            unreadCount={shurikUnreadCount}
-            onMarkRead={markShurikMessagesRead}
-            onClose={() => setNotificationsPanelOpen(false)}
-            clientReportAvailable={workspaceMode.kind === "supabase"}
-            onAction={() => {
-              // On a phone the panel covers the page the button has just opened.
-              if (window.innerWidth < MOBILE_BREAKPOINT_PX) setNotificationsPanelOpen(false);
-            }}
-          />
-        )}
         <main
           className={cn(
             "flex-1 min-w-0",
@@ -210,11 +220,31 @@ export default function AppLayout() {
               level mount instead of a copy in each of the ~16 tab screens. */}
           {isDemo && <DemoSignupCta />}
         </main>
+        {showOutsidePanel && (
+          <ShurikOutsidePanel
+            messages={shurikMessages}
+            unreadCount={shurikUnreadCount}
+            onMarkRead={markShurikMessagesRead}
+            onClose={() => setOutsidePanelOpen(false)}
+            tab={outsideTab}
+            onTabChange={setOutsideTab}
+            chatProfileId={workspaceMode.kind === "supabase" ? workspaceMode.profileId : null}
+            clientReportAvailable={workspaceMode.kind === "supabase"}
+            onAction={() => {
+              // On a phone the panel covers the page the button has just opened.
+              if (window.innerWidth < MOBILE_BREAKPOINT_PX) {
+                // It has opened a page, so a project there is not to open its chat over it.
+                outsidePanelWasOpen.current = false;
+                setOutsidePanelOpen(false);
+              }
+            }}
+          />
+        )}
       </div>
       <ClientReportDialogHost />
       {/* Observability v1 (R-8): fixed feedback entry point on every
           authenticated page; renders nothing for guests. */}
-      <FeedbackWidget />
+      <FeedbackWidget besidePanel={showOutsidePanel} />
     </div>
   );
 }

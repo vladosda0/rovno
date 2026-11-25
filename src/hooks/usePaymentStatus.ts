@@ -19,11 +19,33 @@ export function isTerminalPaymentStatus(status: string | undefined | null): bool
   return !!status && TERMINAL_STATUSES.has(status);
 }
 
+type IntentState = { status?: string | null; confirmed_at?: string | null };
+
+// The bank holds the money and the confirmation is on the row. 'partial_refund' alone
+// is not enough: the server can write it before the CONFIRMED callback, when nothing
+// has been granted yet; confirmed_at is set only by the confirmation.
+export function isPaidPaymentIntent(row: IntentState | null | undefined): boolean {
+  if (!row) return false;
+  return row.status === "confirmed" || (row.status === "partial_refund" && !!row.confirmed_at);
+}
+
+// A row the page can stop watching. An unconfirmed 'partial_refund' is not one: it
+// still moves to 'confirmed', to 'refunded', or gets its confirmed_at.
+export function isSettledPaymentIntent(row: IntentState | null | undefined): boolean {
+  if (!row || !isTerminalPaymentStatus(row.status)) return false;
+  return row.status !== "partial_refund" || !!row.confirmed_at;
+}
+
 const POLL_INTERVAL_MS = 4000;
+
+// react-query refetchInterval for the intent: keep polling until the row is settled.
+export function paymentIntentPollInterval(row: IntentState | null | undefined): number | false {
+  return isSettledPaymentIntent(row) ? false : POLL_INTERVAL_MS;
+}
 const PAYMENT_INTENT_COLUMNS =
   "id, profile_id, plan_code, amount_kopecks, currency, status, error_code, error_message, confirmed_at, created_at";
 
-// Polls a single payment_intent until it reaches a terminal status. Polling is
+// Polls a single payment_intent until it is settled (isSettledPaymentIntent). Polling is
 // the reliable mechanism (the tbank tables are not in the realtime publication);
 // a best-effort realtime subscription invalidates the query for instant updates
 // when realtime is available, otherwise it simply never fires.
@@ -36,7 +58,7 @@ export function usePaymentStatus(intentId: string | null) {
     enabled: !!intentId,
     refetchInterval: (q) => {
       const row = q.state.data as PaymentIntentRow | null | undefined;
-      return isTerminalPaymentStatus(row?.status) ? false : POLL_INTERVAL_MS;
+      return paymentIntentPollInterval(row);
     },
     queryFn: async (): Promise<PaymentIntentRow | null> => {
       if (!intentId) return null;

@@ -17,6 +17,9 @@ interface GanttBarProps {
    */
   placeholder?: boolean;
   placeholderHint?: string;
+  /** Dates picked by the app at «В работу» (rovno#235): dashed and paler, with a hint. */
+  autoScheduled?: boolean;
+  autoScheduledHint?: string;
   onDragStart: (workId: string, mode: GanttDragMode, event: ReactPointerEvent<HTMLDivElement>) => void;
 }
 
@@ -30,6 +33,8 @@ export function GanttBar({
   isOwner,
   placeholder = false,
   placeholderHint,
+  autoScheduled = false,
+  autoScheduledHint,
   onDragStart,
 }: GanttBarProps) {
   const left = (startDay - timelineStartDay) * pxPerDay;
@@ -39,9 +44,18 @@ export function GanttBar({
     ? `absolute top-1/2 h-7 -translate-y-1/2 rounded-md border border-dashed border-primary/60 bg-primary/30 text-xs text-primary-foreground ${
       isOwner ? "cursor-grab active:cursor-grabbing" : "cursor-default"
     }`
-    : `absolute top-1/2 h-7 -translate-y-1/2 rounded-md border border-primary/40 bg-primary/80 text-xs text-primary-foreground shadow-sm ${
-      isOwner ? "cursor-grab active:cursor-grabbing" : "cursor-default"
-    }`;
+    : autoScheduled
+      ? `absolute top-1/2 h-7 -translate-y-1/2 rounded-md border border-dashed border-primary bg-primary/50 text-xs text-primary-foreground ${
+        isOwner ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+      }`
+      : `absolute top-1/2 h-7 -translate-y-1/2 rounded-md border border-primary/40 bg-primary/80 text-xs text-primary-foreground shadow-sm ${
+        isOwner ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+      }`;
+  const hint = placeholder && placeholderHint
+    ? placeholderHint
+    : autoScheduled && autoScheduledHint
+      ? `${title}. ${autoScheduledHint}`
+      : title;
 
   return (
     <div
@@ -59,7 +73,8 @@ export function GanttBar({
         }
         onDragStart(workId, "move", event);
       }}
-      title={placeholder && placeholderHint ? placeholderHint : title}
+      title={hint}
+      data-auto-scheduled={autoScheduled ? "true" : undefined}
       role="button"
       tabIndex={-1}
     >

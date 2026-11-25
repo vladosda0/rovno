@@ -44,7 +44,7 @@ import {
 } from "@/lib/estimate-v2/pricing";
 import {
   applyFSConstraints,
-  autoScheduleSequential,
+  autoScheduleMissingWorks,
   clampWorkDates,
   detectCycle,
   toDayIndex,
@@ -319,6 +319,9 @@ const retainedSupabaseAccessContextByProjectId = new Map<string, EstimateV2Proje
 // a debounce firing before hydration would persist a default/empty snapshot over
 // the real remote draft. Cleared on hydrate install and on any real mutation.
 const defaultSeededStateProjectIds = new Set<string>();
+const executionStatusWriteFailedProjectIds = new Set<string>();
+const latestExecutionStatusWriteByProjectId = new Map<string, number>();
+let executionStatusWriteSeq = 0;
 
 function notify() {
   listeners.forEach((listener) => listener());
@@ -349,6 +352,18 @@ function clampBpsOrNull(value: number | null | undefined): number | null {
 
 function id(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+// The share token is the only credential for the anonymous share link.
+function createShareToken(): string {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function deterministicHex(seed: string): string {
@@ -834,6 +849,8 @@ function clearEstimateV2ProjectRuntimeState(projectId: string) {
   retainedSupabaseSyncProfileIdByProjectId.delete(projectId);
   retainedSupabaseAccessContextByProjectId.delete(projectId);
   defaultSeededStateProjectIds.delete(projectId);
+  executionStatusWriteFailedProjectIds.delete(projectId);
+  latestExecutionStatusWriteByProjectId.delete(projectId);
 }
 
 /**
@@ -934,9 +951,10 @@ export function getEstimateV2ProjectionCapability(projectId: string): EstimateV2
 }
 
 /**
- * Best-effort mirror of the execution status onto the estimate root for the portfolio
- * rollup. Fire-and-forget: only in managed supabase sync, errors swallowed; a no-row
- * update (root not yet synced) is a harmless no-op.
+ * Mirror of the execution status onto the estimate root for the portfolio rollup.
+ * Fire-and-forget, only in managed supabase sync. A failed write surfaces as a draft
+ * sync error and is retried after the next successful draft save; a no-row update
+ * (root not yet synced) is a harmless no-op.
  *
  * Self-healing is asymmetric: a lost in_work write is recovered by the RPC reader fallback
  * (root status='approved' → in_work), but paused/finished have NO server-side fallback, so
@@ -945,9 +963,28 @@ export function getEstimateV2ProjectionCapability(projectId: string): EstimateV2
  */
 function persistExecutionStatusIfManaged(projectId: string, status: EstimateExecutionStatus): void {
   if (!getManagedEstimateRemoteSyncContext(projectId)) return;
-  const estimateId = statesByProjectId.get(projectId)?.project.id;
-  if (!estimateId) return;
-  void updateProjectEstimateExecutionStatus(estimateId, status).catch((error) => {
+  const localEstimateId = statesByProjectId.get(projectId)?.project.id;
+  if (!localEstimateId) return;
+  // The root a draft save creates gets this id (resolveEstimateDraftRemoteIds).
+  const estimateId = ensureWorkspaceUuid(projectId, "estimate", localEstimateId);
+  // Only the outcome of the latest write counts: an older write settling later,
+  // or one from before an account switch, must neither clear nor raise the retry.
+  executionStatusWriteSeq += 1;
+  const seq = executionStatusWriteSeq;
+  latestExecutionStatusWriteByProjectId.set(projectId, seq);
+  const isLatestWrite = () => latestExecutionStatusWriteByProjectId.get(projectId) === seq;
+  void updateProjectEstimateExecutionStatus(estimateId, status).then(() => {
+    if (isLatestWrite()) executionStatusWriteFailedProjectIds.delete(projectId);
+  }, (error) => {
+    if (!isLatestWrite()) return;
+    executionStatusWriteFailedProjectIds.add(projectId);
+    const failedState = statesByProjectId.get(projectId);
+    const failedSync = failedState ? ensureProjectSyncState(failedState) : null;
+    if (failedSync && failedSync.draftSaveStatus !== "blocked_permission") {
+      failedSync.draftSaveStatus = "error";
+      failedSync.draftSaveLastError = error instanceof Error ? error.message : "Estimate status save failed";
+      notify();
+    }
     if (import.meta.env.DEV) {
       console.warn(`execution_status sync failed for ${projectId}`, error);
     }
@@ -1404,6 +1441,9 @@ async function runProjectDraftSync(projectId: string) {
           postSync.draftSaveStatus = "saved";
           postSync.draftSaveLastSucceededAt = nowIso();
           postSync.draftSaveLastError = null;
+          if (executionStatusWriteFailedProjectIds.has(projectId)) {
+            persistExecutionStatusIfManaged(projectId, postSaveState.project.estimateStatus);
+          }
         }
         // Cross-session signal for P2 realtime consumers; best-effort.
         void emitEstimateDraftSyncEvent(projectId, projectionRevision);
@@ -2322,8 +2362,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
         const taskInfo = taskInfoByWorkId.get(work.estimate_work_id);
         // Server row is the source of truth for planned dates. Cache/taskInfo
         // are only consulted when the server row hasn't recorded a value yet.
-        const serverPlannedStart = (work as { planned_start?: string | null }).planned_start ?? null;
-        const serverPlannedEnd = (work as { planned_end?: string | null }).planned_end ?? null;
+        const serverPlannedStart = work.planned_start ?? null;
+        const serverPlannedEnd = work.planned_end ?? null;
         return {
           id: work.estimate_work_id,
           projectId,
@@ -2334,6 +2374,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           discountBps: cachedWork?.discountBps ?? 0,
           plannedStart: serverPlannedStart ?? taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? null,
           plannedEnd: serverPlannedEnd ?? taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? null,
+          // rovno#235: the server row decides; an older database without the key reads false.
+          datesAutoScheduled: work.dates_auto_scheduled === true,
           taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? null,
           status: taskInfo?.status ?? cachedWork?.status ?? "not_started",
           createdAt: cachedWork?.createdAt ?? work.created_at,
@@ -2383,6 +2425,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             discountBps: cachedWork?.discountBps ?? 0,
             plannedStart: work.planned_start ?? taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? null,
             plannedEnd: work.planned_end ?? taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? null,
+            datesAutoScheduled: work.dates_auto_scheduled === true,
             taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? null,
             status: taskInfo?.status ?? cachedWork?.status ?? "not_started",
             createdAt: cachedWork?.createdAt ?? work.created_at,
@@ -2803,14 +2846,6 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
   return state;
 }
 
-function projectScheduleAnchor(projectId: string): string {
-  const tasks = getTasks(projectId)
-    .map((task) => normalizeIsoDate(task.created_at))
-    .filter((value): value is string => Boolean(value))
-    .sort((a, b) => a.localeCompare(b));
-  return tasks[0] ?? isoStartOfToday();
-}
-
 function captureScheduleBaseline(state: EstimateV2ProjectState, capturedAt: string): ScheduleBaseline {
   const works = sortWorksByStageAndOrder(state);
   const baselineWorks = works.map((work) => ({
@@ -2867,8 +2902,8 @@ function buildPlanningToInWorkDraft(
   let nextWorks = draftWorks;
   if (missingWorks.length > 0 && options.skipSetup) {
     const stageOrderById = new Map(state.stages.map((stage) => [stage.id, stage.order]));
-    const anchor = projectScheduleAnchor(projectId);
-    let scheduled = autoScheduleSequential(nextWorks, anchor, stageOrderById);
+    // rovno#235: only dateless works get dates, 7 days each in a chain from the day of the move.
+    let scheduled = autoScheduleMissingWorks(nextWorks, isoStartOfToday(), stageOrderById);
     const cycleValidation = validateNoCycles(state.dependencies);
     if (cycleValidation.valid) {
       const constrainedById = applyFSConstraints(
@@ -2917,6 +2952,7 @@ function applySupabaseInWorkTransitionSuccess(
       ...work,
       plannedStart: nextDraft.plannedStart,
       plannedEnd: nextDraft.plannedEnd,
+      datesAutoScheduled: nextDraft.datesAutoScheduled ?? false,
       taskId: taskIdByWorkId[work.id] ?? work.taskId,
       status: "not_started",
       updatedAt: draft.appliedAt,
@@ -3005,6 +3041,11 @@ function shallowEqualExcludingUpdatedAt(a: Record<string, unknown>, b: Record<st
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   keys.delete("updatedAt");
   for (const key of keys) {
+    // rovno#235: snapshots cached before the mark existed have no key; it means false.
+    if (key === "datesAutoScheduled") {
+      if (Boolean(a[key]) !== Boolean(b[key])) return false;
+      continue;
+    }
     if (a[key] !== b[key]) return false;
   }
   return true;
@@ -3301,7 +3342,7 @@ export function updateWorkDates(
   workId: string,
   plannedStart: string,
   plannedEnd: string,
-  _options: { source: "gantt" },
+  options: { source: "gantt" | "missing_dates_dialog" },
 ): { ok: true; shiftedWorkIds: string[] } | { ok: false; reason: "forbidden" | "invalid_work" | "invalid_date" } {
   const state = ensureProjectState(projectId);
   if (!canEditEstimateState(projectId, state)) return { ok: false, reason: "forbidden" };
@@ -3326,12 +3367,29 @@ export function updateWorkDates(
     plannedEnd: normalized.plannedEnd,
   };
 
-  const constrainedById = applyFSConstraints(worksById, state.dependencies);
+  const fsConstrainedById = applyFSConstraints(worksById, state.dependencies);
+  // From the missing-dates dialog, dependencies move only this work and works that already have
+  // dates: a dateless successor stays dateless, so that «В работу» picks its 7 days (rovno#235).
+  const constrainedById = options.source === "missing_dates_dialog"
+    ? Object.fromEntries(Object.entries(fsConstrainedById).filter(([id]) => {
+      if (id === workId) return true;
+      const before = state.works.find((work) => work.id === id);
+      return Boolean(before?.plannedStart && before?.plannedEnd);
+    }))
+    : fsConstrainedById;
   const now = nowIso();
   const changedWorkIds = applyScheduledDatesFromMap(state, constrainedById, now);
 
   if (changedWorkIds.length === 0) {
     return { ok: true, shiftedWorkIds: [] };
+  }
+
+  // rovno#235: the person set the dates of this work, so they are no longer the app's pick.
+  // Works shifted by dependencies keep their mark: the app still chose their dates.
+  if (changedWorkIds.includes(workId)) {
+    state.works = state.works.map((work) => (
+      work.id === workId && work.datesAutoScheduled ? { ...work, datesAutoScheduled: false } : work
+    ));
   }
 
   if (state.project.estimateStatus === "in_work") {
@@ -3504,8 +3562,7 @@ export function setProjectEstimateStatus(
 
     if (missingWorks.length > 0 && options.skipSetup) {
       const stageOrderById = new Map(state.stages.map((stage) => [stage.id, stage.order]));
-      const anchor = projectScheduleAnchor(projectId);
-      let scheduled = autoScheduleSequential(state.works, anchor, stageOrderById);
+      let scheduled = autoScheduleMissingWorks(state.works, isoStartOfToday(), stageOrderById);
       const cycleValidation = validateNoCycles(state.dependencies);
       if (cycleValidation.valid) {
         const constrainedById = applyFSConstraints(
@@ -3627,12 +3684,15 @@ export async function transitionEstimateV2ProjectToInWork(
   });
 
   heroTransitionInFlightByProjectId.add(projectId);
-  deferredDraftSyncByProjectId.delete(projectId);
+  const hadDeferredDraftSync = deferredDraftSyncByProjectId.delete(projectId);
   const existingTimer = remoteDraftSyncTimers.get(projectId);
   if (existingTimer) {
     clearTimeout(existingTimer);
     remoteDraftSyncTimers.delete(projectId);
   }
+  // A save cancelled here (e.g. dates just entered in the missing-dates dialog) must still run
+  // after the transition, also when the transition fails.
+  const cancelledDraftSync = hadDeferredDraftSync || Boolean(existingTimer);
 
   try {
     const persisted = await persistEstimateV2HeroTransition({
@@ -3734,7 +3794,7 @@ export async function transitionEstimateV2ProjectToInWork(
     };
   } finally {
     heroTransitionInFlightByProjectId.delete(projectId);
-    if (deferredDraftSyncByProjectId.delete(projectId)) {
+    if (deferredDraftSyncByProjectId.delete(projectId) || cancelledDraftSync) {
       queueProjectDraftSync(projectId);
     }
   }
@@ -3914,7 +3974,7 @@ export function createVersionSnapshot(
   const now = nowIso();
   const snapshot = getSnapshotFromState(state);
   const nextNumber = state.versions.reduce((max, version) => Math.max(max, version.number), 0) + 1;
-  const shareId = id("share");
+  const shareId = createShareToken();
 
   const version: EstimateV2Version = {
     id: id("estimate-v2-version"),
@@ -4329,6 +4389,8 @@ export function computeVersionDiff(
 
 export function __unsafeResetEstimateV2ForTests() {
   statesByProjectId.clear();
+  executionStatusWriteFailedProjectIds.clear();
+  latestExecutionStatusWriteByProjectId.clear();
   accessContextByProjectId.clear();
   retainedSupabaseSyncProfileIdByProjectId.clear();
   retainedSupabaseAccessContextByProjectId.clear();

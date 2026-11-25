@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/select";
 import { Search, AlertTriangle, CheckCircle2, Circle, Clock, Ban } from "lucide-react";
 import * as store from "@/data/store";
+import { useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { useWorkspaceTasksState } from "@/hooks/use-planning-source";
 import type { TaskStatus } from "@/types/entities";
 import { useToast } from "@/hooks/use-toast";
 
@@ -39,8 +41,15 @@ export function TasksTab() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
 
-  const allTasks = store.getAllTasks();
-  const projects = store.getProjects();
+  const projects = useProjects();
+  const { tasks: allTasks, isLoading, isError } = useWorkspaceTasksState();
+  // Status writes here go to the demo store only; a signed-in user changes a
+  // task on its project board, where the done checks read the real data.
+  const canToggle = useWorkspaceMode().kind !== "supabase";
+  const projectTitleById = useMemo(
+    () => new Map(projects.map((p) => [p.id, p.title])),
+    [projects],
+  );
 
   const overdue = useMemo(() => allTasks.filter((t) => {
     if (!t.deadline || t.status === "done") return false;
@@ -123,12 +132,14 @@ export function TasksTab() {
               <AlertTriangle className="h-4 w-4" /> {t("tasksTab.overdue")} ({overdue.length})
             </h3>
             <div className="space-y-1">
-              {overdue.map((task) => {
-                const project = store.getProject(task.project_id);
-                return (
-                  <TaskRow key={task.id} task={task} projectTitle={project?.title} onToggle={handleToggleDone} />
-                );
-              })}
+              {overdue.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  projectTitle={projectTitleById.get(task.project_id)}
+                  onToggle={canToggle ? handleToggleDone : undefined}
+                />
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -138,14 +149,21 @@ export function TasksTab() {
       <Card>
         <CardContent className="p-4 sm:p-6">
           <h3 className="mb-3 text-body font-semibold text-foreground sm:mb-4">
-            {t("tasksTab.tasksHeading")} ({filtered.length})
+            {t("tasksTab.tasksHeading")}{!isLoading && !isError && ` (${filtered.length})`}
           </h3>
           <div className="space-y-1">
-            {filtered.map((task) => {
-              const project = store.getProject(task.project_id);
-              return <TaskRow key={task.id} task={task} projectTitle={project?.title} onToggle={handleToggleDone} />;
-            })}
-            {filtered.length === 0 && (
+            {filtered.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                projectTitle={projectTitleById.get(task.project_id)}
+                onToggle={canToggle ? handleToggleDone : undefined}
+              />
+            ))}
+            {isError && (
+              <p className="text-caption text-destructive py-6 text-center">{t("tasksTab.loadFailed")}</p>
+            )}
+            {!isLoading && !isError && filtered.length === 0 && (
               <p className="text-caption text-muted-foreground py-6 text-center">{t("tasksTab.noMatch")}</p>
             )}
           </div>
@@ -158,15 +176,19 @@ export function TasksTab() {
 function TaskRow({ task, projectTitle, onToggle }: {
   task: { id: string; title: string; status: TaskStatus; project_id: string; deadline?: string };
   projectTitle?: string;
-  onToggle: (id: string, status: TaskStatus) => void;
+  onToggle?: (id: string, status: TaskStatus) => void;
 }) {
   const { t } = useTranslation();
   const Icon = STATUS_ICON[task.status];
   return (
     <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors group">
-      <button onClick={() => onToggle(task.id, task.status)} className={`shrink-0 ${STATUS_COLOR[task.status]}`}>
-        <Icon className="h-4 w-4" />
-      </button>
+      {onToggle ? (
+        <button onClick={() => onToggle(task.id, task.status)} className={`shrink-0 ${STATUS_COLOR[task.status]}`}>
+          <Icon className="h-4 w-4" />
+        </button>
+      ) : (
+        <Icon className={`h-4 w-4 shrink-0 ${STATUS_COLOR[task.status]}`} aria-hidden="true" />
+      )}
       <Link to={`/project/${task.project_id}/tasks`} className="flex-1 min-w-0">
         <p className={`text-body-sm text-foreground truncate ${task.status === "done" ? "line-through opacity-60" : ""}`}>
           {task.title}

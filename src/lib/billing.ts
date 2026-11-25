@@ -86,12 +86,24 @@ export interface PaymentIntentRow {
   readonly profile_id: string;
   readonly plan_code: string;
   readonly amount_kopecks: number;
+  readonly amount_refunded_kopecks?: number | null;
   readonly currency: string;
   readonly status: string;
   readonly error_code: string | null;
   readonly error_message: string | null;
   readonly confirmed_at: string | null;
   readonly created_at: string;
+}
+
+// Part of the money went back, the rest is still paid. Status alone is not enough:
+// a CONFIRMED delivered after PARTIAL_REFUNDED moves the row to 'confirmed' and
+// keeps amount_refunded_kopecks. That value only marks the refund and is not shown:
+// what T-Bank sends as Amount in PARTIAL_REFUNDED has not been measured yet.
+export function isPartiallyRefunded(payment: PaymentIntentRow): boolean {
+  return (
+    payment.status === "partial_refund" ||
+    (payment.status === "confirmed" && (payment.amount_refunded_kopecks ?? 0) > 0)
+  );
 }
 
 // Response of the tbank-init-payment Edge Function (phase 1b contract + C1).

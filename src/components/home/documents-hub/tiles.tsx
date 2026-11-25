@@ -7,10 +7,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Folder, MoreHorizontal, Edit2, Trash2, Plus, Download, Eye, FileText } from "lucide-react";
+import { Folder, MoreHorizontal, Edit2, Trash2, Plus, Download, Eye, FileText, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type IconComponent = ComponentType<{ className?: string; strokeWidth?: number | string }>;
+
+/** Cover colour: blue for documents, green for the knowledge base's own «Решения». */
+type TileTone = "accent" | "success";
+
+const COVER_TONE: Record<TileTone, string> = {
+  accent: "from-accent/20 via-accent/8",
+  success: "from-success/20 via-success/8",
+};
 
 interface FolderTileProps {
   title: string;
@@ -18,6 +26,7 @@ interface FolderTileProps {
   icon?: IconComponent;
   description?: string | null;
   coverUrl?: string | null;
+  tone?: TileTone;
   active?: boolean;
   onClick?: () => void;
   draggingOver?: boolean;
@@ -31,6 +40,8 @@ interface FolderTileProps {
     deleteLabel: string;
   } | null;
   filesLabel: string;
+  /** Next to the title: the «Новое» pill. */
+  badge?: ReactNode;
 }
 
 export function FolderTile({
@@ -39,6 +50,7 @@ export function FolderTile({
   icon: Icon = Folder,
   description,
   coverUrl,
+  tone = "accent",
   active = false,
   onClick,
   draggingOver = false,
@@ -47,6 +59,7 @@ export function FolderTile({
   onDrop,
   menu,
   filesLabel,
+  badge,
 }: FolderTileProps) {
   return (
     <Card
@@ -71,19 +84,27 @@ export function FolderTile({
       )}
     >
       <div
-        className="h-32 w-full bg-gradient-to-br from-accent/20 via-accent/8 to-transparent flex items-center justify-center"
+        className={cn("h-32 w-full bg-gradient-to-br to-transparent flex items-center justify-center", COVER_TONE[tone])}
         aria-hidden="true"
+        data-tone={tone}
       >
         {coverUrl ? (
           <img src={coverUrl} alt="" className="h-full w-full object-cover" />
         ) : (
-          <Icon className="h-10 w-10 text-accent" strokeWidth={1.5} />
+          <Icon className={cn("h-10 w-10", tone === "success" ? "text-success" : "text-accent")} strokeWidth={1.5} />
         )}
       </div>
       <CardContent className="flex flex-1 flex-col gap-1 p-4">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="line-clamp-2 text-body font-semibold text-foreground">{title}</h3>
+            {badge ? (
+              <div className="flex items-start gap-2">
+                <h3 className="line-clamp-2 text-body font-semibold text-foreground">{title}</h3>
+                {badge}
+              </div>
+            ) : (
+              <h3 className="line-clamp-2 text-body font-semibold text-foreground">{title}</h3>
+            )}
             <p className="mt-0.5 text-caption text-muted-foreground">
               {filesLabel.replace("{{count}}", String(count))}
             </p>
@@ -152,11 +173,17 @@ interface FileTileProps {
   description?: string | null;
   icon?: IconComponent;
   iconColor?: string;
+  tone?: TileTone;
   /** ISO date string or pre-formatted "YYYY-MM-DD". Shown in the meta row. */
   dateAdded?: string | null;
+  /** Replaces the date in the meta row (the knowledge-base label). */
+  meta?: ReactNode;
   onClick?: () => void;
   onDownload?: () => void;
   onView?: () => void;
+  /** Opens an external source in a new tab (arrow icon). */
+  onOpenExternal?: () => void;
+  openExternalLabel?: string;
   downloadLabel: string;
   viewLabel: string;
   draggable?: boolean;
@@ -169,10 +196,14 @@ export function FileTile({
   description,
   icon: Icon = FileText,
   iconColor = "text-accent",
+  tone = "accent",
   dateAdded,
+  meta,
   onClick,
   onDownload,
   onView,
+  onOpenExternal,
+  openExternalLabel,
   downloadLabel,
   viewLabel,
   draggable,
@@ -200,7 +231,11 @@ export function FileTile({
         draggable && "cursor-grab active:cursor-grabbing",
       )}
     >
-      <div className="flex h-32 w-full items-center justify-center bg-gradient-to-br from-accent/20 via-accent/8 to-transparent" aria-hidden="true">
+      <div
+        className={cn("flex h-32 w-full items-center justify-center bg-gradient-to-br to-transparent", COVER_TONE[tone])}
+        aria-hidden="true"
+        data-tone={tone}
+      >
         <Icon className={cn("h-10 w-10", iconColor)} strokeWidth={1.5} />
       </div>
       <CardContent className="flex flex-1 flex-col gap-1 p-4">
@@ -210,9 +245,11 @@ export function FileTile({
         {description && (
           <p className="line-clamp-2 text-caption text-muted-foreground">{description}</p>
         )}
-        {dateAdded && (
+        {meta ? (
+          <div className="text-caption">{meta}</div>
+        ) : dateAdded ? (
           <p className="text-caption text-muted-foreground">{dateAdded}</p>
-        )}
+        ) : null}
         <div className="mt-auto flex items-center justify-between gap-1 pt-1">
           <div className="flex gap-1">
             {onView && (
@@ -228,6 +265,21 @@ export function FileTile({
                 title={viewLabel}
               >
                 <Eye className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onOpenExternal && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenExternal();
+                }}
+                aria-label={openExternalLabel}
+                title={openExternalLabel}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
               </Button>
             )}
             {onDownload && (

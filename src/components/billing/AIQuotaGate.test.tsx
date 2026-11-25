@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { AIQuotaGate } from "@/components/billing/AIQuotaGate";
 import { type TierQuota, useTierQuota } from "@/hooks/useTierQuota";
@@ -60,11 +61,12 @@ describe("AIQuotaGate", () => {
     billing.enabled = true;
   });
 
-  it("makes the dimmed children inert so the keyboard cannot reach them", () => {
+  it("takes the composer away and stands the card in its place", () => {
     setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
     renderGate();
-    expect(screen.getByText("composer").closest("[inert]")).not.toBeNull();
+    expect(screen.queryByText("composer")).not.toBeInTheDocument();
     expect(screen.getByRole("alertdialog")).not.toHaveAttribute("aria-live");
+    expect(screen.getByRole("alertdialog").className).toContain("rounded-panel");
   });
 
   it("leaves the children interactive while under the limit", () => {
@@ -90,7 +92,7 @@ describe("AIQuotaGate", () => {
     );
     setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
     const { rerender } = render(tree());
-    expect(screen.getByLabelText("composer").closest("[inert]")).not.toBeNull();
+    expect(screen.queryByLabelText("composer")).not.toBeInTheDocument();
     setQuota({ ai_chat_used: 0, ai_chat_limit: 50 });
     rerender(tree());
     expect(screen.getByLabelText("composer").closest("[inert]")).toBeNull();
@@ -104,6 +106,8 @@ describe("AIQuotaGate", () => {
     const dialog = screen.getByRole("alertdialog");
     expect(dialog).toHaveFocus();
     expect(dialog).toHaveAccessibleDescription(/You've used all your AI messages/);
+    // Focus already reads the panel: the region does not say it a second time.
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   // Same div-in-div shape as the real composer: the outer nodes are reused on
@@ -127,6 +131,11 @@ describe("AIQuotaGate", () => {
     setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
     rerender(tree());
     expect(screen.getByRole("alertdialog")).toHaveFocus();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    // A refetch while the paywall stays up announces nothing new.
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("leaves focus alone when the user is typing elsewhere on the page", () => {
@@ -173,6 +182,241 @@ describe("AIQuotaGate", () => {
     setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
     rerender(gateTree());
     expect(screen.getByRole("alertdialog")).not.toHaveFocus();
+  });
+
+  it("announces the paywall through a live region that exists before it", () => {
+    mockedUseTierQuota.mockReturnValue(
+      { data: undefined } as unknown as ReturnType<typeof useTierQuota>,
+    );
+    const { rerender } = renderGate();
+    const region = screen.getByRole("status");
+    expect(region).toBeEmptyDOMElement();
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(gateTree());
+    expect(screen.getByRole("status")).toBe(region);
+    expect(region).toHaveTextContent("AI chat limit reached");
+  });
+
+  // The quota is usually cached (the top bar reads it on every page), so the
+  // gate often mounts with the paywall already up. The region must still start
+  // empty on that first paint, or there is no change for a screen reader to read.
+  it("starts the region empty on the first paint even with a cached exhausted quota", () => {
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    const firstPaint = document.createElement("div");
+    firstPaint.innerHTML = renderToStaticMarkup(gateTree());
+    expect(firstPaint.querySelector('[role="status"]')).toBeEmptyDOMElement();
+    renderGate();
+    expect(screen.getByRole("status")).toHaveTextContent("AI chat limit reached");
+  });
+
+  it("lets an alert panel announce itself instead of the region", () => {
+    mockedUseTierQuota.mockReturnValue(
+      { data: undefined } as unknown as ReturnType<typeof useTierQuota>,
+    );
+    const { rerender } = renderGate();
+    setQuota({ plan_code: "brigade", ai_chat_used: 2000, ai_chat_limit: 2000 });
+    rerender(gateTree());
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  it("announces the paywall when the limit runs out while focus is on another control", () => {
+    const tree = () => (
+      <MemoryRouter>
+        <button type="button">chip</button>
+        <AIQuotaGate usageType="chat">
+          <button type="button">composer</button>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 49, ai_chat_limit: 50 });
+    const { rerender } = render(tree());
+    screen.getByText("chip").focus();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByText("chip")).toHaveFocus();
+    expect(screen.getByRole("status")).toHaveTextContent("AI chat limit reached");
+  });
+
+  it("is an alert, not an alertdialog, when the panel has no enabled control", () => {
+    setQuota({ plan_code: "brigade", ai_chat_used: 2000, ai_chat_limit: 2000 });
+    const { unmount } = renderGate();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveAccessibleName("AI chat limit reached");
+    unmount();
+    billing.enabled = false;
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    renderGate();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("returns focus to the composer when the paywall lifts while focus is on it", () => {
+    const tree = () => (
+      <MemoryRouter>
+        <AIQuotaGate usageType="chat">
+          <div>
+            <div>
+              <textarea aria-label="composer" />
+            </div>
+          </div>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 49, ai_chat_limit: 50 });
+    const { rerender } = render(tree());
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByRole("alertdialog")).toHaveFocus();
+    setQuota({ ai_chat_used: 0, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByLabelText("composer")).toHaveFocus();
+  });
+
+  it("leaves focus alone when the paywall lifts while focus is elsewhere", () => {
+    const tree = () => (
+      <MemoryRouter>
+        <input aria-label="elsewhere" />
+        <AIQuotaGate usageType="chat">
+          <div>
+            <textarea aria-label="composer" />
+          </div>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    const { rerender } = render(tree());
+    screen.getByLabelText("elsewhere").focus();
+    setQuota({ ai_chat_used: 0, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByLabelText("elsewhere")).toHaveFocus();
+  });
+
+  it("leaves focus alone when the paywall lifts after focus moved off it", () => {
+    const tree = () => (
+      <MemoryRouter>
+        <input aria-label="elsewhere" />
+        <AIQuotaGate usageType="chat">
+          <div>
+            <textarea aria-label="composer" />
+          </div>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 49, ai_chat_limit: 50 });
+    const { rerender } = render(tree());
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByRole("alertdialog")).toHaveFocus();
+    screen.getByLabelText("elsewhere").focus();
+    setQuota({ ai_chat_used: 0, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByLabelText("elsewhere")).toHaveFocus();
+  });
+
+  it("does not take focus back after the panel vanished with the quota going unknown", () => {
+    const tree = () => (
+      <MemoryRouter>
+        <input aria-label="elsewhere" />
+        <AIQuotaGate usageType="chat">
+          <div>
+            <textarea aria-label="composer" />
+          </div>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 49, ai_chat_limit: 50 });
+    const { rerender } = render(tree());
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByRole("alertdialog")).toHaveFocus();
+    mockedUseTierQuota.mockReturnValue(
+      { data: undefined } as unknown as ReturnType<typeof useTierQuota>,
+    );
+    rerender(tree());
+    screen.getByLabelText("elsewhere").focus();
+    setQuota({ ai_chat_used: 0, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByLabelText("elsewhere")).toHaveFocus();
+  });
+
+  it("does not take focus on a second lift after the first one handed it back", () => {
+    const tree = () => (
+      <MemoryRouter>
+        <input aria-label="elsewhere" />
+        <AIQuotaGate usageType="chat">
+          <div>
+            <textarea aria-label="composer" />
+          </div>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 49, ai_chat_limit: 50 });
+    const { rerender } = render(tree());
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByRole("alertdialog")).toHaveFocus();
+    setQuota({ ai_chat_used: 0, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByLabelText("composer")).toHaveFocus();
+    screen.getByLabelText("elsewhere").focus();
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByLabelText("elsewhere")).toHaveFocus();
+    setQuota({ ai_chat_used: 0, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByLabelText("elsewhere")).toHaveFocus();
+  });
+
+  it("clears the region while the quota is unknown and announces the paywall again after", () => {
+    const tree = () => (
+      <MemoryRouter>
+        <button type="button">chip</button>
+        <AIQuotaGate usageType="chat">
+          <div>
+            <textarea aria-label="composer" />
+          </div>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 49, ai_chat_limit: 50 });
+    const { rerender } = render(tree());
+    screen.getByText("chip").focus();
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByRole("status")).toHaveTextContent("AI chat limit reached");
+    mockedUseTierQuota.mockReturnValue(
+      { data: undefined } as unknown as ReturnType<typeof useTierQuota>,
+    );
+    rerender(tree());
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    rerender(tree());
+    expect(screen.getByRole("status")).toHaveTextContent("AI chat limit reached");
+  });
+
+  it("announces another slot's paywall when the gate switches to it", () => {
+    const tree = (usageType: "chat" | "photo") => (
+      <MemoryRouter>
+        <button type="button">chip</button>
+        <AIQuotaGate usageType={usageType}>
+          <div>
+            <textarea aria-label="composer" />
+          </div>
+        </AIQuotaGate>
+      </MemoryRouter>
+    );
+    setQuota({ ai_chat_used: 49, ai_chat_limit: 50, ai_photo_used: 1, ai_photo_limit: 1 });
+    const { rerender } = render(tree("chat"));
+    screen.getByText("chip").focus();
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50, ai_photo_used: 1, ai_photo_limit: 1 });
+    rerender(tree("chat"));
+    expect(screen.getByRole("status")).toHaveTextContent("AI chat limit reached");
+    rerender(tree("photo"));
+    const photoTitle = screen.getByRole("heading").textContent ?? "";
+    expect(photoTitle).not.toBe("AI chat limit reached");
+    expect(screen.getByRole("status")).toHaveTextContent(photoTitle);
   });
 
   it("renders children unobstructed when under the limit", () => {

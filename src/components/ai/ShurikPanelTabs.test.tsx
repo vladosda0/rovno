@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ShurikPanelTabs } from "@/components/ai/ShurikPanelTabs";
+import { outsidePanelOpeningTab, ShurikPanelTabs } from "@/components/ai/ShurikPanelTabs";
 
 describe("ShurikPanelTabs", () => {
   it("gives the Notifications tab no-wrap classes and a non-shrinking number next to the label", () => {
@@ -19,3 +19,10 @@ function within(tab: HTMLElement, text: string): HTMLElement {
   if (!node) throw new Error(`no label ${text}`);
   return node;
 }
+
+describe("outsidePanelOpeningTab", () => {
+  it("opens on notifications only while something is unread", () => {
+    expect(outsidePanelOpeningTab(2)).toBe("notifications");
+    expect(outsidePanelOpeningTab(0)).toBe("chat");
+  });
+});

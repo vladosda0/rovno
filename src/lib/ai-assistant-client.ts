@@ -4,12 +4,15 @@ import type { AiLlmProvider } from "@/lib/ai-llm-provider";
 import type {
   AssistantGroundingStatus,
   InferenceGroundingKind,
+  KbAnswerSource,
   LiveTextAssistantResult,
   LiveTextAssistantSource,
   LiveTextFollowUpPrompt,
+  LiveTextKnowledgeBase,
   PresentationalWorkProposal,
 } from "@/lib/ai-assistant-contract";
 import type { AIAccess } from "@/types/entities";
+import { KB_COUNTRIES } from "@/data/kb-regions";
 
 // ---------------------------------------------------------------------------
 // Input
@@ -31,7 +34,7 @@ export interface InvokeLiveTextAssistantInput {
   chatId?: string;
   /** Optional bounded chat history fallback for hosted `ai-inference` when server continuity is empty. */
   priorTurns?: ReadonlyArray<AiInferencePriorTurn>;
-  /** Hosted `ai-inference` — GigaChat vs Qwen (DashScope). Omit to use Edge default / env. */
+  /** Hosted `ai-inference` backend. Omit to use Edge default / env. */
   llmProvider?: AiLlmProvider;
   /** Tier-limit usage slot: 'chat' (default), 'doc', or 'photo'. Selects which monthly limit the server consumes. */
   usageType?: "chat" | "doc" | "photo";
@@ -183,6 +186,11 @@ interface AIInferenceResponseBody {
   groundingNote?: string;
   groundingSources?: BackendGroundingSource[];
   workProposal?: BackendWorkProposal | null;
+  knowledgeBaseSources?: unknown;
+  knowledgeBaseMissing?: unknown;
+  knowledgeBaseFallbackCountry?: unknown;
+  /** Outside a project: the question was about a project (docs-library 6.2). */
+  needsProject?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +270,61 @@ function softenProgrammaticCopy(
     .replace(/\bEvidence domains\b/gi, "Project areas")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
+}
+
+function kbString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * Knowledge-base sources keep their address and clause (unlike grounding
+ * sources, which are reduced to a label). Undefined when the server did not
+ * search the base for this turn.
+ */
+export function mapKnowledgeBase(
+  rawSources: unknown,
+  rawMissing: unknown,
+  rawFallbackCountry?: unknown,
+): LiveTextKnowledgeBase | undefined {
+  if (!Array.isArray(rawSources) && typeof rawMissing !== "boolean") return undefined;
+  const sources: KbAnswerSource[] = [];
+  for (const raw of Array.isArray(rawSources) ? rawSources : []) {
+    if (!raw || typeof raw !== "object") continue;
+    const s = raw as Record<string, unknown>;
+    const docId = kbString(s.docId);
+    const docLabel = kbString(s.docLabel);
+    if (s.kind !== "knowledge_base" || !docId || !docLabel) continue;
+    sources.push({
+      docId,
+      docSlug: kbString(s.docSlug),
+      docLabel,
+      clause: kbString(s.clause),
+      anchor: kbString(s.anchor),
+      solutionSlug: kbString(s.solutionSlug),
+      solutionTitle: kbString(s.solutionTitle),
+      checking: s.checking === true,
+      pendingAmendments: Array.isArray(s.pendingAmendments)
+        ? s.pendingAmendments.filter((n): n is number => typeof n === "number" && Number.isFinite(n))
+        : [],
+      upcomingAmendments: Array.isArray(s.upcomingAmendments)
+        ? s.upcomingAmendments
+            .map((a) => (a && typeof a === "object" ? (a as Record<string, unknown>) : {}))
+            .filter((a) => typeof a.no === "number" && typeof a.effectiveFrom === "string" && /^\d{4}-\d{2}-\d{2}/.test(a.effectiveFrom))
+            .map((a) => ({ no: a.no as number, effectiveFrom: (a.effectiveFrom as string).slice(0, 10) }))
+        : [],
+      quote: kbString(s.quote),
+    });
+  }
+  const fallbackCountry =
+    typeof rawFallbackCountry === "string" && rawFallbackCountry !== "RU" &&
+      (KB_COUNTRIES as readonly string[]).includes(rawFallbackCountry)
+      ? rawFallbackCountry
+      : undefined;
+  return {
+    sources,
+    missing: rawMissing === true && sources.length === 0,
+    ...(fallbackCountry ? { fallbackCountry } : {}),
+  };
 }
 
 export function mapGroundingSources(
@@ -365,7 +428,7 @@ function pickAnswerText(body: AIInferenceResponseBody, lang: AiAssistantUiLangua
     : "The assistant could not prepare a reply.";
 }
 
-function mapEchoLlmProvider(raw: string | undefined): AiLlmProvider | undefined {
+function mapEchoLlmProvider(raw: string | undefined): LiveTextAssistantResult["llmProvider"] {
   if (raw === "gigachat" || raw === "qwen") return raw;
   return undefined;
 }
@@ -392,6 +455,8 @@ export function mapInferenceResponse(
       ? softenProgrammaticCopy(body.groundingNote, assistantUiLanguage)
       : undefined,
     sources: mapGroundingSources(body.groundingSources, assistantUiLanguage),
+    knowledgeBase: mapKnowledgeBase(body.knowledgeBaseSources, body.knowledgeBaseMissing, body.knowledgeBaseFallbackCountry),
+    needsProject: body.needsProject === true ? true : undefined,
     workProposal: proposal,
     responseVersion: typeof body.responseVersion === "string" ? body.responseVersion : undefined,
     groundingKind,
@@ -456,6 +521,30 @@ function parseEdgeFunctionErrorBody(data: unknown): string | null {
   return null;
 }
 
+/** `body.error` from ai-inference when a project evidence read failed (rovno-db#61). */
+export const AI_EVIDENCE_UNAVAILABLE = "evidence_unavailable";
+
+/** A failed ai-inference turn: the user-visible message plus the backend error code it came from. */
+export class AiInferenceFailure extends Error {
+  readonly code: string | null;
+
+  constructor(message: string, code: string | null) {
+    super(message);
+    this.name = "AiInferenceFailure";
+    this.code = code;
+  }
+}
+
+export function aiInferenceFailureFrom(raw: string, lang: AiAssistantUiLanguage): AiInferenceFailure {
+  const code = raw.trim().toLowerCase() === AI_EVIDENCE_UNAVAILABLE ? AI_EVIDENCE_UNAVAILABLE : null;
+  return new AiInferenceFailure(sanitizeAiInferenceUserMessage(raw, lang), code);
+}
+
+/** Only a failed evidence read is worth re-sending unchanged. */
+export function isRetryableAiInferenceFailure(err: unknown): boolean {
+  return err instanceof AiInferenceFailure && err.code === AI_EVIDENCE_UNAVAILABLE;
+}
+
 /** User-visible copy for known provider / schema failures logged server-side. */
 export function sanitizeAiInferenceUserMessage(
   raw: string,
@@ -467,6 +556,11 @@ export function sanitizeAiInferenceUserMessage(
     : "The assistant could not complete this request. Please try again.";
   if (!t) return fallback;
   const lower = t.toLowerCase();
+  if (lower === AI_EVIDENCE_UNAVAILABLE) {
+    return lang === "ru"
+      ? "Не удалось загрузить данные проекта, поэтому ассистент не ответил. Попробуйте ещё раз."
+      : "The project data could not be loaded, so the assistant did not answer. Please try again.";
+  }
   if (lower === "quota_exceeded" || lower.includes("quota_exceeded")) {
     // ai-inference returns body.error = "quota_exceeded" with status 402 when a
     // usage credit can't be consumed. The visual paywall (AIQuotaGate) normally
@@ -489,13 +583,13 @@ export function sanitizeAiInferenceUserMessage(
   return t;
 }
 
-async function resolveAiInferenceInvokeFailureMessage(
+async function resolveAiInferenceInvokeFailure(
   error: unknown,
   data: unknown,
   lang: AiAssistantUiLanguage,
-): Promise<string> {
+): Promise<AiInferenceFailure> {
   const fromData = parseEdgeFunctionErrorBody(data);
-  if (fromData) return sanitizeAiInferenceUserMessage(fromData, lang);
+  if (fromData) return aiInferenceFailureFrom(fromData, lang);
 
   if (error && typeof error === "object" && "context" in error) {
     const ctx = (error as { context?: unknown }).context;
@@ -506,36 +600,42 @@ async function resolveAiInferenceInvokeFailureMessage(
       if (trimmed) {
         try {
           const j = JSON.parse(trimmed) as Record<string, unknown>;
-          if (typeof j.error === "string") return sanitizeAiInferenceUserMessage(j.error, lang);
+          if (typeof j.error === "string") return aiInferenceFailureFrom(j.error, lang);
           if (j.error && typeof j.error === "object" && j.error !== null && "message" in j.error) {
             const m = (j.error as { message?: unknown }).message;
-            if (typeof m === "string") return sanitizeAiInferenceUserMessage(m, lang);
+            if (typeof m === "string") return aiInferenceFailureFrom(m, lang);
           }
-          if (typeof j.message === "string") return sanitizeAiInferenceUserMessage(j.message, lang);
+          if (typeof j.message === "string") return aiInferenceFailureFrom(j.message, lang);
         } catch {
           /* not JSON */
         }
         const clipped = trimmed.length <= 400 ? trimmed : `${trimmed.slice(0, 400)}…`;
-        return sanitizeAiInferenceUserMessage(clipped, lang);
+        return aiInferenceFailureFrom(clipped, lang);
       }
       const statusText = ctx.statusText?.trim();
       if (lang === "ru") {
-        return statusText
-          ? `Запрос не выполнен (${status} ${statusText}). Попробуйте снова.`
-          : `Запрос не выполнен (HTTP ${status}). Попробуйте снова.`;
+        return new AiInferenceFailure(
+          statusText
+            ? `Запрос не выполнен (${status} ${statusText}). Попробуйте снова.`
+            : `Запрос не выполнен (HTTP ${status}). Попробуйте снова.`,
+          null,
+        );
       }
-      return statusText
-        ? `Request failed (${status} ${statusText}). Please try again.`
-        : `Request failed (HTTP ${status}). Please try again.`;
+      return new AiInferenceFailure(
+        statusText
+          ? `Request failed (${status} ${statusText}). Please try again.`
+          : `Request failed (HTTP ${status}). Please try again.`,
+        null,
+      );
     }
   }
 
   if (error && typeof error === "object" && "message" in error) {
     const m = (error as { message?: unknown }).message;
-    if (typeof m === "string" && m.trim()) return sanitizeAiInferenceUserMessage(m, lang);
+    if (typeof m === "string" && m.trim()) return aiInferenceFailureFrom(m, lang);
   }
 
-  return sanitizeAiInferenceUserMessage("", lang);
+  return aiInferenceFailureFrom("", lang);
 }
 
 /** Safe message to show in the assistant bubble when `invokeLiveTextAssistant` throws. */
@@ -581,17 +681,24 @@ async function invokeHosted(
     usageType,
   );
 
+  return postInference(supabase, body, assistantUiLanguage);
+}
+
+async function postInference(
+  supabase: typeof import("@/integrations/supabase/client").supabase,
+  body: object,
+  assistantUiLanguage: AiAssistantUiLanguage,
+): Promise<LiveTextAssistantResult> {
   const { data, error } = await supabase.functions.invoke("ai-inference", { body });
 
   const bodyError = parseEdgeFunctionErrorBody(data);
 
   if (bodyError) {
-    throw new Error(sanitizeAiInferenceUserMessage(bodyError, assistantUiLanguage));
+    throw aiInferenceFailureFrom(bodyError, assistantUiLanguage);
   }
 
   if (error) {
-    const msg = await resolveAiInferenceInvokeFailureMessage(error, data, assistantUiLanguage);
-    throw new Error(msg);
+    throw await resolveAiInferenceInvokeFailure(error, data, assistantUiLanguage);
   }
 
   const responseBody = data as AIInferenceResponseBody | null;
@@ -759,4 +866,45 @@ export async function invokeLiveTextAssistant(
     );
   }
   return invokeMock(input, assistantUiLanguage);
+}
+
+export const OUTSIDE_PROJECT_TIMEOUT_MS = 120_000;
+
+export interface InvokeOutsideProjectInput {
+  userMessage: string;
+  aiOutputLanguage?: "ru" | "en" | "auto";
+  llmProvider?: AiLlmProvider;
+}
+
+/**
+ * Shurik outside a project (docs-library 6.5): no project, no chat id, no context pack. The server
+ * keeps this conversation itself, one per person and shared with the bot, so no history goes up.
+ */
+export async function invokeAssistantOutsideProject(input: InvokeOutsideProjectInput): Promise<LiveTextAssistantResult> {
+  const assistantUiLanguage = resolveAiAssistantUiLanguage(input.aiOutputLanguage, input.userMessage);
+  const { supabase } = await import("@/integrations/supabase/client");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Only this side stops waiting: the server may still answer, and the history then shows it.
+  const timedOut = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(sanitizeAiInferenceUserMessage(
+        assistantUiLanguage === "ru"
+          ? "Ассистент не смог подготовить устойчивый ответ."
+          : "The assistant could not prepare a reliable reply.",
+        assistantUiLanguage,
+      )));
+    }, OUTSIDE_PROJECT_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([
+      postInference(
+        supabase,
+        { mode: "consult", message: input.userMessage, usageType: "chat", ...(input.llmProvider ? { llmProvider: input.llmProvider } : {}) },
+        assistantUiLanguage,
+      ),
+      timedOut,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

@@ -355,8 +355,9 @@ function mapMovementRowToReceiveEvent(input: {
   movementRow: InventoryMovementRow;
   line: OrderLine;
   sourceLocationByMovementId: Map<string, string>;
+  procurementItemIdByInventoryItemId: Map<string, string>;
 }): OrderReceiveEvent | null {
-  const { movementRow, line, sourceLocationByMovementId } = input;
+  const { movementRow, line, sourceLocationByMovementId, procurementItemIdByInventoryItemId } = input;
 
   if (movementRow.movement_type === "adjustment") {
     return null;
@@ -375,7 +376,11 @@ function mapMovementRowToReceiveEvent(input: {
     id: movementRow.id,
     orderId: line.orderId,
     orderLineId: line.id,
-    procurementItemId: movementRow.procurement_item_id ?? line.procurementItemId,
+    // The outgoing side of a cross-project transfer names no procurement item on its row or line.
+    procurementItemId: movementRow.procurement_item_id
+      || line.procurementItemId
+      || procurementItemIdByInventoryItemId.get(movementRow.inventory_item_id)
+      || "",
     locationId: movementRow.inventory_location_id ?? "",
     deltaQty: movementRow.delta_qty,
     eventType,
@@ -391,6 +396,9 @@ export function shapeOrdersWithDetails(input: ShapeOrdersInput): OrderWithLines[
   );
   const receivedQtyByLineId = buildReceivedQtyByOrderLineId(input.movementRows);
   const sourceLocationByMovementId = buildTransferSourceLocationByMovementId(input.movementRows);
+  const procurementItemIdByInventoryItemId = new Map(input.movementRows.flatMap((row) => (
+    row.procurement_item_id ? [[row.inventory_item_id, row.procurement_item_id] as const] : []
+  )));
 
   const linesByOrderId = new Map<string, OrderLine[]>();
   input.lineRows.forEach((row) => {
@@ -440,6 +448,7 @@ export function shapeOrdersWithDetails(input: ShapeOrdersInput): OrderWithLines[
       movementRow: row,
       line,
       sourceLocationByMovementId,
+      procurementItemIdByInventoryItemId,
     });
     if (!event) {
       return;
@@ -510,8 +519,8 @@ function procurementOrderLineItemType(dbType: string | null | undefined): Procur
 }
 
 /**
- * Replace order lines with RPC `ordered_lines` for operational (non-money) views while preserving
- * receive quantities from the already-shaped DB lines so in-stock math still works.
+ * Overlay RPC `ordered_lines` for operational (non-money) views, keeping lines past the RPC page
+ * and preserving receive quantities from the already-shaped DB lines so in-stock math still works.
  */
 export function mergeOperationalRpcLinesOntoExistingOrderLines(
   existingLines: OrderLine[],
@@ -520,7 +529,9 @@ export function mergeOperationalRpcLinesOntoExistingOrderLines(
 ): OrderLine[] {
   const sorted = [...rpcLines].sort((a, b) => a.order_line_id.localeCompare(b.order_line_id));
   const existingLineById = new Map(existingLines.map((line) => [line.id, line]));
-  return sorted.map((ol) => {
+  const rpcLineIds = new Set(sorted.map((ol) => ol.order_line_id));
+  const linesPastTheRpcPage = existingLines.filter((line) => !rpcLineIds.has(line.id));
+  const merged = sorted.map((ol) => {
     const existing = existingLineById.get(ol.order_line_id);
     const fromProcItem = ol.procurement_item_id
       ? procItemTypeById.get(ol.procurement_item_id) ?? null
@@ -539,6 +550,7 @@ export function mergeOperationalRpcLinesOntoExistingOrderLines(
       actualUnitPrice: null,
     };
   });
+  return [...merged, ...linesPastTheRpcPage];
 }
 
 async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
@@ -598,6 +610,42 @@ async function hydrateOrderLinesWhenSelectReturnsEmpty(
   }
 
   return forOrder.map(syntheticOrderLineRowFromRpc);
+}
+
+/**
+ * A member with `operational_summary` access gets no `order_lines` rows, so without these ids
+ * `inventory_movements` is never read and neither receipts nor warehouse moves reach the order.
+ */
+const OPERATIONAL_SUMMARY_PAGE_SIZE = 500;
+const OPERATIONAL_SUMMARY_MAX_PAGES = 20;
+
+/** Throws on a failed page: without these ids a move reads as a supplier order and receipts vanish. */
+async function loadOperationalLineRows(
+  supabase: TypedSupabaseClient,
+  projectId: string,
+): Promise<OrderLineRow[]> {
+  const rowsById = new Map<string, OrderLineRow>();
+  for (let page = 0; page < OPERATIONAL_SUMMARY_MAX_PAGES; page += 1) {
+    const { data, error } = await supabase.rpc("get_procurement_operational_summary", {
+      p_project_id: projectId,
+      p_limit: OPERATIONAL_SUMMARY_PAGE_SIZE,
+      p_offset: page * OPERATIONAL_SUMMARY_PAGE_SIZE,
+    });
+    if (error) {
+      throw error;
+    }
+
+    const parsed = parseProcurementOperationalSummaryPayload(data);
+    if (!parsed) {
+      throw new Error("Operational procurement summary could not be read");
+    }
+
+    parsed.orderedLines.forEach((ol) => rowsById.set(ol.order_line_id, syntheticOrderLineRowFromRpc(ol)));
+    if (parsed.orderedLines.length < OPERATIONAL_SUMMARY_PAGE_SIZE) {
+      return [...rowsById.values()];
+    }
+  }
+  throw new Error("Operational procurement summary is too long to read");
 }
 
 async function mergeOperationalSummaryLinesIntoOrders(
@@ -696,7 +744,17 @@ async function loadShapedOrders(
     throw linesError;
   }
 
-  const lines = lineRows ?? [];
+  const operationalProjectId = financeLoadAccess === "operational_summary"
+    ? options.projectId ?? rows[0].project_id
+    : null;
+  const directLines = lineRows ?? [];
+  const directLineIds = new Set(directLines.map((row) => row.id));
+  const lines = [
+    ...directLines,
+    ...(operationalProjectId
+      ? (await loadOperationalLineRows(supabase, operationalProjectId)).filter((row) => !directLineIds.has(row.id))
+      : []),
+  ];
   const procurementItemIds = Array.from(new Set(
     lines
       .flatMap((row) => row.procurement_item_id ? [row.procurement_item_id] : []),

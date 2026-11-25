@@ -72,15 +72,33 @@ export interface SharedDocumentFile {
   signedUrl: string;
   /** ISO timestamp; the signed URL must not be used after it. */
   expiresAt: string;
+  /** The owner or a co-owner uploaded a newer version after the link was made. */
+  hasNewerVersion: boolean;
+  /** This response is that newer version, not the file the link was made for. */
+  showingLatest: boolean;
 }
 
-function isSharedDocumentFile(value: unknown): value is SharedDocumentFile {
-  if (!value || typeof value !== "object") return false;
+function toSharedDocumentFile(value: unknown): SharedDocumentFile | null {
+  if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
-  return typeof row.title === "string"
-    && typeof row.filename === "string"
-    && typeof row.signedUrl === "string"
-    && typeof row.expiresAt === "string";
+  if (
+    typeof row.title !== "string"
+    || typeof row.filename !== "string"
+    || typeof row.signedUrl !== "string"
+    || typeof row.expiresAt !== "string"
+  ) {
+    return null;
+  }
+  return {
+    title: row.title,
+    filename: row.filename,
+    mimeType: typeof row.mimeType === "string" ? row.mimeType : null,
+    sizeBytes: typeof row.sizeBytes === "number" ? row.sizeBytes : null,
+    signedUrl: row.signedUrl,
+    expiresAt: row.expiresAt,
+    hasNewerVersion: row.hasNewerVersion === true,
+    showingLatest: row.showingLatest === true,
+  };
 }
 
 function invokeFailureStatus(error: unknown): number | null {
@@ -102,16 +120,18 @@ function invokeFailureStatus(error: unknown): number | null {
  * token is a 400 that means the same thing to the visitor. Anything else
  * (network, 5xx) is thrown so the page can distinguish "gone" from "try again".
  */
-export async function fetchSharedDocument(shareToken: string): Promise<SharedDocumentFile | null> {
+export async function fetchSharedDocument(
+  shareToken: string,
+  options: { latest?: boolean } = {},
+): Promise<SharedDocumentFile | null> {
   if (!shareToken) return null;
   const { data, error } = await rawSupabase.functions.invoke("get-shared-document", {
-    body: { token: shareToken },
+    body: options.latest ? { token: shareToken, latest: true } : { token: shareToken },
   });
   if (error) {
     const status = invokeFailureStatus(error);
     if (status === 404 || status === 400) return null;
     throw error instanceof Error ? error : new Error(String(error));
   }
-  if (!isSharedDocumentFile(data)) return null;
-  return data;
+  return toSharedDocumentFile(data);
 }

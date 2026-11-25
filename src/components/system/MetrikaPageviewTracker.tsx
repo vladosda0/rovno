@@ -15,8 +15,8 @@ import {
  * `initMetrika()` (src/lib/analytics.ts, run from main.tsx), so we deliberately
  * skip the first effect run to avoid double-counting the landing URL. On an
  * auth landing that init is deferred until the credential leaves the address
- * bar, so the skipped first hit may have no counterpart; `ensureMetrikaStarted()`
- * below is what starts the tag when the deferral timed out.
+ * bar, so `ensureMetrikaStarted()` below starts the tag on the first navigation
+ * that finds the address bar clean, and that navigation's pageview is the init.
  *
  * Place inside <BrowserRouter> but outside <Routes>, so it stays mounted
  * across route changes. No-ops when no Metrika counter is configured.
@@ -27,9 +27,9 @@ export function MetrikaPageviewTracker(): null {
 
   useEffect(() => {
     if (crossSecretRouteBoundary()) return;
-    ensureMetrikaStarted();
+    const startedHere = ensureMetrikaStarted();
 
-    if (isFirstHit.current) {
+    if (isFirstHit.current || startedHere) {
       isFirstHit.current = false;
       return;
     }

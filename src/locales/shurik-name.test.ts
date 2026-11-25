@@ -127,7 +127,6 @@ const HE_IS_NAMED_KEYS = [
   "ai.sidebar.proposal.statusTitle.declined",
   "ai.sidebar.filter.aiActions",
   "ai.sidebar.composer.placeholderDefault",
-  "ai.sidebar.composer.placeholderLearn",
   "ai.sidebar.consult.actions.addComment",
   "ai.sidebar.consult.analysisCommentPrefix",
   "ai.sidebar.guest.loginHint",
@@ -186,6 +185,8 @@ const TECHNOLOGY_KEYS = [
   "landing.faq.q4",
   "landing.finalCta.subtitle",
   "landing.footer.tagline",
+  // The price of «Пара слов от Шурика» is counted in the plan's AI messages (rovno-db#151).
+  "notifications.briefing.leadHint",
   "pricing.plans.free.ai.title",
   "pricing.plans.free.ai.chat",
   "pricing.plans.master.ai.title",
@@ -201,6 +202,13 @@ const TECHNOLOGY_KEYS = [
   "participants.axisHelp.ai.consult_only",
   "participants.axisHelp.ai.project_pool",
   "shurikHints.T51.text",
+  // The signature «Ровно ИИ» under the registry check mark, Vlad's wording (rovno#243).
+  "estimate.export.verifiedMark.document",
+  "estimate.export.verifiedMark.toggleHint",
+  "estimate.export.verifiedMark.documentIp",
+  "estimate.export.verifiedMark.toggleHintIp",
+  // The line under the composer, «Шурик это ИИ и может ошибаться…», approved on the slice 5 mockup (docs-library, 26.10).
+  "ai.sidebar.composer.disclaimer",
 ];
 
 /** English labels of the assisted mode that had no AI in them to begin with. */

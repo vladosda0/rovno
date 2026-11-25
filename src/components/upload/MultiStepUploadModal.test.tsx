@@ -99,6 +99,13 @@ describe("MultiStepUploadModal", () => {
     expect(screen.getByText("pick-document")).toBeInTheDocument();
   });
 
+  it("visitka Back closes the modal when it was opened to edit the card", () => {
+    const onOpenChange = vi.fn();
+    render(<MultiStepUploadModal open onOpenChange={onOpenChange} presetType="visitka" closeOnBack />);
+    fireEvent.click(screen.getByText("back-from-visitka"));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it("closes on Escape", () => {
     const onOpenChange = vi.fn();
     render(<MultiStepUploadModal open onOpenChange={onOpenChange} />);

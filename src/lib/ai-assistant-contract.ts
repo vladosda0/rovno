@@ -32,8 +32,35 @@ export interface LiveTextFollowUpPrompt {
   intent?: string;
 }
 
+/** One knowledge-base source under an answer (ai-inference `knowledgeBaseSources`, docs-library 5.2). */
+export interface KbAnswerSource {
+  docId: string;
+  docSlug?: string;
+  docLabel: string;
+  clause?: string;
+  anchor?: string;
+  solutionSlug?: string;
+  solutionTitle?: string;
+  checking: boolean;
+  pendingAmendments: number[];
+  /** Approved amendments to the clause's document not in force yet (docs-library 7.4). */
+  upcomingAmendments?: Array<{ no: number; effectiveFrom: string }>;
+  /** Verbatim text of the clause or the card fact's quote, for the clause popover. */
+  quote?: string;
+}
+
+/** Knowledge-base part of an answer: its sources, or «not in the base». */
+export interface LiveTextKnowledgeBase {
+  sources: KbAnswerSource[];
+  missing: boolean;
+  /** The person's country when the answer stands on Russian norms because the base has none of theirs (rovno-db#230). */
+  fallbackCountry?: string;
+}
+
 /** Result returned by `invokeLiveTextAssistant` (mock or hosted edge). */
 export interface LiveTextAssistantResult {
+  /** Outside a project: the question was about a project, the client draws its own answer. */
+  needsProject?: boolean;
   /** Which LLM backend served this turn when hosted (echo from `ai-inference`). */
   llmProvider?: "gigachat" | "qwen";
   /** Resolved UI language for grounding chrome, mock copy, and client-side error sanitization. */
@@ -54,4 +81,6 @@ export interface LiveTextAssistantResult {
   };
   followUps?: LiveTextFollowUpPrompt[];
   freshnessHint?: Record<string, unknown> | null;
+  /** Present only when the server searched the knowledge base for this turn. */
+  knowledgeBase?: LiveTextKnowledgeBase;
 }

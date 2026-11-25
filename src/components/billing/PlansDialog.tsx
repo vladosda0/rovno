@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { trackEvent } from "@/lib/analytics";
 import { toast } from "@/hooks/use-toast";
 import { PLANS } from "@/data/plans";
+import { planDisplayName } from "@/data/plan-labels";
 import { TIER_LIMITS, type TierCode } from "@/data/tier-limits";
 import { BILLING_ENABLED, formatRubFromKopecks, planRank } from "@/lib/billing";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
@@ -122,7 +123,7 @@ export function PlansDialog({ open, onOpenChange, currentPlan }: PlansDialogProp
     trackEvent("billing_downgrade_scheduled", { from: effectiveCurrentPlan, to: downgradeTo });
     toast({
       title: t("plans.dialog.downgradeScheduled", {
-        plan: PLANS[downgradeTo]?.display_name ?? downgradeTo,
+        plan: planDisplayName(downgradeTo),
       }),
     });
     setDowngradeTo(null);
@@ -137,7 +138,7 @@ export function PlansDialog({ open, onOpenChange, currentPlan }: PlansDialogProp
         year: "numeric",
       }).format(new Date(subscription.current_period_ends_at))
     : null;
-  const downgradeName = downgradeTo ? PLANS[downgradeTo]?.display_name ?? downgradeTo : "";
+  const downgradeName = downgradeTo ? planDisplayName(downgradeTo) : "";
 
   return (
     <>
@@ -165,7 +166,7 @@ export function PlansDialog({ open, onOpenChange, currentPlan }: PlansDialogProp
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-body font-semibold text-foreground">{plan.display_name}</span>
+                    <span className="text-body font-semibold text-foreground">{planDisplayName(code)}</span>
                     {isCurrent && <Badge variant="secondary" className="text-[10px]">{t("plans.dialog.currentBadge")}</Badge>}
                   </div>
                   <p className="mt-1 text-body-sm text-muted-foreground">
@@ -227,7 +228,7 @@ export function PlansDialog({ open, onOpenChange, currentPlan }: PlansDialogProp
             <AlertDialogDescription>
               {endsAtLabel
                 ? t("plans.dialog.downgradeConfirmBody", {
-                    current: PLANS[effectiveCurrentPlan]?.display_name ?? effectiveCurrentPlan,
+                    current: planDisplayName(effectiveCurrentPlan),
                     plan: downgradeName,
                     date: endsAtLabel,
                   })

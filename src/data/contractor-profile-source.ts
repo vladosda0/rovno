@@ -11,6 +11,18 @@ export interface ContractorProfileContacts {
   phone?: string;
   telegram?: string;
   website?: string;
+  whatsapp?: string;
+  vk?: string;
+  max?: string;
+  youtube?: string;
+}
+
+/** Card design (rovno#282). The server drops an unknown shade or a non-web cover. */
+export interface ContractorProfileAppearance {
+  shade?: string;
+  cover_url?: string;
+  cover_preset?: string;
+  show_requisites?: boolean;
 }
 
 export interface ContractorProfileData {
@@ -18,13 +30,43 @@ export interface ContractorProfileData {
   contacts: ContractorProfileContacts;
   region?: string;
   specializations?: string[];
-  experience_years?: number;
+  experience_years?: number | null;
   avatar_url?: string;
   description?: string;
   /** Optional taxpayer id (ИНН); used later to mark verified orgs. */
   inn?: string;
+  appearance?: ContractorProfileAppearance;
   /** Server whitelists this to 'draft' | 'pending_moderation'; others ignored. */
   status?: "draft" | "pending_moderation";
+}
+
+export interface ContractorProfile {
+  id: string;
+  org_id: string;
+  display_name: string;
+  contacts: ContractorProfileContacts;
+  region: string | null;
+  specializations: string[];
+  experience_years: number | null;
+  avatar_url: string | null;
+  description: string | null;
+  inn: string | null;
+  appearance: ContractorProfileAppearance;
+  status: string;
+}
+
+const CONTRACTOR_PROFILE_COLUMNS =
+  "id, org_id, display_name, contacts, region, specializations, experience_years, avatar_url, description, inn, appearance, status";
+
+/** The organization's single business card, or null when it has none yet. */
+export async function fetchContractorProfile(orgId: string): Promise<ContractorProfile | null> {
+  const { data, error } = await rawSupabase
+    .from("contractor_profiles")
+    .select(CONTRACTOR_PROFILE_COLUMNS)
+    .eq("org_id", orgId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ContractorProfile | null) ?? null;
 }
 
 export interface CreateOrgWithProfileResult {

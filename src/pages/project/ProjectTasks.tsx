@@ -39,6 +39,7 @@ import type { TaskStatus } from "@/types/entities";
 import { useEstimateV2Project, useEstimateV2ProjectionCapability } from "@/hooks/use-estimate-v2-data";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
+import { prepareMediaPhotoForUpload } from "@/lib/image-optimization";
 import type { Task } from "@/types/entities";
 
 const statusMeta: Record<TaskStatus, { labelKey: string; Icon: typeof Circle; colorClass: string; bgClass: string }> = {
@@ -447,7 +448,11 @@ export default function ProjectTasks() {
 
     setDoneUploading(true);
     try {
-      for (const file of doneFiles) {
+      const files: File[] = [];
+      for (const rawFile of doneFiles) {
+        files.push(await prepareMediaPhotoForUpload(rawFile, t("tasks.toast.cannotComplete.fallback")));
+      }
+      for (const file of files) {
         // Cancel cannot abort the request already in flight: storage-js `upload()`
         // takes no AbortSignal. It does stop every file after this one.
         if (!isCurrentRun()) return;

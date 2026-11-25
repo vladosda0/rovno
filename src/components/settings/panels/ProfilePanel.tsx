@@ -282,25 +282,25 @@ export function ProfilePanel() {
         {/* Fields */}
         <div className="grid gap-sp-2 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>{t("profile.fullName")}</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <Label htmlFor="profile-full-name">{t("profile.fullName")}</Label>
+            <Input id="profile-full-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>{t("profile.email")}</Label>
-            <Input value={email} disabled className="opacity-60" />
+            <Label htmlFor="profile-email">{t("profile.email")}</Label>
+            <Input id="profile-email" value={email} disabled className="opacity-60" />
           </div>
           <div className="space-y-1.5">
-            <Label>{t("profile.roleTitle")}</Label>
-            <Input value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} placeholder={t("profile.roleTitlePlaceholder")} />
+            <Label htmlFor="profile-role-title">{t("profile.roleTitle")}</Label>
+            <Input id="profile-role-title" value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} placeholder={t("profile.roleTitlePlaceholder")} />
           </div>
           <div className="space-y-1.5">
-            <Label>{t("profile.phone")}</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("profile.phonePlaceholder")} />
+            <Label htmlFor="profile-phone">{t("profile.phone")}</Label>
+            <Input id="profile-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("profile.phonePlaceholder")} />
           </div>
           <div className="space-y-1.5">
-            <Label>{t("profile.timezone")}</Label>
+            <Label htmlFor="profile-timezone">{t("profile.timezone")}</Label>
             <Select value={timezone} onValueChange={pickTimezone}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="profile-timezone"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {timezoneOptions.map((tz) => (
                   <SelectItem key={tz.value} value={tz.value}>
@@ -318,13 +318,13 @@ export function ProfilePanel() {
         <p className="text-caption text-muted-foreground">{t("profile.gender.hint")}</p>
 
         <div className="space-y-1.5">
-          <Label>{t("profile.bio")}</Label>
-          <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder={t("profile.bioPlaceholder")} rows={2} />
+          <Label htmlFor="profile-bio">{t("profile.bio")}</Label>
+          <Textarea id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder={t("profile.bioPlaceholder")} rows={2} />
         </div>
 
         <div className="space-y-1.5">
-          <Label>{t("profile.signature")}</Label>
-          <Textarea value={signature} onChange={(e) => setSignature(e.target.value)} placeholder={t("profile.signaturePlaceholder")} rows={3} />
+          <Label htmlFor="profile-signature">{t("profile.signature")}</Label>
+          <Textarea id="profile-signature" value={signature} onChange={(e) => setSignature(e.target.value)} placeholder={t("profile.signaturePlaceholder")} rows={3} />
         </div>
       </SettingsSection>
 

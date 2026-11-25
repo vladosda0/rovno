@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AddressSuggestInput } from "@/components/address/AddressSuggestInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getInventorySource } from "@/data/inventory-source";
 import { inventoryQueryKeys, useLocations } from "@/hooks/use-inventory-data";
@@ -86,7 +87,15 @@ export function LocationPicker({
           <ChevronsUpDown className="ml-2 h-4 w-4 opacity-60" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] p-2" align="start">
+      <PopoverContent
+        className="w-[320px] p-2"
+        align="start"
+        onEscapeKeyDown={(event) => {
+          // Esc first closes the address hints, not the whole picker.
+          const target = event.target as HTMLElement | null;
+          if (target?.getAttribute("aria-expanded") === "true") event.preventDefault();
+        }}
+      >
         <div className="space-y-1.5">
           {locations.map((location) => (
             <button
@@ -121,11 +130,13 @@ export function LocationPicker({
               className="h-8"
               disabled={disabled}
             />
-            <Input
+            <AddressSuggestInput
+              id="location-picker-new-address"
               value={newAddress}
-              onChange={(event) => setNewAddress(event.target.value)}
+              onChange={setNewAddress}
+              onPick={setNewAddress}
               placeholder={t("procurement.locationPicker.addressPlaceholder")}
-              className="h-8"
+              inputClassName="h-8"
               disabled={disabled}
             />
             <Button

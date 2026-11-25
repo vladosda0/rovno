@@ -172,6 +172,20 @@ describe("reportDeferredRecovery", () => {
     expect(captureMessage).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["meta-webindexer", "meta-webindexer/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)", REAL_MESSAGE, 0],
+    ["YandexBot", "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)", "Failed to fetch dynamically imported module: https://rovno.ai/assets/x.js", 0],
+    ["YandexBot on a CSS preload", "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)", REAL_MESSAGE, 1],
+    ["Chrome", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36", REAL_MESSAGE, 1],
+  ])("reports a recovery for %s only when it is not a measured crawler failure", (_label, userAgent, message, reports) => {
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(userAgent);
+    handler(vi.fn())(preloadErrorEvent(new Error(message)));
+
+    reportDeferredRecovery();
+
+    expect(captureMessage).toHaveBeenCalledTimes(reports);
+  });
+
   it("keeps the guard after reporting, so the retry is not silently refunded", () => {
     const reload = vi.fn();
     handler(reload)(preloadErrorEvent(new Error(REAL_MESSAGE)));

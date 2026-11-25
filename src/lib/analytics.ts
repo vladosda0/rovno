@@ -1,4 +1,5 @@
 import { safeNextPath } from "@/lib/safe-next-path";
+import { analyticsDeclined } from "@/lib/cookie-consent";
 
 export type AnalyticsEventName =
   | "estimate_editor_started"
@@ -154,6 +155,14 @@ export type AnalyticsEventName =
   | "ai_opener_shown";
 
 export type AnalyticsEventPayload = Record<string, unknown>;
+
+/**
+ * How a person signed in or registered, carried as `method` on
+ * `registration_complete` and `first_login` so `/pulse` can split the funnel
+ * by sign-in method (epic external-login, D10). `yandex`, `vk` and `passkey`
+ * arrive with later slices of that epic.
+ */
+export type AuthMethod = "password" | "email_code" | "yandex" | "vk" | "passkey";
 
 /**
  * Product analytics provider: Yandex Metrika.
@@ -335,6 +344,13 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/blog" },
   { pattern: "/blog/tag/:tag" },
   { pattern: "/blog/:slug" },
+  { pattern: "/baza" },
+  { pattern: "/baza/razdel/:folder" },
+  { pattern: "/baza/razdel/:folder/:page" },
+  { pattern: "/baza/resheniya" },
+  { pattern: "/baza/resheniya/:slug" },
+  { pattern: "/baza/izmeneniya" },
+  { pattern: "/baza/:slug" },
   { pattern: "/offer" },
   { pattern: "/privacy" },
   { pattern: "/refund" },
@@ -346,6 +362,10 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/auth/confirm" },
   { pattern: "/auth/email-sent" },
   { pattern: "/auth/callback" },
+  { pattern: "/auth/yandex/callback" },
+  { pattern: "/auth/vk/callback" },
+  { pattern: "/auth/mfa" },
+  { pattern: "/auth/faster" },
   { pattern: "/home" },
   { pattern: "/home/catalogs/upload-review/:uploadId" },
   { pattern: "/home/catalogs/:catalogId" },
@@ -369,6 +389,7 @@ export const ANALYTICS_ROUTES: readonly { pattern: string; secret?: boolean }[] 
   { pattern: "/project/:id/hr" },
   { pattern: "/project/:id/gallery" },
   { pattern: "/project/:id/documents" },
+  { pattern: "/project/:id/reports" },
   { pattern: "/project/:id/participants" },
 ];
 
@@ -475,8 +496,9 @@ export function analyticsReferrer(): string {
  * fallback link in the confirmation e-mail template), and `parseParametersFromURL`
  * reads both.
  *
- * `code` is deliberately absent: PKCE is not in use, and `code` is also the
- * promo-redeem parameter, which must not stall analytics forever.
+ * `code` is deliberately absent: Supabase PKCE is not in use, and `code` is also
+ * the promo-redeem parameter, which must not stall analytics forever. The Yandex
+ * and VK callbacks carry their `code` on their own paths, held back in urlCarriesAuthCredential.
  */
 const AUTH_CREDENTIAL_KEYS = [
   "access_token",
@@ -489,6 +511,15 @@ const AUTH_CREDENTIAL_KEYS = [
 
 function carriesCredential(params: URLSearchParams): boolean {
   return AUTH_CREDENTIAL_KEYS.some((key) => (params.get(key) ?? "") !== "");
+}
+
+/** Leading and trailing C0 controls and spaces, as the URL parser strips them. */
+function trimC0AndSpace(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) <= 0x20) start += 1;
+  while (end > start && value.charCodeAt(end - 1) <= 0x20) end -= 1;
+  return value.slice(start, end);
 }
 
 /**
@@ -514,6 +545,8 @@ function carriesSecretRouteValue(params: URLSearchParams): boolean {
       // the raw value rather than letting the throw escape into a page view.
       decoded = value;
     }
+    // Normalised the way the URL parser reads a path, so these characters cannot hide a secret route.
+    decoded = trimC0AndSpace(decoded).replace(/[\t\n\r]/g, "").replace(/\\/g, "/");
     if (!decoded.startsWith("/")) continue;
     if (matchAnalyticsRoute(decoded.split(/[?#]/, 1)[0])?.secret === true) return true;
     // Also resolved the way the auth pages resolve `next`, so a dot segment
@@ -524,12 +557,26 @@ function carriesSecretRouteValue(params: URLSearchParams): boolean {
   return false;
 }
 
+// The provider callbacks carry their `code` (VK also its device id) on their own path.
+const PROVIDER_CALLBACK_PATHS: ReadonlySet<string> = new Set(["/auth/yandex/callback", "/auth/vk/callback"]);
+
+/**
+ * Whether the current address carries a credential or sits on a secret route.
+ * The cookie banner uses it to stay off pages where the address holds a token
+ * (sign-in links, Yandex ID and VK ID callbacks), exactly where Metrika waits too.
+ */
+export function currentUrlCarriesAuthCredential(): boolean {
+  if (typeof window === "undefined") return false;
+  return urlCarriesAuthCredential();
+}
+
 function urlCarriesAuthCredential(): boolean {
   const { hash, search, pathname } = window.location;
   const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
   const searchParams = new URLSearchParams(search);
   return (
     matchAnalyticsRoute(pathname)?.secret === true ||
+    PROVIDER_CALLBACK_PATHS.has(pathname) ||
     carriesCredential(hashParams) ||
     carriesCredential(searchParams) ||
     carriesSecretRouteValue(searchParams) ||
@@ -633,16 +680,18 @@ export function initMetrika(): void {
 /**
  * Start Metrika if it is not running yet and the address bar is clean. Called on
  * every SPA navigation, so a landing whose credential never cleared costs that
- * page view rather than the rest of the session.
+ * page view rather than the rest of the session. Returns whether this call started
+ * it: the init then reports the current page, so no separate hit is due.
  */
-export function ensureMetrikaStarted(): void {
-  if (!import.meta.env.VITE_METRIKA_COUNTER_ID) return;
-  if (METRIKA_COUNTER_ID === null) return;
-  if (typeof window === "undefined" || typeof document === "undefined") return;
-  if (metrikaStarted) return;
-  if (urlCarriesAuthCredential()) return;
+export function ensureMetrikaStarted(): boolean {
+  if (!import.meta.env.VITE_METRIKA_COUNTER_ID) return false;
+  if (METRIKA_COUNTER_ID === null) return false;
+  if (typeof window === "undefined" || typeof document === "undefined") return false;
+  if (metrikaStarted) return false;
+  if (urlCarriesAuthCredential()) return false;
 
   bootstrapMetrika();
+  return metrikaStarted;
 }
 
 function ensureYmQueue(): YandexMetrikaFn {
@@ -667,6 +716,10 @@ function bootstrapMetrika(): void {
   if (METRIKA_COUNTER_ID === null) return;
   if (metrikaStarted) return;
   if (documentStartedOnSecretRoute) return;
+  // The visitor switched analytics off in "Настройки cookie" (rovno#333). No
+  // record keeps today's behaviour: Metrika runs until they say no. Checked here,
+  // before the flag, so both entries (initMetrika, ensureMetrikaStarted) obey it.
+  if (analyticsDeclined()) return;
 
   const counterId = METRIKA_COUNTER_ID;
   const src = `https://mc.yandex.ru/metrika/tag.js?id=${counterId}`;

@@ -271,6 +271,38 @@ describe("initMetrika and the Supabase auth fragment", () => {
     expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
   });
 
+  it("does not start on the Yandex callback, code in the address bar or not", async () => {
+    vi.useFakeTimers();
+    setUrl("/auth/yandex/callback?code=OAUTHCODE&state=STATE");
+    vi.resetModules();
+    vi.stubEnv("VITE_METRIKA_COUNTER_ID", COUNTER_ID);
+    const analytics = await import("./analytics");
+
+    analytics.initMetrika();
+    vi.advanceTimersByTime(1_000);
+    setUrl("/auth/yandex/callback");
+    analytics.ensureMetrikaStarted();
+
+    expect(initCalls(ym)).toHaveLength(0);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
+  });
+
+  it("does not start on the VK ID callback either, code and device id in the address bar or not", async () => {
+    vi.useFakeTimers();
+    setUrl("/auth/vk/callback?code=VKCODE&state=STATE&device_id=DEVICE");
+    vi.resetModules();
+    vi.stubEnv("VITE_METRIKA_COUNTER_ID", COUNTER_ID);
+    const analytics = await import("./analytics");
+
+    analytics.initMetrika();
+    vi.advanceTimersByTime(1_000);
+    setUrl("/auth/vk/callback");
+    analytics.ensureMetrikaStarted();
+
+    expect(initCalls(ym)).toHaveLength(0);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
+  });
+
   // The credential also arrives as the VALUE of `next`, where the
   // parameter-NAME check cannot see it. Dropping `next` from the URL we report
   // does not help: tag.js reads location.href itself for its clickmap beacons,
@@ -283,6 +315,12 @@ describe("initMetrika and the Supabase auth fragment", () => {
     ["a share link behind a literal dot segment", "/auth/login?next=%2Fshare%2Festimate%2F.%2FQA-SHARE-TOKEN"],
     ["a share link behind a dot segment with a fragment", "/auth/login?next=%2Fshare%2Festimate%2F.%2FQA-SHARE-TOKEN%23%2Fitems"],
     ["a share link behind a protocol-relative prefix", "/auth/login?next=%2F%2Fshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["a share link behind a backslash prefix", "/auth/login?next=%2F%5Cshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["a share link with every separator a backslash", "/auth/login?next=%2F%5Cshare%5Cestimate%5CQA-SHARE-TOKEN"],
+    ["a share link behind a tab between slashes", "/auth/login?next=%2F%09%2Fshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["a share link behind a newline and backslash", "/auth/login?next=%2F%5C%0A%5Cshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["a share link behind a leading space", "/auth/login?next=%20%2Fshare%2Festimate%2FQA-SHARE-TOKEN"],
+    ["an invite link behind backslash separators", `/auth/signup?next=%5Cinvite%5Caccept%5C${"d".repeat(32)}`],
     ["an invite link behind a parent segment", `/auth/signup?next=%2Fhome%2F..%2Finvite%2Faccept%2F${"c".repeat(32)}`],
   ])("does not start when `next` carries %s", async (_label, url) => {
     vi.useFakeTimers();
@@ -309,6 +347,65 @@ describe("initMetrika and the Supabase auth fragment", () => {
     analytics.initMetrika();
 
     expect(ym.mock.calls.filter((call) => call[1] === "init")).toHaveLength(1);
+  });
+});
+
+describe("Metrika and the cookie choice (rovno#333)", () => {
+  const CONSENT_KEY = "rovno.cookieConsent.v1";
+  let ym: YmMock;
+
+  beforeEach(() => {
+    ym = vi.fn();
+    (window as unknown as { ym?: unknown }).ym = ym;
+    removeInjectedTags();
+    localStorage.clear();
+    setUrl("/");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    removeInjectedTags();
+    localStorage.clear();
+    delete (window as unknown as { ym?: unknown }).ym;
+  });
+
+  it("loads the tag as before when the visitor has not chosen", async () => {
+    const analytics = await loadAnalytics();
+
+    analytics.initMetrika();
+
+    expect(initCalls(ym)).toHaveLength(1);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).not.toBeNull();
+  });
+
+  it("loads the tag after 'Хорошо' (analytics: true)", async () => {
+    localStorage.setItem(CONSENT_KEY, JSON.stringify({ analytics: true, at: "2026-11-13T00:00:00Z", v: 1 }));
+    const analytics = await loadAnalytics();
+
+    analytics.initMetrika();
+
+    expect(initCalls(ym)).toHaveLength(1);
+  });
+
+  it("does not load the tag on either entry once analytics is switched off", async () => {
+    localStorage.setItem(CONSENT_KEY, JSON.stringify({ analytics: false, at: "2026-11-13T00:00:00Z", v: 1 }));
+    const analytics = await loadAnalytics();
+
+    analytics.initMetrika();
+    setUrl("/home");
+    expect(analytics.ensureMetrikaStarted()).toBe(false);
+
+    expect(initCalls(ym)).toHaveLength(0);
+    expect(document.querySelector(`script[src="${TAG_SRC}"]`)).toBeNull();
+  });
+
+  it("still loads the tag when the stored choice is unreadable", async () => {
+    localStorage.setItem(CONSENT_KEY, "{broken");
+    const analytics = await loadAnalytics();
+
+    analytics.initMetrika();
+
+    expect(initCalls(ym)).toHaveLength(1);
   });
 });
 

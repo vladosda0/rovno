@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import PromoRedeem from "@/pages/promo/Redeem";
 import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
+import ru from "@/locales/ru.json";
 import {
   __unsafeResetRuntimeAuthForTests,
   __unsafeSetRuntimeAuthStateForTests,
@@ -72,6 +73,21 @@ describe("PromoRedeem", () => {
   afterEach(() => {
     __unsafeResetRuntimeAuthForTests();
     vi.restoreAllMocks();
+  });
+
+  it("names both reasons behind already_redeemed instead of blaming the code alone", async () => {
+    rpcMock.mockResolvedValue({ data: [{ status: "already_redeemed" }], error: null, status: 200 });
+    renderRedeem();
+
+    await submit();
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    const { title } = vi.mocked(toast).mock.calls[0][0] as { title: string };
+    expect(title).toMatch(/per account/);
+    expect(title).toMatch(/activations/);
+    const ruTitle = ru["promo.redeem.error.alreadyRedeemed" as keyof typeof ru];
+    expect(ruTitle).toMatch(/одном аккаунте/);
+    expect(ruTitle).toMatch(/закончились активации/);
   });
 
   it("routes a session the server rejects back through signup with the code preserved", async () => {

@@ -35,7 +35,7 @@ describe("MetrikaPageviewTracker", () => {
 
   // BrowserRouter, not MemoryRouter: the tracker reads window.location, so the
   // router has to drive it or the assertion pins the pre-navigation URL.
-  it("sends a pageview whose url carries neither the auth fragment nor private query params", async () => {
+  it("reports one pageview whose url carries neither the auth fragment nor private query params", async () => {
     window.history.replaceState({}, "", `/auth/reset-password?lang=ru${AUTH_FRAGMENT}`);
     const referrer = `${window.location.origin}/auth/login?next=%2Finvite%2Faccept%2FQA-INVITE`;
     Object.defineProperty(document, "referrer", { value: referrer, configurable: true });
@@ -48,14 +48,38 @@ describe("MetrikaPageviewTracker", () => {
       </BrowserRouter>,
     );
 
-    await waitFor(() => expect(ym.mock.calls.some((call) => call[1] === "hit")).toBe(true));
+    await waitFor(() => expect(ym.mock.calls.some((call) => call[1] === "init")).toBe(true));
 
+    // The tag starts on this navigation, so its init is the one pageview.
+    expect(ym.mock.calls.filter((call) => call[1] === "hit")).toHaveLength(0);
+    const init = ym.mock.calls.find((call) => call[1] === "init")?.[2] as { url: string; referrer: string };
+    expect(window.location.pathname).toBe("/auth/email-sent");
+    expect(init.url).toBe(`${window.location.origin}/auth/email-sent?lang=ru`);
+    expect(init.url).not.toContain("access_token");
+    expect(init.url).not.toContain("example.com");
+    expect(init.referrer).toBe(window.location.origin);
+    Object.defineProperty(document, "referrer", { value: "", configurable: true });
+  });
+
+  it("sends one sanitised hit per navigation once the tag is running", async () => {
+    window.history.replaceState({}, "", "/home");
+    const referrer = `${window.location.origin}/auth/login?next=%2Finvite%2Faccept%2FQA-INVITE`;
+    Object.defineProperty(document, "referrer", { value: referrer, configurable: true });
+    const { initMetrika } = await import("@/lib/analytics");
+    initMetrika();
+    const { MetrikaPageviewTracker } = await import("./MetrikaPageviewTracker");
+
+    render(
+      <BrowserRouter>
+        <MetrikaPageviewTracker />
+        <Navigate to="/auth/email-sent?lang=ru&email=user%40example.com" />
+      </BrowserRouter>,
+    );
+
+    await waitFor(() => expect(ym.mock.calls.some((call) => call[1] === "hit")).toBe(true));
     const hits = ym.mock.calls.filter((call) => call[1] === "hit");
     expect(hits).toHaveLength(1);
-    expect(window.location.pathname).toBe("/auth/email-sent");
     expect(hits[0][2]).toBe(`${window.location.origin}/auth/email-sent?lang=ru`);
-    expect(hits[0][2]).not.toContain("access_token");
-    expect(hits[0][2]).not.toContain("example.com");
     expect((hits[0][3] as { referer: string }).referer).toBe(window.location.origin);
     Object.defineProperty(document, "referrer", { value: "", configurable: true });
   });

@@ -494,10 +494,10 @@ export function markNotificationRead(id: string) {
   });
 }
 
-export function updateProject(id: string, partial: Partial<Project>) {
+export function updateProject(id: string, partial: Partial<Project>, mode?: BrowserWorkspaceKind) {
   updateWorkspaceState((state) => {
     state.projects = state.projects.map((project) => (project.id === id ? { ...project, ...partial } : project));
-  });
+  }, mode);
 }
 
 /**

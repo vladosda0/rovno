@@ -8,7 +8,12 @@ import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { MetrikaPageviewTracker } from "@/components/system/MetrikaPageviewTracker";
 import { ScrollToHash } from "@/components/system/ScrollToHash";
 import { DocumentLanguage } from "@/components/system/DocumentLanguage";
+import { CookieConsentBanner } from "@/components/system/CookieConsentBanner";
+import { CookieSettingsDialog } from "@/components/system/CookieSettingsDialog";
+import { KbPendingWatch } from "@/components/knowledge-base/KbPendingWatch";
 import { queryClient } from "@/lib/query-client";
+import { MfaGate } from "@/components/auth/MfaGate";
+import { prerenderedHtmlFor } from "@/lib/prerender-snapshot";
 
 const AppLayout = lazy(() => import("@/layouts/AppLayout"));
 const AuthLayout = lazy(() => import("@/layouts/AuthLayout"));
@@ -23,6 +28,10 @@ const AuthResetPassword = lazy(() => import("@/pages/auth/AuthResetPassword"));
 const AuthConfirm = lazy(() => import("@/pages/auth/AuthConfirm"));
 const EmailSent = lazy(() => import("@/pages/auth/EmailSent"));
 const AuthCallback = lazy(() => import("@/pages/auth/AuthCallback"));
+const YandexCallback = lazy(() => import("@/pages/auth/YandexCallback"));
+const VkCallback = lazy(() => import("@/pages/auth/VkCallback"));
+const MfaChallenge = lazy(() => import("@/pages/auth/MfaChallenge"));
+const FasterSignIn = lazy(() => import("@/pages/auth/FasterSignIn"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Home = lazy(() => import("@/pages/Home"));
 const CatalogUploadReview = lazy(() => import("@/pages/catalogs/CatalogUploadReview"));
@@ -40,6 +49,7 @@ const ProjectProcurement = lazy(() => import("@/pages/project/ProjectProcurement
 const ProjectHR = lazy(() => import("@/pages/project/ProjectHR"));
 const ProjectGallery = lazy(() => import("@/pages/project/ProjectGallery"));
 const ProjectDocuments = lazy(() => import("@/pages/project/ProjectDocuments"));
+const ProjectReport = lazy(() => import("@/pages/project/ProjectReport"));
 const ProjectParticipants = lazy(() => import("@/pages/project/ProjectParticipants"));
 const ShareEstimate = lazy(() => import("@/pages/share/ShareEstimate"));
 const ShareDocument = lazy(() => import("@/pages/share/ShareDocument"));
@@ -50,6 +60,18 @@ const ThemeDemo = lazy(() => import("@/pages/ThemeDemo"));
 const BlogIndex = lazy(() => import("@/pages/blog/BlogIndex"));
 const BlogPostPage = lazy(() => import("@/pages/blog/BlogPostPage"));
 const BlogTagPage = lazy(() => import("@/pages/blog/BlogTagPage"));
+const KbDocumentPage = lazy(() => import("@/pages/knowledge-base/KbDocumentPage"));
+const KbIndexPage = lazy(() => import("@/pages/knowledge-base/KbHubPages").then((m) => ({ default: m.KbIndexPage })));
+const KbFolderPage = lazy(() => import("@/pages/knowledge-base/KbHubPages").then((m) => ({ default: m.KbFolderPage })));
+const KbSolutionsPage = lazy(() =>
+  import("@/pages/knowledge-base/KbSolutionPages").then((m) => ({ default: m.KbSolutionsPage })),
+);
+const KbChangesPublicPage = lazy(() =>
+  import("@/pages/knowledge-base/KbChangesPage").then((m) => ({ default: m.KbChangesPublicPage })),
+);
+const KbSolutionPublicPage = lazy(() =>
+  import("@/pages/knowledge-base/KbSolutionPages").then((m) => ({ default: m.KbSolutionPublicPage })),
+);
 const BlogAdminList = lazy(() => import("@/pages/blog/admin/BlogAdminList"));
 const BlogEditorPage = lazy(() => import("@/pages/blog/admin/BlogEditorPage"));
 const Offer = lazy(() => import("@/pages/legal/Offer"));
@@ -60,6 +82,9 @@ const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const RouteFallback = () => {
   const { t } = useTranslation();
+  // A prerendered public page stays on screen while its chunk loads.
+  const prerendered = prerenderedHtmlFor(window.location.pathname);
+  if (prerendered) return <div dangerouslySetInnerHTML={{ __html: prerendered }} />;
   return (
     <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">
       {t("app.loading")}
@@ -80,6 +105,10 @@ const App = () => (
         <MetrikaPageviewTracker />
         <ScrollToHash />
         <DocumentLanguage />
+        <KbPendingWatch />
+        <CookieConsentBanner />
+        <CookieSettingsDialog />
+        <MfaGate>
         <Routes>
           {/* Standalone pages */}
           <Route path="/" element={routeElement(<Landing />)} />
@@ -99,6 +128,15 @@ const App = () => (
           <Route path="/blog/tag/:tag" element={routeElement(<BlogTagPage />)} />
           <Route path="/blog/:slug" element={routeElement(<BlogPostPage />)} />
 
+          {/* Public knowledge-base documents (no login; static prerender covers them) */}
+          <Route path="/baza" element={routeElement(<KbIndexPage />)} />
+          <Route path="/baza/razdel/:folder" element={routeElement(<KbFolderPage />)} />
+          <Route path="/baza/razdel/:folder/:page" element={routeElement(<KbFolderPage />)} />
+          <Route path="/baza/resheniya" element={routeElement(<KbSolutionsPage />)} />
+          <Route path="/baza/resheniya/:slug" element={routeElement(<KbSolutionPublicPage />)} />
+          <Route path="/baza/izmeneniya" element={routeElement(<KbChangesPublicPage />)} />
+          <Route path="/baza/:slug" element={routeElement(<KbDocumentPage />)} />
+
           {/* Legal / compliance pages (required by T-Bank acquirer) */}
           <Route path="/offer" element={routeElement(<Offer />)} />
           <Route path="/privacy" element={routeElement(<Privacy />)} />
@@ -114,6 +152,10 @@ const App = () => (
             <Route path="/auth/confirm" element={routeElement(<AuthConfirm />)} />
             <Route path="/auth/email-sent" element={routeElement(<EmailSent />)} />
             <Route path="/auth/callback" element={routeElement(<AuthCallback />)} />
+            <Route path="/auth/yandex/callback" element={routeElement(<YandexCallback />)} />
+            <Route path="/auth/vk/callback" element={routeElement(<VkCallback />)} />
+            <Route path="/auth/mfa" element={routeElement(<MfaChallenge />)} />
+            <Route path="/auth/faster" element={routeElement(<FasterSignIn />)} />
           </Route>
 
           {/* App layout (sidebar + topbar) */}
@@ -152,12 +194,14 @@ const App = () => (
               <Route path="hr" element={routeElement(<ProjectHR />)} />
               <Route path="gallery" element={routeElement(<ProjectGallery />)} />
               <Route path="documents" element={routeElement(<ProjectDocuments />)} />
+              <Route path="reports" element={routeElement(<ProjectReport />)} />
               <Route path="participants" element={routeElement(<ProjectParticipants />)} />
             </Route>
           </Route>
 
           <Route path="*" element={routeElement(<NotFound />)} />
         </Routes>
+        </MfaGate>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

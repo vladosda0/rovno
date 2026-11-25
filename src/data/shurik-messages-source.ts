@@ -14,6 +14,7 @@ const MONEY_TYPE_PREFIX = "billing_";
 const BRIEFING_TYPE = "briefing";
 const PEOPLE_TYPE_PREFIX = "people_";
 const CLIENT_REPORT_REMINDER_TYPE = "client_report_reminder";
+const KB_DOCUMENT_CHANGED_TYPE = "kb_document_changed";
 /** Shurik's most important hint of the day, written only to be sent to Telegram. */
 export const SHURIK_HINT_TYPE = "shurik_hint";
 
@@ -85,6 +86,11 @@ export function isClientReportReminderShurikMessage(message: Pick<ShurikMessage,
   return message.type === CLIENT_REPORT_REMINDER_TYPE;
 }
 
+/** A knowledge-base document the person follows has changed (docs-library 8.3, 8.6). */
+export function isKbDocumentChangedShurikMessage(message: Pick<ShurikMessage, "type">): boolean {
+  return message.type === KB_DOCUMENT_CHANGED_TYPE;
+}
+
 /**
  * Whether a message belongs in the «Уведомления» tab and its number. The hint of the day is not:
  * it stands as a card in the project chat, and its row exists only to reach Telegram.
@@ -124,6 +130,25 @@ export function readShurikMessageAction(message: Pick<ShurikMessage, "payload">)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function payloadText(message: Pick<ShurikMessage, "payload">, key: string): string {
+  const value = message.payload[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** «Пара слов от Шурика» (rovno-db#151): the greeting and the phrase above the lines, or null. */
+export function readShurikBriefingLead(message: Pick<ShurikMessage, "payload">): string | null {
+  const lead = payloadText(message, "lead");
+  if (lead === "") return null;
+  const greeting = payloadText(message, "lead_greeting");
+  return greeting === "" ? lead : `${greeting} ${lead}`;
+}
+
+/** The line under the last briefing of a morning when the phrase was skipped to keep the last AI messages. */
+export function readShurikBriefingLeadNote(message: Pick<ShurikMessage, "payload">): string | null {
+  const note = payloadText(message, "lead_note");
+  return note === "" ? null : note;
 }
 
 /**

@@ -12,6 +12,8 @@ import { useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { ProjectMuteRow } from "@/components/ProjectMuteControl";
 import { useVisibleProjectTabs } from "@/components/ProjectTabs";
 import { HOME_TABS, VALID_HOME_TABS } from "@/components/HomeTabs";
+import { NewFeatureDot } from "@/components/ui/new-feature-badge";
+import { newFeatureIdsForHomeTab } from "@/lib/new-features";
 import { cn } from "@/lib/utils";
 
 interface MobileNavSheetProps {
@@ -109,6 +111,7 @@ export function MobileNavSheet({
                 >
                   <tab.icon className="h-4 w-4" />
                   <span>{t(tab.labelKey)}</span>
+                  <NewFeatureDot featureIds={newFeatureIdsForHomeTab(tab.value)} />
                 </Link>
               );
             })}

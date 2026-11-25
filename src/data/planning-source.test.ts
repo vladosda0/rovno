@@ -644,6 +644,30 @@ describe("changeTaskStatus (supabase source)", () => {
     });
   });
 
+  it("passes the final-proof override to change_task_status_v2 only when asked (rovno#138)", async () => {
+    const rpc = vi.fn(async () => ({ data: { id: "task-1", status: "done" }, error: null }));
+    setMockSupabase({ rpc, from: vi.fn() } as unknown as MockSupabaseClient);
+    const source = await supabaseSource();
+
+    await source.changeTaskStatus("task-1", "done", { overrideFinalProof: true });
+    expect(rpc).toHaveBeenCalledWith("change_task_status_v2", {
+      p_task_id: "task-1",
+      p_new_status: "done",
+      p_comment_body: null,
+      p_expected_status: null,
+      p_override_final_proof: true,
+    });
+
+    rpc.mockClear();
+    await source.changeTaskStatus("task-1", "done");
+    expect(rpc).toHaveBeenCalledWith("change_task_status_v2", {
+      p_task_id: "task-1",
+      p_new_status: "done",
+      p_comment_body: null,
+      p_expected_status: null,
+    });
+  });
+
   it("maps P0002 to TaskNoLongerAvailableError (converge on not-found or stale CAS)", async () => {
     setMockSupabase({
       rpc: vi.fn(async () => ({ data: null, error: { code: "P0002", message: "task status changed" } })),

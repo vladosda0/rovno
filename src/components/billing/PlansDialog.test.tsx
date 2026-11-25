@@ -69,6 +69,7 @@ describe("PlansDialog downgrade guard", () => {
       readOnly: false,
       isLoading: false,
       isError: false,
+      isLoadingError: false,
       refetch: vi.fn(),
     };
 
@@ -91,6 +92,7 @@ describe("PlansDialog downgrade guard", () => {
       readOnly: false,
       isLoading: false,
       isError: false,
+      isLoadingError: false,
       refetch: vi.fn(),
     };
 
@@ -119,6 +121,7 @@ describe("PlansDialog downgrade guard", () => {
       readOnly: false,
       isLoading: false,
       isError: false,
+      isLoadingError: false,
       refetch: vi.fn(),
     };
     const tree = (open: boolean) => (
@@ -153,6 +156,7 @@ describe("PlansDialog downgrade guard", () => {
       readOnly: false,
       isLoading: false,
       isError: false,
+      isLoadingError: false,
       refetch: vi.fn(),
     };
 
@@ -174,6 +178,7 @@ describe("PlansDialog downgrade guard", () => {
       readOnly: false,
       isLoading: false,
       isError: false,
+      isLoadingError: false,
       refetch: vi.fn(),
     };
 
@@ -189,6 +194,7 @@ describe("PlansDialog downgrade guard", () => {
       readOnly: false,
       isLoading: false,
       isError: false,
+      isLoadingError: false,
       refetch: vi.fn(),
     };
 
@@ -197,9 +203,9 @@ describe("PlansDialog downgrade guard", () => {
   });
 
   it.each([
-    ["no row", { status: "none", isLoading: false, isError: false }],
-    ["a row still loading", { status: "none", isLoading: true, isError: false }],
-    ["a failed load", { status: "none", isLoading: false, isError: true }],
+    ["no row", { status: "none", isLoading: false, isError: false, isLoadingError: false }],
+    ["a row still loading", { status: "none", isLoading: true, isError: false, isLoadingError: false }],
+    ["a failed load", { status: "none", isLoading: false, isError: true, isLoadingError: true }],
   ] as const)("offers no downgrade and no cancel note with %s", (_label, state) => {
     activeSubReturn = {
       ...state,
@@ -220,6 +226,7 @@ describe("PlansDialog downgrade guard", () => {
       readOnly: false,
       isLoading: true,
       isError: false,
+      isLoadingError: false,
       refetch: vi.fn(),
     };
 

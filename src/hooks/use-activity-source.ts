@@ -209,6 +209,14 @@ export function useProjectsRecentEventsMap(
   projectIds: string[],
   perProjectLimit: number,
 ): Record<string, Event[]> {
+  return useProjectsRecentEventsState(projectIds, perProjectLimit).eventsByProject;
+}
+
+/** `isSettled` is false while the events of the given projects are loading or failed to load. */
+export function useProjectsRecentEventsState(
+  projectIds: string[],
+  perProjectLimit: number,
+): { eventsByProject: Record<string, Event[]>; isSettled: boolean } {
   const mode = useWorkspaceMode();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const normalizedProjectIds = useStableStringArray(projectIds.filter(Boolean));
@@ -244,8 +252,13 @@ export function useProjectsRecentEventsMap(
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return browserRecentEvents;
+    return { eventsByProject: browserRecentEvents, isSettled: true };
   }
 
-  return recentEventsQuery.data ?? EMPTY_EVENTS_BY_PROJECT;
+  return {
+    eventsByProject: recentEventsQuery.data ?? EMPTY_EVENTS_BY_PROJECT,
+    isSettled: supabaseMode
+      ? normalizedProjectIds.length === 0 || recentEventsQuery.isSuccess
+      : mode.kind !== "pending-supabase",
+  };
 }

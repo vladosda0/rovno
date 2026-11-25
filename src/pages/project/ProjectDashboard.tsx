@@ -7,6 +7,7 @@ import {
   useDocuments,
   useMedia,
   usePermission,
+  useCurrentUser,
 } from "@/hooks/use-mock-data";
 import {
   useEstimateV2FinanceProjectSummaryFromWorkspace,
@@ -16,13 +17,14 @@ import { EmptyState } from "@/components/EmptyState";
 import { BudgetWidget } from "@/components/dashboard/BudgetWidget";
 import { TaskSummaryWidget } from "@/components/dashboard/TaskSummaryWidget";
 import { DocsWidget } from "@/components/dashboard/DocsWidget";
+import { ReportsWidget } from "@/components/dashboard/ReportsWidget";
+import { showsViewerReports } from "@/lib/project-reports";
 import { GalleryWidget } from "@/components/dashboard/GalleryWidget";
 import { ParticipantsWidget } from "@/components/dashboard/ParticipantsWidget";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useToast } from "@/hooks/use-toast";
 import {
   getProjectDomainAccess,
   projectDomainAllowsManage,
@@ -31,14 +33,17 @@ import {
 } from "@/lib/permissions";
 import { seamAllowsClientReport } from "@/lib/client-report-dialog";
 import { resolveActionState } from "@/lib/permission-contract-actions";
-import { Copy, Info, LayoutDashboard, MapPin } from "lucide-react";
+import { ProjectAddressRow } from "@/components/dashboard/ProjectAddressRow";
+import { useUpdateWorkspaceProjectAddress, useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { useProjectReports } from "@/hooks/use-project-reports";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Info, LayoutDashboard } from "lucide-react";
 
 export default function ProjectDashboard() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const projectId = id!;
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
@@ -85,15 +90,15 @@ export default function ProjectDashboard() {
   const canContributeGallery = resolveActionState(perm.role, "documents_media", "upload") === "enabled";
   const canManageProcurement = projectDomainAllowsManage(procurementAccess);
 
-  const handleCopyAddress = async () => {
-    if (!project?.address) return;
-    try {
-      await navigator.clipboard.writeText(project.address);
-      toast({ title: t("projectDashboard.copied") });
-    } catch {
-      toast({ title: t("projectDashboard.copyFailed"), variant: "destructive" });
-    }
-  };
+  const currentUser = useCurrentUser();
+  const updateAddress = useUpdateWorkspaceProjectAddress(projectId);
+
+  // rovno#237: the viewer reads the project's published reports here. Owners
+  // and co-owners have «Отчёт клиенту»; the block is the viewer's only.
+  const workspaceMode = useWorkspaceMode();
+  const isMobile = useIsMobile();
+  const showReports = showsViewerReports(workspaceMode.kind, perm.seam.membership?.role);
+  const projectReports = useProjectReports(projectId, null, showReports);
 
   if (!project) {
     return (
@@ -110,7 +115,7 @@ export default function ProjectDashboard() {
 
   return (
     <div className="space-y-sp-2">
-      <div className="glass rounded-card p-sp-3">
+      <div className="glass relative z-10 rounded-card p-sp-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-sp-3">
           <div className="space-y-2">
             <div>
@@ -120,26 +125,18 @@ export default function ProjectDashboard() {
               </p>
             </div>
 
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("projectDashboard.aiDescription")}</p>
-              <p className="text-body-sm text-foreground/90 line-clamp-2">
-                {project.ai_description || t("projectDashboard.aiDescriptionPlaceholder")}
-              </p>
-            </div>
+            {project.ai_description ? (
+              <div className="space-y-1">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("projectDashboard.aiDescription")}</p>
+                <p className="text-body-sm text-foreground/90 line-clamp-2">{project.ai_description}</p>
+              </div>
+            ) : null}
 
-            <div className="flex items-center gap-2 rounded-panel bg-muted/40 px-2 py-1.5">
-              <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              {project.address ? (
-                <>
-                  <span className="text-caption text-foreground flex-1 truncate">{project.address}</span>
-                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleCopyAddress} aria-label={t("projectDashboard.copyAddress")}>
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </>
-              ) : (
-                <span className="text-caption text-muted-foreground">{t("projectDashboard.addAddress")}</span>
-              )}
-            </div>
+            <ProjectAddressRow
+              address={project.address}
+              canEdit={perm.role === "owner" && Boolean(currentUser?.id) && project.owner_id === currentUser?.id}
+              onSave={(address) => updateAddress.mutateAsync(address)}
+            />
           </div>
 
           <div className="rounded-panel bg-muted/30 p-3 flex flex-col justify-between gap-3 min-h-[128px]">
@@ -204,13 +201,27 @@ export default function ProjectDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-6 gap-sp-2 items-stretch">
         <TaskSummaryWidget tasks={tasks} projectId={projectId} className="lg:col-span-4 h-full" />
-        {canViewSensitiveDetail && (
-          <BudgetWidget
-            summary={financeSummary}
-            projectId={projectId}
-            isLoading={estimateProject.isLoading}
-            className="lg:col-span-2 h-full"
-          />
+        {(canViewSensitiveDetail || showReports) && (
+          <div className="lg:col-span-2 h-full flex flex-col gap-sp-2">
+            {canViewSensitiveDetail && (
+              <BudgetWidget
+                summary={financeSummary}
+                projectId={projectId}
+                isLoading={estimateProject.isLoading}
+                className={showReports ? "h-auto" : "h-full"}
+              />
+            )}
+            {showReports && (
+              <ReportsWidget
+                projectId={projectId}
+                reports={projectReports.data?.reports ?? []}
+                isLoading={projectReports.isLoading}
+                isError={projectReports.isError}
+                maxItems={isMobile || canViewSensitiveDetail ? 2 : 4}
+                className={canViewSensitiveDetail ? "h-auto flex-1" : undefined}
+              />
+            )}
+          </div>
         )}
       </div>
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileSpreadsheet, FileText, IdCard, Download, Search, X } from "lucide-react";
 import { MultiStepUploadModal } from "@/components/upload/MultiStepUploadModal";
+import { useActiveOrg } from "@/hooks/use-orgs";
 import {
   DOCUMENT_BLANKS,
   DOCUMENT_BLANK_GROUPS,
@@ -82,6 +83,7 @@ function BlankCard({ blank, title, description }: BlankCardProps) {
 }
 
 export function DocumentTemplatesTab() {
+  const activeOrgRole = useActiveOrg()?.role;
   const { t } = useTranslation();
   const [, setSearchParams] = useSearchParams();
   const [visitkaOpen, setVisitkaOpen] = useState(false);
@@ -215,7 +217,7 @@ export function DocumentTemplatesTab() {
                     ))}
                   </ul>
                 )}
-                action={(
+                action={activeOrgRole === "member" ? null : (
                   <Button variant="default" size="sm" onClick={() => setVisitkaOpen(true)}>
                     {t("home.documentTemplates.pinned.visitka.action")}
                   </Button>

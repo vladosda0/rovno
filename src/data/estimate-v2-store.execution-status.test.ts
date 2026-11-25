@@ -48,12 +48,31 @@ describe("execution_status portfolio mirror", () => {
       projectOwnerProfileId: "profile-1",
       membershipRole: "owner",
     });
-    const estimateId = getEstimateV2ProjectState(PROJECT_ID).project.id;
+    expect(getEstimateV2ProjectState(PROJECT_ID).project.id).toBe(`estimate-v2-${PROJECT_ID}`);
 
     const result = setProjectEstimateStatus(PROJECT_ID, "paused");
 
     expect(result.ok).toBe(true);
-    expect(updateProjectEstimateExecutionStatusMock).toHaveBeenCalledWith(estimateId, "paused");
+    // The seeded id is not a uuid: the write targets the root a draft save would create.
+    const [estimateId, status] = updateProjectEstimateExecutionStatusMock.mock.calls[0];
+    expect(estimateId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(status).toBe("paused");
+  });
+
+  it("reports a failed mirror write as a sync error instead of swallowing it", async () => {
+    registerEstimateV2ProjectAccessContext(PROJECT_ID, {
+      mode: "supabase",
+      profileId: "profile-1",
+      projectOwnerProfileId: "profile-1",
+      membershipRole: "owner",
+    });
+    updateProjectEstimateExecutionStatusMock.mockRejectedValueOnce(new Error("invalid input syntax for type uuid"));
+
+    expect(setProjectEstimateStatus(PROJECT_ID, "paused").ok).toBe(true);
+    await vi.waitFor(() => {
+      expect(getEstimateV2ProjectState(PROJECT_ID).sync.draftSaveStatus).toBe("error");
+    });
+    expect(getEstimateV2ProjectState(PROJECT_ID).sync.draftSaveLastError).toContain("invalid input syntax");
   });
 
   it("does not write to Supabase in demo/local mode (no managed sync context)", () => {

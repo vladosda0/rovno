@@ -359,3 +359,52 @@ export async function fetchSharedReport(
     pdfAllowed: data.pdfAllowed === true,
   };
 }
+
+/**
+ * What get-project-report returns to a signed-in participant (rovno#237):
+ * the open report (null when the project has none yet) and every published
+ * report of the project, latest first.
+ */
+export interface ProjectReports {
+  shared: SharedReport | null;
+  reports: SharedReportListItem[];
+}
+
+/**
+ * The project's reports for a participant, read through get-project-report.
+ *
+ * Returns null for "no such report here" (not a participant, a report id of
+ * another project, a malformed id: the function's 404 and 400). Anything else
+ * is thrown so the screen can tell "gone" from "try again".
+ */
+export async function fetchProjectReports(
+  projectId: string,
+  reportId?: string | null,
+): Promise<ProjectReports | null> {
+  if (!projectId) return null;
+  const { data, error } = await rawSupabase.functions.invoke("get-project-report", {
+    body: reportId ? { project_id: projectId, report_id: reportId } : { project_id: projectId },
+  });
+  if (error) {
+    const status = invokeFailureStatus(error);
+    if (status === 404 || status === 400) return null;
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+  if (!data || typeof data !== "object") return null;
+  const row = data as Record<string, unknown>;
+  const reports = asArray<SharedReportListItem>(row.reports);
+  if (!isSharedReport(data)) {
+    return row.report === null ? { shared: null, reports } : null;
+  }
+  const body = normalizeBody<{ project_title: string; prepared_by: string | null }>(data.report.body);
+  return {
+    shared: {
+      ...data,
+      report: { ...data.report, body },
+      photos: asArray<SharedReportPhoto>(data.photos),
+      reports,
+      pdfAllowed: data.pdfAllowed === true,
+    },
+    reports,
+  };
+}

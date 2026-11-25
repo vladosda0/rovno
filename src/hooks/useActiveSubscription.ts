@@ -23,6 +23,8 @@ export interface ActiveSubscription {
   isLoading: boolean;
   /** True when the fetch errored — callers must NOT treat this as "no subscription". */
   isError: boolean;
+  /** True when the fetch errored and no read has ever succeeded (not even a "no subscription" one). */
+  isLoadingError: boolean;
   refetch: () => void;
 }
 
@@ -55,8 +57,9 @@ export function useActiveSubscription(): ActiveSubscription {
     status,
     subscription,
     readOnly,
-    isLoading: enabled && query.isLoading,
+    isLoading: enabled && query.isPending,
     isError: enabled && query.isError,
+    isLoadingError: enabled && query.isLoadingError,
     refetch: () => {
       void query.refetch();
     },

@@ -25,12 +25,29 @@ vi.mock("@/hooks/use-toast", async (importOriginal) => {
 
 type ActiveSub = ReturnType<typeof import("@/hooks/useActiveSubscription").useActiveSubscription>;
 let activeSubReturn: ActiveSub;
+const trackEventSpy = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/analytics", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/analytics")>();
+  return {
+    ...actual,
+    trackEvent: (...args: Parameters<typeof actual.trackEvent>) => {
+      trackEventSpy(...args);
+      return actual.trackEvent(...args);
+    },
+  };
+});
 vi.mock("@/hooks/useActiveSubscription", () => ({
   useActiveSubscription: () => activeSubReturn,
 }));
 
 // Settable payment-status row + a refetch spy (Fix I); the terminal check is the real one (Fix G).
-type StatusRow = { id: string; status: string; error_code: string | null; plan_code?: string };
+type StatusRow = {
+  id: string;
+  status: string;
+  error_code: string | null;
+  plan_code?: string;
+  confirmed_at?: string | null;
+};
 let statusData: StatusRow | undefined = undefined;
 const refetchStatus = vi.fn();
 vi.mock("@/hooks/usePaymentStatus", async (importOriginal) => {
@@ -79,7 +96,7 @@ function renderCheckout(plan = "master") {
 }
 
 function noSubscription(): ActiveSub {
-  return { status: "none", subscription: null, readOnly: false, isLoading: false, isError: false, refetch: vi.fn() };
+  return { status: "none", subscription: null, readOnly: false, isLoading: false, isError: false, isLoadingError: false, refetch: vi.fn() };
 }
 
 const PAYMENT_URL_RESPONSE = {
@@ -201,6 +218,7 @@ describe("Checkout", () => {
       readOnly: false,
       isLoading: false,
       isError: false,
+      isLoadingError: false,
       refetch: vi.fn(),
     };
 
@@ -210,8 +228,133 @@ describe("Checkout", () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("upgrade: charges the catalogue difference today and names the full price for later", async () => {
+  it("a subscription read that is still loading keeps the way back to plans", () => {
+    activeSubReturn = { ...noSubscription(), isLoading: true };
+
+    renderCheckout();
+
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to plans" })).toHaveAttribute("href", "/settings?tab=billing");
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("a failed subscription read shows the load error with retry and never inits", async () => {
+    const refetch = vi.fn();
+    activeSubReturn = { ...noSubscription(), isError: true, isLoadingError: true, refetch };
     mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+
+    renderCheckout();
+    const consent = screen.queryByRole("checkbox");
+    if (consent) {
+      await act(async () => {
+        fireEvent.click(consent);
+      });
+    }
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByText("Couldn't load your subscription.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("a read that fails after consent was ticked does not init a payment", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+
+    const view = renderCheckout();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox"));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+    // The query key changes (e.g. account switch) and the new read fails:
+    // pending -> isLoadingError without unmount, consent state survives.
+    activeSubReturn = { ...noSubscription(), isLoading: true };
+    view.rerender(
+      <MemoryRouter initialEntries={["/billing/checkout?plan=master"]}>
+        <Checkout />
+      </MemoryRouter>,
+    );
+    activeSubReturn = { ...noSubscription(), isError: true, isLoadingError: true };
+    view.rerender(
+      <MemoryRouter initialEntries={["/billing/checkout?plan=master"]}>
+        <Checkout />
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("Couldn't load your subscription.")).toBeInTheDocument();
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("the load-error screen does not count as a started checkout", () => {
+    trackEventSpy.mockClear();
+    activeSubReturn = { ...noSubscription(), isError: true, isLoadingError: true };
+
+    renderCheckout();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load your subscription.");
+    expect(screen.getByRole("link", { name: /back/i })).toBeInTheDocument();
+    expect(trackEventSpy).not.toHaveBeenCalledWith("billing_checkout_started", expect.anything());
+  });
+
+  it("signing out in another tab after consent does not init a payment without a session", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+
+    const view = renderCheckout();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox"));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      __unsafeSetRuntimeAuthStateForTests({ status: "guest", session: null, user: null, profileId: null });
+    });
+    view.rerender(
+      <MemoryRouter initialEntries={["/billing/checkout?plan=master"]}>
+        <Checkout />
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not count a started checkout while sign-in is still loading", () => {
+    trackEventSpy.mockClear();
+    __unsafeSetRuntimeAuthStateForTests({ status: "loading", session: null, user: null, profileId: null });
+
+    const { rerender } = renderCheckout();
+    expect(trackEventSpy).not.toHaveBeenCalledWith("billing_checkout_started", expect.anything());
+
+    act(() => {
+      __unsafeSetRuntimeAuthStateForTests({
+        status: "authenticated",
+        session: {} as Session,
+        user: { email: "user@example.ru" } as User,
+        profileId: "pid-1",
+      });
+    });
+    rerender(
+      <MemoryRouter initialEntries={["/billing/checkout?plan=master"]}>
+        <Checkout />
+      </MemoryRouter>,
+    );
+    const started = trackEventSpy.mock.calls.filter(([name]) => name === "billing_checkout_started");
+    expect(started).toHaveLength(1);
+  });
+
+  it("upgrade: charges the catalogue difference today and names the full price for later", async () => {
+    mutateAsync.mockResolvedValue({ ...PAYMENT_URL_RESPONSE, amount_kopecks: 200000 });
     activeSubReturn = {
       ...noSubscription(),
       status: "active",
@@ -252,6 +395,116 @@ describe("Checkout", () => {
     });
     expect(screen.getByRole("switch").parentElement).toHaveTextContent(/2\s000\s₽/);
     expect(screen.getByRole("switch").parentElement).not.toHaveTextContent(/2\s990\s₽/);
+  });
+
+  it("upgrade during a prepaid renewal: credits the month that has not started", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+    const startsSoon = new Date(Date.now() + 12 * 60 * 60 * 1000);
+    activeSubReturn = {
+      ...noSubscription(),
+      status: "active",
+      subscription: {
+        id: "s2",
+        profile_id: "pid-1",
+        provider: "tbank",
+        plan_code: "master",
+        status: "active",
+        is_current: true,
+        currency: "RUB",
+        amount_cents: 99000,
+        auto_renew: true,
+        current_period_starts_at: startsSoon.toISOString(),
+        current_period_ends_at: new Date(startsSoon.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        canceled_at: null,
+        grace_until: null,
+        created_at: "2026-05-15T00:00:00Z",
+        pending_plan_code: null,
+      },
+    };
+
+    renderCheckout("brigade");
+
+    // 2 990 (Бригада) - 990 (Мастер) - 990 already paid for the month ahead = 1 010 today.
+    expect(screen.getByText(/^1\s010\s₽$/)).toBeInTheDocument();
+    expect(screen.queryByText(/^2\s000\s₽$/)).not.toBeInTheDocument();
+    expect(screen.getByText(/prepaid month of «Мастер» \(990\s₽\) is credited/i)).toBeInTheDocument();
+  });
+
+  it.each([
+    { provider: "promo", startsInHours: 12 },
+    { provider: "tbank", startsInHours: -24 },
+  ])("upgrade from a $provider row starting in $startsInHours h: no credit", ({ provider, startsInHours }) => {
+    const starts = new Date(Date.now() + startsInHours * 60 * 60 * 1000);
+    activeSubReturn = {
+      ...noSubscription(),
+      status: "active",
+      subscription: {
+        id: "s3",
+        profile_id: "pid-1",
+        provider,
+        plan_code: "master",
+        status: "active",
+        is_current: true,
+        currency: "RUB",
+        amount_cents: 99000,
+        auto_renew: true,
+        current_period_starts_at: starts.toISOString(),
+        current_period_ends_at: new Date(starts.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        canceled_at: null,
+        grace_until: null,
+        created_at: "2026-05-15T00:00:00Z",
+        pending_plan_code: null,
+      },
+    };
+
+    renderCheckout("brigade");
+
+    expect(screen.getByText(/^2\s000\s₽$/)).toBeInTheDocument();
+    expect(screen.queryByText(/is credited/i)).not.toBeInTheDocument();
+  });
+
+  it("after Init the page shows the amount the server will charge, not its own estimate", async () => {
+    // The renewal was refunded meanwhile: the server credits nothing and charges 2 000.
+    mutateAsync.mockResolvedValue({ ...PAYMENT_URL_RESPONSE, amount_kopecks: 200000 });
+    const startsSoon = new Date(Date.now() + 12 * 60 * 60 * 1000);
+    activeSubReturn = {
+      ...noSubscription(),
+      status: "active",
+      subscription: {
+        id: "s4",
+        profile_id: "pid-1",
+        provider: "tbank",
+        plan_code: "master",
+        status: "active",
+        is_current: true,
+        currency: "RUB",
+        amount_cents: 99000,
+        auto_renew: true,
+        current_period_starts_at: startsSoon.toISOString(),
+        current_period_ends_at: new Date(startsSoon.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        canceled_at: null,
+        grace_until: null,
+        created_at: "2026-05-15T00:00:00Z",
+        pending_plan_code: null,
+      },
+    };
+
+    renderCheckout("brigade");
+    expect(screen.getByText(/^1\s010\s₽$/)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox"));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/^2\s000\s₽$/)).toBeInTheDocument();
+    expect(screen.queryByText(/^1\s010\s₽$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/is credited/i)).not.toBeInTheDocument();
   });
 
   it("first purchase from the free plan reads as a subscription, not an upgrade surcharge", async () => {
@@ -452,8 +705,25 @@ describe("Checkout", () => {
     );
   });
 
-  it("G: routes to the fail screen on a partial_refund payment_intent too", async () => {
-    statusData = { id: "i10", status: "partial_refund", error_code: null, plan_code: "master" };
+  it("G: a partial_refund payment_intent with no confirmation yet stays on the checkout", async () => {
+    statusData = { id: "i11", status: "partial_refund", error_code: null, plan_code: "master", confirmed_at: null };
+
+    renderCheckout();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("G: routes a confirmed partial_refund payment_intent to the success screen", async () => {
+    statusData = {
+      id: "i10",
+      status: "partial_refund",
+      error_code: null,
+      plan_code: "master",
+      confirmed_at: "2026-11-12T15:20:26Z",
+    };
 
     renderCheckout();
     await act(async () => {
@@ -461,7 +731,7 @@ describe("Checkout", () => {
     });
 
     expect(mockNavigate).toHaveBeenCalledWith(
-      "/billing/fail?intent=i10&reason=partial_refund",
+      "/billing/success?intent=i10",
       { replace: true },
     );
   });

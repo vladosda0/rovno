@@ -12,6 +12,8 @@ import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { useCreateOrganization, useSetActiveOrg } from "@/hooks/use-orgs";
+import { planMeets, useTierQuota } from "@/hooks/useTierQuota";
+import { showTierLimitPaywall } from "@/lib/tier-limit-error";
 import { suggestOrgSlug } from "@/data/org-source";
 import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
@@ -64,7 +66,12 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
   ]);
   const [savingStages, setSavingStages] = useState(false);
 
-  const showOrgStep = workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase";
+  const { data: tierQuota } = useTierQuota();
+  // Organizations are Brigade-only (enforce_org_brigade_only), so the step is offered
+  // only once the plan is known to allow it.
+  const showOrgStep =
+    (workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase")
+    && planMeets(tierQuota?.plan_code, "brigade");
   const [orgSectionExpanded, setOrgSectionExpanded] = useState(false);
   const [orgName, setOrgName] = useState("");
   const createOrgMutation = useCreateOrganization();
@@ -281,6 +288,7 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
       toast({ title: t("onboarding.org.createSuccess") });
       onComplete();
     } catch (error) {
+      if (showTierLimitPaywall(error, t)) return;
       toast({
         title: t("onboarding.org.createError"),
         description: error instanceof Error ? error.message : undefined,
